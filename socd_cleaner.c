@@ -109,8 +109,12 @@ int main() {
     printf("\n\nPress Ctrl+C to exit\n");
     real[KEY_LEFT] = IS_UP;
     real[KEY_RIGHT] = IS_UP;
+    real[KEY_UP] = IS_UP;
+    real[KEY_DOWN] = IS_UP;
     virtual[KEY_LEFT] = IS_UP;
     virtual[KEY_RIGHT] = IS_UP;
+    virtual[KEY_UP] = IS_UP;
+    virtual[KEY_DOWN] = IS_UP;
     SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, GetModuleHandle(NULL), 0);
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {}
