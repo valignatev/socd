@@ -17,8 +17,12 @@ There you go, I warned you. Enjoy!
 
 ## Compiling from source code
 
-Install [Visual Studio Build Tools](https://docs.microsoft.com/en-us/cpp/build/walkthrough-compile-a-c-program-on-the-command-line?view=vs-2019) (tm)
-Run `cl socd_cleaner.c`
+Install [Visual Studio Build Tools](https://docs.microsoft.com/en-us/cpp/build/walkthrough-compile-a-c-program-on-the-command-line?view=vs-2019) (tm).
+Then run
+```
+cl socd_cleaner.c
+```
+in the repository root.
 
 Should probably work with mingw or any other windows compiler, but I haven't tested it.
 
