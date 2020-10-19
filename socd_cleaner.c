@@ -12,6 +12,8 @@
 # define KEY_DOWN 3
 # define IS_DOWN 1
 # define IS_UP 0
+const char *CLASS_NAME = "SOCD_WINDOW_CLASS";
+char error_msg[100];
 
 int real[4]; // whether the key is pressed for real on keyboard
 int virtual[4]; // whether the key is pressed on a software level
@@ -19,6 +21,11 @@ int left;
 int right;
 int up;
 int down;
+//                  a     d     w     s
+const int WASD[] = {0x41, 0x44, 0x57, 0x53};
+//                    <     >     ^     v
+const int ARROWS[] = {0x25, 0x27, 0x26, 0x28};
+
 
 int find_opposing_key(int key) {
     if (key == left) {
@@ -97,16 +104,21 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
 
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    switch (uMsg) {
+    case WM_DESTROY:
+	PostQuitMessage(0);
+	return 0;
+    }
+    return DefWindowProc(hwnd, uMsg, wParam, lParam);
+}
+
 int main() {
-    left = 0x41; // a
-    right = 0x44; // d
-    up = 0x57; // w
-    down = 0x53; // s
-    /* left = 0x4C; // l */
-    /* right = 0xDE; // ' */
-    /* printf("left is %d, right is %d", left, right); */
+    left = WASD[0];
+    right = WASD[1];
+    up = WASD[2];
+    down = WASD[3];
   
-    printf("\n\nPress Ctrl+C to exit\n");
     real[KEY_LEFT] = IS_UP;
     real[KEY_RIGHT] = IS_UP;
     real[KEY_UP] = IS_UP;
@@ -115,8 +127,66 @@ int main() {
     virtual[KEY_RIGHT] = IS_UP;
     virtual[KEY_UP] = IS_UP;
     virtual[KEY_DOWN] = IS_UP;
-    SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, GetModuleHandle(NULL), 0);
+
+    HINSTANCE hInstance = (HINSTANCE)GetModuleHandle(NULL);
+    SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, hInstance, 0);
+
+    WNDCLASSEX wc;
+    wc.cbSize = sizeof(WNDCLASSEX);
+    wc.style = 0;
+    wc.lpfnWndProc = WindowProc;
+    wc.cbClsExtra = 0;
+    wc.cbWndExtra = 0;
+    wc.hInstance = hInstance;
+    wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    wc.lpszMenuName = NULL;
+    wc.lpszClassName = CLASS_NAME;
+    wc.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
+    
+    if (RegisterClassEx(&wc) == 0) {
+        int error = GetLastError();
+        sprintf(error_msg, "Failed to register window class, error code is %d", error);
+        MessageBox(
+            NULL,
+            error_msg,
+            "RIP",
+            MB_OK | MB_ICONERROR);
+        return 1;
+    };
+    
+    HWND hwndMain = CreateWindowEx(
+        0,
+        CLASS_NAME,
+        "SOCD helper for Epic Gamers!",
+        WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        500,
+        350,
+        NULL,
+        NULL,
+        hInstance,
+        NULL);
+    
+    if (hwndMain == NULL) {
+        int error = GetLastError();
+        sprintf(error_msg, "Failed to create a window, error code is %d", error);
+        MessageBox(
+            NULL,
+            error_msg,
+            "RIP",
+            MB_OK | MB_ICONERROR);
+        return 1;
+    }
+    ShowWindow(hwndMain, SW_SHOWDEFAULT);
+    UpdateWindow(hwndMain);
+
     MSG msg;
-    while (GetMessage(&msg, NULL, 0, 0)) {}
+    while (GetMessage(&msg, NULL, 0, 0)) {
+	TranslateMessage(&msg);
+	DispatchMessage(&msg);
+    }
     return 0;
 }
