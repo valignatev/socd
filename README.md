@@ -17,14 +17,18 @@ There you go, I warned you. Enjoy!
 
 ## Compiling from source code
 
-Install [Visual Studio Build Tools](https://docs.microsoft.com/en-us/cpp/build/walkthrough-compile-a-c-program-on-the-command-line?view=vs-2019) (tm).
+Windows might yell at prebuilt executable as if it has viruses. It doesn't, but you should never
+run untrasted executables on your machine if you don't know what you are doing.
+
+You should be able to compile it from source with any C compiler on Windows.
+There is no external dependencies outside of builtin windows libraries.
+
+For example, install [Visual Studio Build Tools](https://docs.microsoft.com/en-us/cpp/build/walkthrough-compile-a-c-program-on-the-command-line?view=vs-2019) (tm).
 Then run
 ```
 cl socd_cleaner.c
 ```
 in the repository root.
-
-Should probably work with mingw or any other windows compiler, but I haven't tested it.
 
 ## LICENSE
 MIT
