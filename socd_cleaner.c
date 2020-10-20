@@ -12,8 +12,9 @@
 # define KEY_DOWN 3
 # define IS_DOWN 1
 # define IS_UP 0
-const char *CLASS_NAME = "SOCD_WINDOW_CLASS";
-char error_msg[100];
+
+const char *CLASS_NAME = "SOCD_CLASS";
+char error_message_buffer[100];
 
 int real[4]; // whether the key is pressed for real on keyboard
 int virtual[4]; // whether the key is pressed on a software level
@@ -21,11 +22,30 @@ int left;
 int right;
 int up;
 int down;
-//                  a     d     w     s
-const int WASD[] = {0x41, 0x44, 0x57, 0x53};
-//                    <     >     ^     v
-const int ARROWS[] = {0x25, 0x27, 0x26, 0x28};
+//                   a     d     w     s
+const int WASD[4] = {0x41, 0x44, 0x57, 0x53};
+const int WASD_ID = 666;
+//                     <     >     ^     v
+const int ARROWS[4] = {0x25, 0x27, 0x26, 0x28};
+const int ARROWS_ID = 999;
 
+int error_message(char* text) {
+    int error = GetLastError();
+    sprintf(error_message_buffer, text, error);
+    MessageBox(
+        NULL,
+        error_message_buffer,
+        "RIP",
+        MB_OK | MB_ICONERROR);
+    return 1;
+}
+
+void set_bindings(const int* bindings) {
+    left = bindings[0];
+    right = bindings[1];
+    up = bindings[2];
+    down = bindings[3];
+}
 
 int find_opposing_key(int key) {
     if (key == left) {
@@ -109,16 +129,24 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
     case WM_DESTROY:
 	PostQuitMessage(0);
 	return 0;
+    case WM_COMMAND:
+        if (wParam == WASD_ID) {
+            set_bindings(WASD);
+        } else if (wParam == ARROWS_ID) {
+            set_bindings(ARROWS);
+        }
     }
+
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
 int main() {
-    left = WASD[0];
-    right = WASD[1];
-    up = WASD[2];
-    down = WASD[3];
-  
+    // You can compile with these flags instead of calling to FreeConsole
+    // to get rid of a terminal window
+    // cl socd_cleaner.c /link /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup
+    FreeConsole();
+    set_bindings(WASD);
+
     real[KEY_LEFT] = IS_UP;
     real[KEY_RIGHT] = IS_UP;
     real[KEY_UP] = IS_UP;
@@ -144,18 +172,11 @@ int main() {
     wc.lpszMenuName = NULL;
     wc.lpszClassName = CLASS_NAME;
     wc.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
-    
+
     if (RegisterClassEx(&wc) == 0) {
-        int error = GetLastError();
-        sprintf(error_msg, "Failed to register window class, error code is %d", error);
-        MessageBox(
-            NULL,
-            error_msg,
-            "RIP",
-            MB_OK | MB_ICONERROR);
-        return 1;
+        return error_message("Failed to register window class, error code is %d");
     };
-    
+
     HWND hwndMain = CreateWindowEx(
         0,
         CLASS_NAME,
@@ -163,23 +184,87 @@ int main() {
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
-        500,
-        350,
+        460,
+        200,
         NULL,
         NULL,
         hInstance,
         NULL);
-    
     if (hwndMain == NULL) {
-        int error = GetLastError();
-        sprintf(error_msg, "Failed to create a window, error code is %d", error);
-        MessageBox(
-            NULL,
-            error_msg,
-            "RIP",
-            MB_OK | MB_ICONERROR);
-        return 1;
+        return error_message("Failed to create a window, error code is %d");
     }
+
+    HWND wasd_hwnd = CreateWindowEx(
+        0,
+        "BUTTON",
+        "WASD",
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_AUTORADIOBUTTON,
+        10,
+        100,
+        100,
+        30,
+        hwndMain,
+        (HMENU)WASD_ID,
+        hInstance,
+        NULL);
+    if (wasd_hwnd == NULL) {
+        return error_message("Failed to create WASD radiobutton, error code is %d");
+    }
+
+    if (CheckRadioButton(hwndMain, WASD_ID, ARROWS_ID, WASD_ID) == 0) {
+        return error_message("Failed to select default keybindings, error code is %d");
+    }
+
+    HWND arrows_hwnd = CreateWindowEx(
+        0,
+        "BUTTON",
+        "Arrows",
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_AUTORADIOBUTTON,
+        10,
+        120,
+        100,
+        30,
+        hwndMain,
+        (HMENU)ARROWS_ID,
+        hInstance,
+        NULL);
+    if (arrows_hwnd == NULL) {
+        return error_message("Failed to create Arrows radiobutton, error code is %d");
+    }
+
+    HWND text_hwnd = CreateWindowEx(
+        0,
+        "STATIC",
+        "\"Last Wins\" is the only mode available as of now.",
+        WS_VISIBLE | WS_CHILD,
+        10,
+        10,
+        400,
+        20,
+        hwndMain,
+        (HMENU)100,
+        hInstance,
+        NULL);
+    if (text_hwnd == NULL) {
+        return error_message("Failed to create Text, error code is %d");
+    }
+    HWND text1_hwnd = CreateWindowEx(
+        0,
+        "STATIC",
+        "Arbitrary keybindings will be added later. For now, only WASD or Arrows. Hardcode your bindings and compile it yourself or DM me in discord (valignatev#7795), I can compile a version for you.",
+        WS_VISIBLE | WS_CHILD,
+        10,
+        30,
+        400,
+        70,
+        hwndMain,
+        (HMENU)100,
+        hInstance,
+        NULL);
+    if (text1_hwnd == NULL) {
+        return error_message("Failed to create Text1, error code is %d");
+    }
+
     ShowWindow(hwndMain, SW_SHOWDEFAULT);
     UpdateWindow(hwndMain);
 
