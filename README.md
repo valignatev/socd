@@ -18,7 +18,7 @@ There you go, I warned you. Enjoy!
 ## Compiling from source code
 
 Windows might yell at prebuilt executable as if it has viruses. It doesn't, but you should never
-run untrasted executables on your machine if you don't know what you are doing.
+run untrusted code on your machine if you don't know what you are doing.
 
 You should be able to compile it from source with any C compiler on Windows.
 There is no external dependencies outside of builtin windows libraries.
