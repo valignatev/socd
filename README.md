@@ -42,5 +42,5 @@ cl /O2 socd_cleaner.c
 ```
 
 ## LICENSE
-MIT
+MIT or Apache 2.0, whatever you like
 
