@@ -1,5 +1,8 @@
 # SOCD cleaner for epic gamers
 
+## Install
+Grab the latest version from [Releases page](https://github.com/valignatev/socd/releases).
+
 ## Why do I need it?
 
 SOCD stands for simultaneous opposite cardinal direction. Basically, what'll
