@@ -13,21 +13,22 @@
 # define IS_DOWN 1
 # define IS_UP 0
 
-const char *CLASS_NAME = "SOCD_CLASS";
+const char* CONFIG_NAME = "socd.conf";
+const char* CLASS_NAME = "SOCD_CLASS";
 char error_message_buffer[100];
+char config[100];
 
 int real[4]; // whether the key is pressed for real on keyboard
 int virtual[4]; // whether the key is pressed on a software level
-int left;
-int right;
-int up;
-int down;
 //                   a     d     w     s
-const int WASD[4] = {0x41, 0x44, 0x57, 0x53};
-const int WASD_ID = 666;
+int WASD[4] = {0x41, 0x44, 0x57, 0x53};
+const int WASD_ID = 100;
 //                     <     >     ^     v
-const int ARROWS[4] = {0x25, 0x27, 0x26, 0x28};
-const int ARROWS_ID = 999;
+int ARROWS[4] = {0x25, 0x27, 0x26, 0x28};
+const int ARROWS_ID = 200;
+// left, right, up, down
+int CUSTOM_BINDS[4];
+const int CUSTOM_ID = 300;
 
 int error_message(char* text) {
     int error = GetLastError();
@@ -40,40 +41,70 @@ int error_message(char* text) {
     return 1;
 }
 
-void set_bindings(const int* bindings) {
-    left = bindings[0];
-    right = bindings[1];
-    up = bindings[2];
-    down = bindings[3];
+void write_bindings_to_file(int* bindings) {
+    FILE* config_file = fopen(CONFIG_NAME, "w");
+    if (config_file == NULL) {
+        // This writes to console that we're freeing sigh
+        // Probably better to show MessageBox
+        perror("Couldn't open the config file");
+        return;
+    }
+    for (int i=0; i < 4; i++) {
+        fprintf(config_file, "%X\n", bindings[i]);
+    }
+    fclose(config_file);
+}
+
+void set_bindings(int* bindings) {
+    CUSTOM_BINDS[0] = bindings[0];
+    CUSTOM_BINDS[1] = bindings[1];
+    CUSTOM_BINDS[2] = bindings[2];
+    CUSTOM_BINDS[3] = bindings[3];
+}
+
+void read_initial_bindings() {
+    FILE* config_file = fopen(CONFIG_NAME, "r+");
+    if (config_file == NULL) {
+        set_bindings(WASD);
+        write_bindings_to_file(WASD);
+        return;
+    }
+    
+    for (int i=0; i < 4; i++) {
+        char* result = fgets(config, 100, config_file);
+        int button = (int)strtol(result, NULL, 16);
+        CUSTOM_BINDS[i] = button;
+    }
+    fclose(config_file);
 }
 
 int find_opposing_key(int key) {
-    if (key == left) {
-        return right;
+    if (key == CUSTOM_BINDS[KEY_LEFT]) {
+        return CUSTOM_BINDS[KEY_RIGHT];
     }
-    if (key == right) {
-        return left;
+    if (key == CUSTOM_BINDS[KEY_RIGHT]) {
+        return CUSTOM_BINDS[KEY_LEFT];
     }
-    if (key == up) {
-        return down;
+    if (key == CUSTOM_BINDS[KEY_UP]) {
+        return CUSTOM_BINDS[KEY_DOWN];
     }
-    if (key == down) {
-        return up;
+    if (key == CUSTOM_BINDS[KEY_DOWN]) {
+        return CUSTOM_BINDS[KEY_UP];
     }
     return -1;
 }
 
 int find_index_by_key(int key) {
-    if (key == left) {
+    if (key == CUSTOM_BINDS[KEY_LEFT]) {
         return KEY_LEFT;
     }
-    if (key == right) {
+    if (key == CUSTOM_BINDS[KEY_RIGHT]) {
         return KEY_RIGHT;
     }
-    if (key == up) {
+    if (key == CUSTOM_BINDS[KEY_UP]) {
         return KEY_UP;
     }
-    if (key == down) {
+    if (key == CUSTOM_BINDS[KEY_DOWN]) {
         return KEY_DOWN;
     }
     return -1;
@@ -132,8 +163,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
     case WM_COMMAND:
         if (wParam == WASD_ID) {
             set_bindings(WASD);
+            write_bindings_to_file(WASD);
         } else if (wParam == ARROWS_ID) {
             set_bindings(ARROWS);
+            write_bindings_to_file(ARROWS);
         }
     }
 
@@ -145,7 +178,6 @@ int main() {
     // to get rid of a terminal window
     // cl socd_cleaner.c /link /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup
     FreeConsole();
-    set_bindings(WASD);
 
     real[KEY_LEFT] = IS_UP;
     real[KEY_RIGHT] = IS_UP;
@@ -211,10 +243,6 @@ int main() {
         return error_message("Failed to create WASD radiobutton, error code is %d");
     }
 
-    if (CheckRadioButton(hwndMain, WASD_ID, ARROWS_ID, WASD_ID) == 0) {
-        return error_message("Failed to select default keybindings, error code is %d");
-    }
-
     HWND arrows_hwnd = CreateWindowEx(
         0,
         "BUTTON",
@@ -230,6 +258,19 @@ int main() {
         NULL);
     if (arrows_hwnd == NULL) {
         return error_message("Failed to create Arrows radiobutton, error code is %d");
+    }
+    
+    read_initial_bindings();
+    int check_id;
+    if (memcmp(CUSTOM_BINDS, WASD, sizeof(WASD)) == 0) {
+        check_id = WASD_ID;
+    } else if (memcmp(CUSTOM_BINDS, ARROWS, sizeof(ARROWS)) == 0) {
+        check_id = ARROWS_ID;
+    } else {
+        check_id = CUSTOM_ID;
+    }
+    if (CheckRadioButton(hwndMain, WASD_ID, CUSTOM_ID, check_id) == 0) {
+        return error_message("Failed to select default keybindings, error code is %d");
     }
 
     HWND text_hwnd = CreateWindowEx(
