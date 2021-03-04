@@ -69,7 +69,7 @@ void read_initial_bindings() {
         write_bindings_to_file(WASD);
         return;
     }
-    
+
     for (int i=0; i < 4; i++) {
         char* result = fgets(config, 100, config_file);
         int button = (int)strtol(result, NULL, 16);
@@ -158,8 +158,8 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
     case WM_DESTROY:
-	PostQuitMessage(0);
-	return 0;
+    PostQuitMessage(0);
+    return 0;
     case WM_COMMAND:
         if (wParam == WASD_ID) {
             set_bindings(WASD);
@@ -259,7 +259,7 @@ int main() {
     if (arrows_hwnd == NULL) {
         return error_message("Failed to create Arrows radiobutton, error code is %d");
     }
-    
+
     read_initial_bindings();
     int check_id;
     if (memcmp(CUSTOM_BINDS, WASD, sizeof(WASD)) == 0) {
@@ -311,8 +311,8 @@ int main() {
 
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
-	TranslateMessage(&msg);
-	DispatchMessage(&msg);
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
     }
     return 0;
 }
