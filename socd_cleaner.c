@@ -1,7 +1,9 @@
 #include <windows.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <shlwapi.h>
 #pragma comment(lib,"user32.lib")
+#pragma comment(lib,"shlwapi.lib")
 
 // Maintaining our own key states bookkeeping is kinda cringe
 // but we can't really use Get[Async]KeyState, see the first note at
@@ -17,6 +19,7 @@ const char* CONFIG_NAME = "socd.conf";
 const char* CLASS_NAME = "SOCD_CLASS";
 char error_message_buffer[100];
 char config[100];
+char window_file_buffer[MAX_PATH];
 
 int real[4]; // whether the key is pressed for real on keyboard
 int virtual[4]; // whether the key is pressed on a software level
@@ -131,7 +134,6 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     // Holding Alt sends WM_SYSKEYDOWN/WM_SYSKEYUP
     // instead of WM_KEYDOWN/WM_KEYUP, check it as well
     if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
-        /* printf("%d\n", key); */
         real[index] = IS_DOWN;
         virtual[index] = IS_DOWN;
         if (real[opposing_index] == IS_DOWN && virtual[opposing_index] == IS_DOWN) {
@@ -142,7 +144,6 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         }
     }
     else if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
-        /* printf("%d released\n", key); */
         real[index] = IS_UP;
         virtual[index] = IS_UP;
         if (real[opposing_index] == IS_DOWN) {
@@ -155,11 +156,42 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
 
+void winEventProc(
+    HWINEVENTHOOK hWinEventHook,
+    DWORD event,
+    HWND hwnd,
+    LONG idObject,
+    LONG idChild,
+    DWORD idEventThread,
+    DWORD dwmsEventTime
+) {
+    DWORD procId = 0;
+    GetWindowThreadProcessId(hwnd, &procId);
+    if (procId == 0) {
+        // Sometimes when you minimize a window nothing is focused for a brief moment,
+        // in this case windows sends "System Idle Process" as currently focused window
+        // for some reason. Just ignore it
+        return;
+    }
+    HANDLE hproc = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, 0, procId);
+    if (hproc == NULL) {
+        error_message("Couldn't open active process, error code is: %d");
+    }
+    DWORD filename_size = MAX_PATH;
+    // This function API is so fucking weird. Read its docs extremely carefully
+    QueryFullProcessImageName(hproc, 0, window_file_buffer, &filename_size);
+    CloseHandle(hproc);
+    PathStripPath(window_file_buffer);
+    printf("Window activated: %s\n", window_file_buffer);
+
+    // Compare against stored allowed exe files and unhook keyboard hook if doesn't match
+}
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
     case WM_DESTROY:
-    PostQuitMessage(0);
-    return 0;
+        PostQuitMessage(0);
+        return 0;
     case WM_COMMAND:
         if (wParam == WASD_ID) {
             set_bindings(WASD);
@@ -190,6 +222,15 @@ int main() {
 
     HINSTANCE hInstance = (HINSTANCE)GetModuleHandle(NULL);
     SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, hInstance, 0);
+    SetWinEventHook(
+        EVENT_OBJECT_FOCUS,
+        EVENT_OBJECT_FOCUS,
+        hInstance,
+        (WINEVENTPROC)winEventProc,
+        0,
+        0,
+        WINEVENT_OUTOFCONTEXT
+        );
 
     WNDCLASSEX wc;
     wc.cbSize = sizeof(WNDCLASSEX);
