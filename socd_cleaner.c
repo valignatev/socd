@@ -18,8 +18,9 @@
 const char* CONFIG_NAME = "socd.conf";
 const char* CLASS_NAME = "SOCD_CLASS";
 char error_message_buffer[100];
-char config[100];
-char window_file_buffer[MAX_PATH];
+char config_line[100];
+char focused_program[MAX_PATH];
+char programs_whitelist[200][MAX_PATH] = {0};
 
 int real[4]; // whether the key is pressed for real on keyboard
 int virtual[4]; // whether the key is pressed on a software level
@@ -44,7 +45,7 @@ int error_message(char* text) {
     return 1;
 }
 
-void write_bindings_to_file(int* bindings) {
+void write_settings(int* bindings) {
     FILE* config_file = fopen(CONFIG_NAME, "w");
     if (config_file == NULL) {
         // This writes to console that we're freeing sigh
@@ -52,8 +53,14 @@ void write_bindings_to_file(int* bindings) {
         perror("Couldn't open the config file");
         return;
     }
-    for (int i=0; i < 4; i++) {
+    for (int i = 0; i < 4; i++) {
         fprintf(config_file, "%X\n", bindings[i]);
+    }
+    for (int i = 0; i < sizeof(programs_whitelist) / MAX_PATH; i++) {
+        if (programs_whitelist[i][0] == '\0') {
+            break;
+        }
+        fprintf(config_file, "%s\n", programs_whitelist[i]);
     }
     fclose(config_file);
 }
@@ -65,18 +72,34 @@ void set_bindings(int* bindings) {
     CUSTOM_BINDS[3] = bindings[3];
 }
 
-void read_initial_bindings() {
+void read_settings() {
     FILE* config_file = fopen(CONFIG_NAME, "r+");
     if (config_file == NULL) {
         set_bindings(WASD);
-        write_bindings_to_file(WASD);
+        write_settings(WASD);
         return;
     }
 
+    // First 4 lines are key bindings
     for (int i=0; i < 4; i++) {
-        char* result = fgets(config, 100, config_file);
+        char* result = fgets(config_line, 100, config_file);
         int button = (int)strtol(result, NULL, 16);
         CUSTOM_BINDS[i] = button;
+    }
+
+    // Then there are programs SOCD cleaner should track
+    int i = 0;
+    while (fgets(programs_whitelist[i], MAX_PATH, config_file) != NULL) {
+        // Remove line ends from the line we just read.
+        // Works for LF, CR, CRLF, LFCR etc
+        programs_whitelist[i][strcspn(programs_whitelist[i], "\r\n")] = 0;
+        i++;
+    }
+    for (int i = 0; i < sizeof(programs_whitelist) / MAX_PATH; i++) {
+        if (programs_whitelist[i][0] == '\0') {
+            break;
+        }
+        printf("file is: %s\n", programs_whitelist[i]);
     }
     fclose(config_file);
 }
@@ -175,14 +198,15 @@ void winEventProc(
     }
     HANDLE hproc = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, 0, procId);
     if (hproc == NULL) {
+        // check for code #5 "access denied" and probably just ignore it
         error_message("Couldn't open active process, error code is: %d");
     }
     DWORD filename_size = MAX_PATH;
     // This function API is so fucking weird. Read its docs extremely carefully
-    QueryFullProcessImageName(hproc, 0, window_file_buffer, &filename_size);
+    QueryFullProcessImageName(hproc, 0, focused_program, &filename_size);
     CloseHandle(hproc);
-    PathStripPath(window_file_buffer);
-    printf("Window activated: %s\n", window_file_buffer);
+    PathStripPath(focused_program);
+    printf("Window activated: %s\n", focused_program);
 
     // Compare against stored allowed exe files and unhook keyboard hook if doesn't match
 }
@@ -195,10 +219,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
     case WM_COMMAND:
         if (wParam == WASD_ID) {
             set_bindings(WASD);
-            write_bindings_to_file(WASD);
+            write_settings(WASD);
         } else if (wParam == ARROWS_ID) {
             set_bindings(ARROWS);
-            write_bindings_to_file(ARROWS);
+            write_settings(ARROWS);
         }
     }
 
@@ -301,7 +325,7 @@ int main() {
         return error_message("Failed to create Arrows radiobutton, error code is %d");
     }
 
-    read_initial_bindings();
+    read_settings();
     int check_id;
     if (memcmp(CUSTOM_BINDS, WASD, sizeof(WASD)) == 0) {
         check_id = WASD_ID;
