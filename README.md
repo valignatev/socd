@@ -18,6 +18,31 @@ Use it at your own caution, especially if you do competitive gaming because
 some communities require to use something particular and ban any other alternatives.
 There you go, I warned you. Enjoy!
 
+## (Beta) Set programs where SOCD cleaner works
+
+Sometimes you don't want SOCD cleaner messing with your keyboard in some applications (like messengers).
+It's very inconvenient when it starts overriding A and D with each other when you're typing a word
+that contains both. Now it's possible to specify programs that SOCD cleaner will target when they are
+focused.
+
+Currently there is no proper interface to set it up, but you can open your `socd.conf` file
+and add a new line per program name after your keybindings, so starting with line number 5. Program
+name should be specified as its .exe file name.
+
+If you don't specify any filenames, SOCD cleaner will just work globally.
+
+Example `socd.conf` content:
+
+```
+41
+44
+57
+53
+hollow_knight.exe
+TheMessenger.exe
+oriwotw.exe
+```
+
 ## Compiling from source code
 
 Some antiviruses might complain at prebuilt executable as if it has viruses.
