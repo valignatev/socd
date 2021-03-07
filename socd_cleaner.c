@@ -14,13 +14,17 @@
 # define KEY_DOWN 3
 # define IS_DOWN 1
 # define IS_UP 0
+# define whitelist_max_length 200
 
 const char* CONFIG_NAME = "socd.conf";
 const char* CLASS_NAME = "SOCD_CLASS";
 char error_message_buffer[100];
 char config_line[100];
 char focused_program[MAX_PATH];
-char programs_whitelist[200][MAX_PATH] = {0};
+char programs_whitelist[whitelist_max_length][MAX_PATH] = {0};
+
+HHOOK kbhook;
+int hook_is_installed = 0;
 
 int real[4]; // whether the key is pressed for real on keyboard
 int virtual[4]; // whether the key is pressed on a software level
@@ -56,7 +60,7 @@ void write_settings(int* bindings) {
     for (int i = 0; i < 4; i++) {
         fprintf(config_file, "%X\n", bindings[i]);
     }
-    for (int i = 0; i < sizeof(programs_whitelist) / MAX_PATH; i++) {
+    for (int i = 0; i < whitelist_max_length; i++) {
         if (programs_whitelist[i][0] == '\0') {
             break;
         }
@@ -95,11 +99,10 @@ void read_settings() {
         programs_whitelist[i][strcspn(programs_whitelist[i], "\r\n")] = 0;
         i++;
     }
-    for (int i = 0; i < sizeof(programs_whitelist) / MAX_PATH; i++) {
+    for (int i = 0; i < whitelist_max_length; i++) {
         if (programs_whitelist[i][0] == '\0') {
             break;
         }
-        printf("file is: %s\n", programs_whitelist[i]);
     }
     fclose(config_file);
 }
@@ -179,6 +182,24 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
 
+void set_kb_hook(HINSTANCE instance) {
+    if (!hook_is_installed) {
+        printf("hooking this shit\n");
+        kbhook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, instance, 0);
+        if (kbhook != NULL) {
+            hook_is_installed = 1;
+        }
+    }
+}
+
+void unset_kb_hook() {
+    if (hook_is_installed) {
+        printf("unhooking this shit\n");
+        UnhookWindowsHookEx(kbhook);
+        hook_is_installed = 0;
+    }
+}
+
 void winEventProc(
     HWINEVENTHOOK hWinEventHook,
     DWORD event,
@@ -206,9 +227,19 @@ void winEventProc(
     QueryFullProcessImageName(hproc, 0, focused_program, &filename_size);
     CloseHandle(hproc);
     PathStripPath(focused_program);
-    printf("Window activated: %s\n", focused_program);
 
-    // Compare against stored allowed exe files and unhook keyboard hook if doesn't match
+    HINSTANCE hInstance = (HINSTANCE)GetModuleHandle(NULL);
+    // Linear scan let's fucking go, don't look here CS degree people
+    for (int i = 0; i < whitelist_max_length; i++) {
+        if (strcmp(focused_program, programs_whitelist[i]) == 0) {
+            printf("Window activated: %s\n", focused_program);
+            set_kb_hook(hInstance);
+            return;
+        } else if (programs_whitelist[i][0] == '\0') {
+            break;
+        }
+    }
+    unset_kb_hook();
 }
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -245,16 +276,25 @@ int main() {
     virtual[KEY_DOWN] = IS_UP;
 
     HINSTANCE hInstance = (HINSTANCE)GetModuleHandle(NULL);
-    SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, hInstance, 0);
-    SetWinEventHook(
-        EVENT_OBJECT_FOCUS,
-        EVENT_OBJECT_FOCUS,
-        hInstance,
-        (WINEVENTPROC)winEventProc,
-        0,
-        0,
-        WINEVENT_OUTOFCONTEXT
-        );
+
+    read_settings();
+    // Means no allowed programes were set up, just globally set the hook.
+    if (programs_whitelist[0][0] == '\0') {
+        set_kb_hook(hInstance);
+
+    // At least one allowed program is specified,
+    // handle hooking/unhooking when program gets focused/unfocused
+    } else {
+        SetWinEventHook(
+            EVENT_OBJECT_FOCUS,
+            EVENT_OBJECT_FOCUS,
+            hInstance,
+            (WINEVENTPROC)winEventProc,
+            0,
+            0,
+            WINEVENT_OUTOFCONTEXT
+            );
+    }
 
     WNDCLASSEX wc;
     wc.cbSize = sizeof(WNDCLASSEX);
@@ -325,7 +365,6 @@ int main() {
         return error_message("Failed to create Arrows radiobutton, error code is %d");
     }
 
-    read_settings();
     int check_id;
     if (memcmp(CUSTOM_BINDS, WASD, sizeof(WASD)) == 0) {
         check_id = WASD_ID;
