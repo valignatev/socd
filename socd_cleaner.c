@@ -219,7 +219,10 @@ void winEventProc(
     }
     HANDLE hproc = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, 0, procId);
     if (hproc == NULL) {
-        // check for code #5 "access denied" and probably just ignore it
+        // Sometimes we can't open a process (#5 "access denied"). Ignore it I guess.
+        if (GetLastError() == 5) {
+            return;
+        }
         error_message("Couldn't open active process, error code is: %d");
     }
     DWORD filename_size = MAX_PATH;
