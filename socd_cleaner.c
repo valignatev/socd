@@ -28,10 +28,10 @@ int hook_is_installed = 0;
 
 int real[4]; // whether the key is pressed for real on keyboard
 int virtual[4]; // whether the key is pressed on a software level
-//                   a     d     w     s
+//              a     d     w     s
 int WASD[4] = {0x41, 0x44, 0x57, 0x53};
 const int WASD_ID = 100;
-//                     <     >     ^     v
+//                <     >     ^     v
 int ARROWS[4] = {0x25, 0x27, 0x26, 0x28};
 const int ARROWS_ID = 200;
 // left, right, up, down
@@ -340,7 +340,7 @@ int main() {
         "WASD",
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_AUTORADIOBUTTON,
         10,
-        100,
+        90,
         100,
         30,
         hwndMain,
@@ -357,7 +357,7 @@ int main() {
         "Arrows",
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_AUTORADIOBUTTON,
         10,
-        120,
+        110,
         100,
         30,
         hwndMain,
@@ -366,6 +366,23 @@ int main() {
         NULL);
     if (arrows_hwnd == NULL) {
         return error_message("Failed to create Arrows radiobutton, error code is %d");
+    }
+
+    HWND custom_hwnd = CreateWindowEx(
+        0,
+        "BUTTON",
+        "Custom",
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_AUTORADIOBUTTON,
+        10,
+        130,
+        100,
+        30,
+        hwndMain,
+        (HMENU)CUSTOM_ID,
+        hInstance,
+        NULL);
+    if (custom_hwnd == NULL) {
+        return error_message("Failed to create Custom radiobutton, error code is %d");
     }
 
     int check_id;
@@ -399,12 +416,12 @@ int main() {
     HWND text1_hwnd = CreateWindowEx(
         0,
         "STATIC",
-        "Arbitrary keybindings will be added later. For now, only WASD or Arrows. Hardcode your bindings and compile it yourself or DM me in discord (valignatev#7795), I can compile a version for you.",
+        "I'll add custom binding interface later. For now, you can set them in socd.conf in the first 4 rows. The order is left, right, up, down.",
         WS_VISIBLE | WS_CHILD,
         10,
         30,
         400,
-        70,
+        60,
         hwndMain,
         (HMENU)100,
         hInstance,

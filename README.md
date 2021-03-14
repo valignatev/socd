@@ -18,6 +18,14 @@ Use it at your own caution, especially if you do competitive gaming because
 some communities require to use something particular and ban any other alternatives.
 There you go, I warned you. Enjoy!
 
+## (Beta) Custom keybindings
+
+You can specify your custom keybindings as you first 4 rows in `socd.conf`.
+You can get numbers for your keys [here](https://docs.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes),
+just make sure to remove `0x` and put only the number itself.
+Just clicking on "Custom" doesn't do anything for now, but it'll appear as selected automatically
+after you put anything other than WASD or arrows in your `socd.conf`
+
 ## (Beta) Set programs where SOCD cleaner works
 
 Sometimes you don't want SOCD cleaner messing with your keyboard in some applications (like messengers).
