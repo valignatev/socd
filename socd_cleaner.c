@@ -42,10 +42,10 @@ int error_message(char* text) {
     int error = GetLastError();
     sprintf(error_message_buffer, text, error);
     MessageBox(
-        NULL,
-        error_message_buffer,
-        "RIP",
-        MB_OK | MB_ICONERROR);
+               NULL,
+               error_message_buffer,
+               "RIP",
+               MB_OK | MB_ICONERROR);
     return 1;
 }
 
@@ -83,14 +83,14 @@ void read_settings() {
         write_settings(WASD);
         return;
     }
-
+    
     // First 4 lines are key bindings
     for (int i=0; i < 4; i++) {
         char* result = fgets(config_line, 100, config_file);
         int button = (int)strtol(result, NULL, 16);
         CUSTOM_BINDS[i] = button;
     }
-
+    
     // Then there are programs SOCD cleaner should track
     int i = 0;
     while (fgets(programs_whitelist[i], MAX_PATH, config_file) != NULL) {
@@ -141,13 +141,13 @@ int find_index_by_key(int key) {
 
 LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     KBDLLHOOKSTRUCT* kbInput = (KBDLLHOOKSTRUCT*)lParam;
-
+    
     // We ignore injected events so we don't mess with the inputs
     // we inject ourselves with SendInput
     if (nCode != HC_ACTION || kbInput->flags & LLKHF_INJECTED) {
         return CallNextHookEx(NULL, nCode, wParam, lParam);
     }
-
+    
     INPUT input;
     int key = kbInput->vkCode;
     int opposing = find_opposing_key(key);
@@ -156,7 +156,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     }
     int index = find_index_by_key(key);
     int opposing_index = find_index_by_key(opposing);
-
+    
     // Holding Alt sends WM_SYSKEYDOWN/WM_SYSKEYUP
     // instead of WM_KEYDOWN/WM_KEYUP, check it as well
     if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
@@ -230,7 +230,7 @@ void winEventProc(
     QueryFullProcessImageName(hproc, 0, focused_program, &filename_size);
     CloseHandle(hproc);
     PathStripPath(focused_program);
-
+    
     HINSTANCE hInstance = (HINSTANCE)GetModuleHandle(NULL);
     // Linear scan let's fucking go, don't look here CS degree people
     for (int i = 0; i < whitelist_max_length; i++) {
@@ -279,14 +279,14 @@ int main() {
     virtual[KEY_DOWN] = IS_UP;
 
     HINSTANCE hInstance = (HINSTANCE)GetModuleHandle(NULL);
-
+    
     read_settings();
     // Means no allowed programes were set up, just globally set the hook.
     if (programs_whitelist[0][0] == '\0') {
         set_kb_hook(hInstance);
-
-    // At least one allowed program is specified,
-    // handle hooking/unhooking when program gets focused/unfocused
+        
+        // At least one allowed program is specified,
+        // handle hooking/unhooking when program gets focused/unfocused
     } else {
         SetWinEventHook(
             EVENT_OBJECT_FOCUS,
@@ -298,7 +298,7 @@ int main() {
             WINEVENT_OUTOFCONTEXT
             );
     }
-
+    
     WNDCLASSEX wc;
     wc.cbSize = sizeof(WNDCLASSEX);
     wc.style = 0;
@@ -312,11 +312,11 @@ int main() {
     wc.lpszMenuName = NULL;
     wc.lpszClassName = CLASS_NAME;
     wc.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
-
+    
     if (RegisterClassEx(&wc) == 0) {
         return error_message("Failed to register window class, error code is %d");
     };
-
+    
     HWND hwndMain = CreateWindowEx(
         0,
         CLASS_NAME,
@@ -333,7 +333,7 @@ int main() {
     if (hwndMain == NULL) {
         return error_message("Failed to create a window, error code is %d");
     }
-
+    
     HWND wasd_hwnd = CreateWindowEx(
         0,
         "BUTTON",
@@ -350,7 +350,7 @@ int main() {
     if (wasd_hwnd == NULL) {
         return error_message("Failed to create WASD radiobutton, error code is %d");
     }
-
+    
     HWND arrows_hwnd = CreateWindowEx(
         0,
         "BUTTON",
@@ -367,7 +367,7 @@ int main() {
     if (arrows_hwnd == NULL) {
         return error_message("Failed to create Arrows radiobutton, error code is %d");
     }
-
+    
     HWND custom_hwnd = CreateWindowEx(
         0,
         "BUTTON",
@@ -384,7 +384,7 @@ int main() {
     if (custom_hwnd == NULL) {
         return error_message("Failed to create Custom radiobutton, error code is %d");
     }
-
+    
     int check_id;
     if (memcmp(CUSTOM_BINDS, WASD, sizeof(WASD)) == 0) {
         check_id = WASD_ID;
@@ -396,16 +396,19 @@ int main() {
     if (CheckRadioButton(hwndMain, WASD_ID, CUSTOM_ID, check_id) == 0) {
         return error_message("Failed to select default keybindings, error code is %d");
     }
-
+    
     HWND text_hwnd = CreateWindowEx(
         0,
         "STATIC",
-        "\"Last Wins\" is the only mode available as of now.",
+        ("\"Last Wins\" is the only mode available as of now.\n"
+         "I'll add custom binding interface later. "
+         "For now, you can set them in socd.conf in the first 4 rows. "
+         "The order is left, right, up, down."),
         WS_VISIBLE | WS_CHILD,
         10,
         10,
         400,
-        20,
+        80,
         hwndMain,
         (HMENU)100,
         hInstance,
@@ -413,26 +416,10 @@ int main() {
     if (text_hwnd == NULL) {
         return error_message("Failed to create Text, error code is %d");
     }
-    HWND text1_hwnd = CreateWindowEx(
-        0,
-        "STATIC",
-        "I'll add custom binding interface later. For now, you can set them in socd.conf in the first 4 rows. The order is left, right, up, down.",
-        WS_VISIBLE | WS_CHILD,
-        10,
-        30,
-        400,
-        60,
-        hwndMain,
-        (HMENU)100,
-        hInstance,
-        NULL);
-    if (text1_hwnd == NULL) {
-        return error_message("Failed to create Text1, error code is %d");
-    }
-
+    
     ShowWindow(hwndMain, SW_SHOWDEFAULT);
     UpdateWindow(hwndMain);
-
+    
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
         TranslateMessage(&msg);
