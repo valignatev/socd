@@ -18,7 +18,6 @@
 
 const char* CONFIG_NAME = "socd.conf";
 const char* CLASS_NAME = "SOCD_CLASS";
-char error_message_buffer[100];
 char config_line[100];
 char focused_program[MAX_PATH];
 char programs_whitelist[whitelist_max_length][MAX_PATH] = {0};
@@ -40,10 +39,12 @@ const int CUSTOM_ID = 300;
 
 int error_message(char* text) {
     int error = GetLastError();
-    sprintf(error_message_buffer, text, error);
+    // error is dword which is 32 bits, so 10 characters should be enough considering that we have an extra %d in the string
+    char* error_buffer = malloc(strlen(text) + 10);
+    sprintf(error_buffer, text, error);
     MessageBox(
                NULL,
-               error_message_buffer,
+               error_buffer,
                "RIP",
                MB_OK | MB_ICONERROR);
     return 1;
