@@ -322,7 +322,7 @@ int main() {
         0,
         CLASS_NAME,
         "SOCD helper for Epic Gamers!",
-        WS_OVERLAPPEDWINDOW,
+        WS_OVERLAPPEDWINDOW | WS_VISIBLE,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
         460,
@@ -417,9 +417,6 @@ int main() {
     if (text_hwnd == NULL) {
         return error_message("Failed to create Text, error code is %d");
     }
-    
-    ShowWindow(hwndMain, SW_SHOWDEFAULT);
-    UpdateWindow(hwndMain);
     
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
