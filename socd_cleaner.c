@@ -197,6 +197,17 @@ void unset_kb_hook() {
     if (hook_is_installed) {
         printf("unhooking this shit\n");
         UnhookWindowsHookEx(kbhook);
+        // Forget buttons that are pressed before unhooking from the keyboard
+        // So that when we hook again we don't end up in a dirty state where one
+        // of the buttons is being stuck from the previous hook
+        real[KEY_LEFT] = IS_UP;
+        real[KEY_RIGHT] = IS_UP;
+        real[KEY_UP] = IS_UP;
+        real[KEY_DOWN] = IS_UP;
+        virtual[KEY_LEFT] = IS_UP;
+        virtual[KEY_RIGHT] = IS_UP;
+        virtual[KEY_UP] = IS_UP;
+        virtual[KEY_DOWN] = IS_UP;
         hook_is_installed = 0;
     }
 }
