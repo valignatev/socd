@@ -17,7 +17,7 @@
 # define whitelist_max_length 200
 
 const char* CONFIG_NAME = "socd.conf";
-const char* CLASS_NAME = "SOCD_CLASS";
+const LPCWSTR CLASS_NAME = L"SOCD_CLASS";
 char config_line[100];
 char focused_program[MAX_PATH];
 char programs_whitelist[whitelist_max_length][MAX_PATH] = {0};
@@ -43,10 +43,10 @@ int error_message(char* text) {
     char* error_buffer = malloc(strlen(text) + 10);
     sprintf(error_buffer, text, error);
     MessageBox(
-               NULL,
-               error_buffer,
-               "RIP",
-               MB_OK | MB_ICONERROR);
+        NULL,
+        error_buffer,
+        "RIP",
+        MB_OK | MB_ICONERROR);
     return 1;
 }
 
@@ -261,7 +261,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         }
     }
 
-    return DefWindowProc(hwnd, uMsg, wParam, lParam);
+    return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 }
 
 int main() {
@@ -300,8 +300,8 @@ int main() {
             );
     }
     
-    WNDCLASSEX wc;
-    wc.cbSize = sizeof(WNDCLASSEX);
+    WNDCLASSEXW wc;
+    wc.cbSize = sizeof(WNDCLASSEXW);
     wc.style = 0;
     wc.lpfnWndProc = WindowProc;
     wc.cbClsExtra = 0;
@@ -309,19 +309,19 @@ int main() {
     wc.hInstance = hInstance;
     wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    wc.hbrBackground = (HBRUSH)COLOR_WINDOW,
     wc.lpszMenuName = NULL;
     wc.lpszClassName = CLASS_NAME;
     wc.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
     
-    if (RegisterClassEx(&wc) == 0) {
+    if (RegisterClassExW(&wc) == 0) {
         return error_message("Failed to register window class, error code is %d");
     };
     
-    HWND hwndMain = CreateWindowEx(
+    HWND hwndMain = CreateWindowExW(
         0,
         CLASS_NAME,
-        "SOCD helper for Epic Gamers!",
+        L"SOCD helper for Epic Gamers!",
         WS_OVERLAPPEDWINDOW | WS_VISIBLE,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
@@ -335,10 +335,10 @@ int main() {
         return error_message("Failed to create a window, error code is %d");
     }
     
-    HWND wasd_hwnd = CreateWindowEx(
+    HWND wasd_hwnd = CreateWindowExW(
         0,
-        "BUTTON",
-        "WASD",
+        L"BUTTON",
+        L"WASD",
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_AUTORADIOBUTTON,
         10,
         90,
@@ -352,10 +352,10 @@ int main() {
         return error_message("Failed to create WASD radiobutton, error code is %d");
     }
     
-    HWND arrows_hwnd = CreateWindowEx(
+    HWND arrows_hwnd = CreateWindowExW(
         0,
-        "BUTTON",
-        "Arrows",
+        L"BUTTON",
+        L"Arrows",
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_AUTORADIOBUTTON,
         10,
         110,
@@ -369,10 +369,10 @@ int main() {
         return error_message("Failed to create Arrows radiobutton, error code is %d");
     }
     
-    HWND custom_hwnd = CreateWindowEx(
+    HWND custom_hwnd = CreateWindowExW(
         0,
-        "BUTTON",
-        "Custom",
+        L"BUTTON",
+        L"Custom",
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_AUTORADIOBUTTON,
         10,
         130,
@@ -398,13 +398,13 @@ int main() {
         return error_message("Failed to select default keybindings, error code is %d");
     }
     
-    HWND text_hwnd = CreateWindowEx(
+    HWND text_hwnd = CreateWindowExW(
         0,
-        "STATIC",
-        ("\"Last Wins\" is the only mode available as of now.\n"
-         "I'll add custom binding interface later. "
-         "For now, you can set them in socd.conf in the first 4 rows. "
-         "The order is left, right, up, down."),
+        L"STATIC",
+        (L"\"Last Wins\" is the only mode available as of now.\n"
+         L"I'll add custom binding interface later. "
+         L"For now, you can set them in socd.conf in the first 4 rows. "
+         L"The order is left, right, up, down."),
         WS_VISIBLE | WS_CHILD,
         10,
         10,
@@ -419,7 +419,7 @@ int main() {
     }
     
     MSG msg;
-    while (GetMessage(&msg, NULL, 0, 0)) {
+    while (GetMessageW(&msg, NULL, 0, 0)) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
