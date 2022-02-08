@@ -189,6 +189,8 @@ void set_kb_hook(HINSTANCE instance) {
         kbhook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, instance, 0);
         if (kbhook != NULL) {
             hook_is_installed = 1;
+        } else {
+            printf("hook failed oopsie\n");
         }
     }
 }
@@ -212,24 +214,17 @@ void unset_kb_hook() {
     }
 }
 
-void winEventProc(
-    HWINEVENTHOOK hWinEventHook,
-    DWORD event,
-    HWND hwnd,
-    LONG idObject,
-    LONG idChild,
-    DWORD idEventThread,
-    DWORD dwmsEventTime
-) {
-    DWORD procId = 0;
-    GetWindowThreadProcessId(hwnd, &procId);
-    if (procId == 0) {
+void get_focused_program() {
+    HWND inspected_window = GetForegroundWindow();
+    DWORD process_id = 0;
+    GetWindowThreadProcessId(inspected_window, &process_id);
+    if (process_id== 0) {
         // Sometimes when you minimize a window nothing is focused for a brief moment,
         // in this case windows sends "System Idle Process" as currently focused window
         // for some reason. Just ignore it
         return;
     }
-    HANDLE hproc = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, 0, procId);
+    HANDLE hproc = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, 0, process_id);
     if (hproc == NULL) {
         // Sometimes we can't open a process (#5 "access denied"). Ignore it I guess.
         if (GetLastError() == 5) {
@@ -242,12 +237,27 @@ void winEventProc(
     QueryFullProcessImageName(hproc, 0, focused_program, &filename_size);
     CloseHandle(hproc);
     PathStripPath(focused_program);
+    printf("Window activated: %s\n", focused_program);
+}
+
+void detect_focused_program(
+    HWINEVENTHOOK hWinEventHook,
+    DWORD event,
+    HWND window,
+    LONG idObject,
+    LONG idChild,
+    DWORD idEventThread,
+    DWORD dwmsEventTime
+) {
+    // We're ignoring window here, sometimes it points to the program that
+    // is not actually being focused for some reason. Instead, we treat the event
+    // as a trigger to check for the current foreground program ourselves.
+    get_focused_program();
     
     HINSTANCE hInstance = (HINSTANCE)GetModuleHandle(NULL);
     // Linear scan let's fucking go, don't look here CS degree people
     for (int i = 0; i < whitelist_max_length; i++) {
         if (strcmp(focused_program, programs_whitelist[i]) == 0) {
-            printf("Window activated: %s\n", focused_program);
             set_kb_hook(hInstance);
             return;
         } else if (programs_whitelist[i][0] == '\0') {
@@ -304,7 +314,7 @@ int main() {
             EVENT_OBJECT_FOCUS,
             EVENT_OBJECT_FOCUS,
             hInstance,
-            (WINEVENTPROC)winEventProc,
+            (WINEVENTPROC)detect_focused_program,
             0,
             0,
             WINEVENT_OUTOFCONTEXT
