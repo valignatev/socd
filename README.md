@@ -62,7 +62,7 @@ Running `build.bat release` will produce a release build. Consult the script sou
 
 Generally, you should be able to compile it from source with any C compiler on Windows.
 There is no external dependencies outside of builtin windows libraries.
-Fore example, with clang:
+For example, with clang:
 
 Download [clang](https://releases.llvm.org/download.html) and run in the project root
 
