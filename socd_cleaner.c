@@ -27,7 +27,7 @@ int hook_is_installed = 0;
 
 int real[4]; // whether the key is pressed for real on keyboard
 int virtual[4]; // whether the key is pressed on a software level
-int DEFUALT_DISABLE_BIND = 0x45;
+int DEFUALT_DISABLE_BIND = 0x45; // e
 //              a     d     w     s
 int WASD[4] = {0x41, 0x44, 0x57, 0x53};
 const int WASD_ID = 100;
@@ -172,9 +172,6 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         }
         return CallNextHookEx(NULL, nCode, wParam, lParam);
     }
-    if(disableKeyPressed == IS_DOWN){
-        return CallNextHookEx(NULL, nCode, wParam, lParam);
-    }
     int opposing = find_opposing_key(key);
     if (opposing < 0) {
         return CallNextHookEx(NULL, nCode, wParam, lParam);
@@ -187,7 +184,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
         real[index] = IS_DOWN;
         virtual[index] = IS_DOWN;
-        if (real[opposing_index] == IS_DOWN && virtual[opposing_index] == IS_DOWN) {
+        if (real[opposing_index] == IS_DOWN && virtual[opposing_index] == IS_DOWN && disableKeyPressed == IS_UP) {
             input.type = INPUT_KEYBOARD;
             input.ki = (KEYBDINPUT){opposing, 0, KEYEVENTF_KEYUP, 0, 0};
             SendInput(1, &input, sizeof(INPUT));
@@ -197,7 +194,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     else if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
         real[index] = IS_UP;
         virtual[index] = IS_UP;
-        if (real[opposing_index] == IS_DOWN) {
+        if (real[opposing_index] == IS_DOWN && disableKeyPressed == IS_UP) {
             input.type = INPUT_KEYBOARD;
             input.ki = (KEYBDINPUT){opposing, 0, 0, 0, 0};
             SendInput(1, &input, sizeof(INPUT));
