@@ -27,7 +27,7 @@ int hook_is_installed = 0;
 
 int real[4]; // whether the key is pressed for real on keyboard
 int virtual[4]; // whether the key is pressed on a software level
-int DEFUALT_DISABLE_BIND = 0x45; // e
+int DEFUALT_DISABLE_BIND = 0xA1; // e
 //              a     d     w     s
 int WASD[4] = {0x41, 0x44, 0x57, 0x53};
 const int WASD_ID = 100;
