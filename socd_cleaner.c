@@ -16,7 +16,7 @@
 # define IS_UP 0
 # define whitelist_max_length 200
 
-const char* CONFIG_NAME = "socd.conf";
+const char* CONFIG_NAME = "socd_updated.conf";
 const LPCWSTR CLASS_NAME = L"SOCD_CLASS";
 char config_line[100];
 char focused_program[MAX_PATH];
@@ -27,6 +27,7 @@ int hook_is_installed = 0;
 
 int real[4]; // whether the key is pressed for real on keyboard
 int virtual[4]; // whether the key is pressed on a software level
+int DEFUALT_DISABLE_BIND = 0x45;
 //              a     d     w     s
 int WASD[4] = {0x41, 0x44, 0x57, 0x53};
 const int WASD_ID = 100;
@@ -36,6 +37,8 @@ const int ARROWS_ID = 200;
 // left, right, up, down
 int CUSTOM_BINDS[4];
 const int CUSTOM_ID = 300;
+int DISABLE_BIND;
+int disableKeyPressed;
 
 int error_message(char* text) {
     int error = GetLastError();
@@ -50,7 +53,7 @@ int error_message(char* text) {
     return 1;
 }
 
-void write_settings(int* bindings) {
+void write_settings(int* bindings, int disableBind) {
     FILE* config_file = fopen(CONFIG_NAME, "w");
     if (config_file == NULL) {
         // This writes to console that we're freeing sigh
@@ -61,6 +64,7 @@ void write_settings(int* bindings) {
     for (int i = 0; i < 4; i++) {
         fprintf(config_file, "%X\n", bindings[i]);
     }
+    fprintf(config_file, "%X\n", disableBind);
     for (int i = 0; i < whitelist_max_length; i++) {
         if (programs_whitelist[i][0] == '\0') {
             break;
@@ -70,18 +74,19 @@ void write_settings(int* bindings) {
     fclose(config_file);
 }
 
-void set_bindings(int* bindings) {
+void set_bindings(int* bindings, int disableBind) {
     CUSTOM_BINDS[0] = bindings[0];
     CUSTOM_BINDS[1] = bindings[1];
     CUSTOM_BINDS[2] = bindings[2];
     CUSTOM_BINDS[3] = bindings[3];
+    DISABLE_BIND = disableBind; 
 }
 
 void read_settings() {
     FILE* config_file = fopen(CONFIG_NAME, "r+");
     if (config_file == NULL) {
-        set_bindings(WASD);
-        write_settings(WASD);
+        set_bindings(WASD, DEFUALT_DISABLE_BIND);
+        write_settings(WASD,DEFUALT_DISABLE_BIND);
         return;
     }
     
@@ -91,7 +96,12 @@ void read_settings() {
         int button = (int)strtol(result, NULL, 16);
         CUSTOM_BINDS[i] = button;
     }
-    
+
+    // 5th line is disable key bind
+    char* result = fgets(config_line,100,config_file);
+    int button = (int)strtol(result,NULL,16);
+    DISABLE_BIND = button;
+
     // Then there are programs SOCD cleaner should track
     int i = 0;
     while (fgets(programs_whitelist[i], MAX_PATH, config_file) != NULL) {
@@ -151,6 +161,20 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     
     INPUT input;
     int key = kbInput->vkCode;
+    if(key == DISABLE_BIND){
+        if(wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
+        {
+            disableKeyPressed = IS_DOWN;
+        }
+        else if(wParam == WM_KEYUP || wParam == WM_SYSKEYUP)
+        {
+            disableKeyPressed = IS_UP;
+        }
+        return CallNextHookEx(NULL, nCode, wParam, lParam);
+    }
+    if(disableKeyPressed == IS_DOWN){
+        return CallNextHookEx(NULL, nCode, wParam, lParam);
+    }
     int opposing = find_opposing_key(key);
     if (opposing < 0) {
         return CallNextHookEx(NULL, nCode, wParam, lParam);
@@ -274,11 +298,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         return 0;
     case WM_COMMAND:
         if (wParam == WASD_ID) {
-            set_bindings(WASD);
-            write_settings(WASD);
+            set_bindings(WASD,DEFUALT_DISABLE_BIND);
+            write_settings(WASD,DEFUALT_DISABLE_BIND);
         } else if (wParam == ARROWS_ID) {
-            set_bindings(ARROWS);
-            write_settings(ARROWS);
+            set_bindings(ARROWS,DEFUALT_DISABLE_BIND);
+            write_settings(ARROWS,DEFUALT_DISABLE_BIND);
         }
     }
 
@@ -291,6 +315,7 @@ int main() {
     // cl socd_cleaner.c /link /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup
     FreeConsole();
 
+    disableKeyPressed = IS_UP;
     real[KEY_LEFT] = IS_UP;
     real[KEY_RIGHT] = IS_UP;
     real[KEY_UP] = IS_UP;
