@@ -16,6 +16,8 @@
 # define IS_UP 0
 # define whitelist_max_length 200
 
+HWND main_window;
+
 const char* CONFIG_NAME = "socd_updated.conf";
 const LPCWSTR CLASS_NAME = L"SOCD_CLASS";
 char config_line[100];
@@ -24,6 +26,7 @@ char programs_whitelist[whitelist_max_length][MAX_PATH] = {0};
 
 HHOOK kbhook;
 int hook_is_installed = 0;
+int listening_for_esc_bind = 0;
 
 int real[4]; // whether the key is pressed for real on keyboard
 int virtual[4]; // whether the key is pressed on a software level
@@ -37,8 +40,11 @@ const int ARROWS_ID = 200;
 // left, right, up, down
 int CUSTOM_BINDS[4];
 const int CUSTOM_ID = 300;
+const int ESC_BIND_ID = 400;
 int DISABLE_BIND;
 int disableKeyPressed;
+int ESC_BIND = 0;
+int ESC_PRESSED;
 
 int error_message(char* text) {
     int error = GetLastError();
@@ -65,6 +71,7 @@ void write_settings(int* bindings, int disableBind) {
         fprintf(config_file, "%X\n", bindings[i]);
     }
     fprintf(config_file, "%X\n", disableBind);
+    fprintf(config_file, "%X\n", ESC_BIND);
     for (int i = 0; i < whitelist_max_length; i++) {
         if (programs_whitelist[i][0] == '\0') {
             break;
@@ -172,6 +179,25 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         }
         return CallNextHookEx(NULL, nCode, wParam, lParam);
     }
+
+    if(key == ESC_BIND) {
+        if(wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
+        {
+            ESC_PRESSED = IS_DOWN;
+            input.type = INPUT_KEYBOARD;
+            input.ki = (KEYBDINPUT){VK_ESCAPE, 0, 0, 0, 0};
+            SendInput(1, &input, sizeof(INPUT));
+        }
+        else if(wParam == WM_KEYUP || wParam == WM_SYSKEYUP)
+        {
+            ESC_PRESSED = IS_UP;
+            input.type = INPUT_KEYBOARD;
+            input.ki = (KEYBDINPUT){VK_ESCAPE, 0, KEYEVENTF_KEYUP, 0, 0};
+            SendInput(1, &input, sizeof(INPUT));
+        }
+        return CallNextHookEx(NULL, nCode, wParam, lParam);
+    }
+
     int opposing = find_opposing_key(key);
     if (opposing < 0) {
         return CallNextHookEx(NULL, nCode, wParam, lParam);
@@ -288,18 +314,62 @@ void detect_focused_program(
     unset_kb_hook();
 }
 
+void paint_esc_label(lParam) {
+    LPCWSTR label;
+    if (listening_for_esc_bind) {
+        label = L"Press button to bind ESC to...";
+    } else {
+        if (!ESC_BIND) {
+            label = L"ESC isn't bound";
+        } else {
+            wchar_t label_buffer[100];
+            wchar_t key_name_buf[15];
+            GetKeyNameTextW(lParam, key_name_buf, 15);
+            wprintf(L"key name is %s\nvirtual key is %X", key_name_buf, ESC_BIND);
+            wsprintfW(label_buffer, L"ESC is bound to %s", key_name_buf);
+            label = label_buffer;
+        }
+    }
+    HWND hwnd = CreateWindowExW(
+        0,
+        L"STATIC",
+        label,
+        WS_VISIBLE | WS_CHILD,
+        120,
+        167,
+        400,
+        30,
+        main_window,
+        (HMENU)500,
+        main_window,
+        NULL);
+    if (hwnd == NULL) {
+        error_message("Failed to create ESC bind label, error code is %d");
+    }
+    
+}
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
     case WM_COMMAND:
+        // We reset focus to the main window so that it's possible to bind the buttons
+        // to SPACE without it repressing the button and asking for the bind infinitely
+        SetFocus(main_window);
         if (wParam == WASD_ID) {
             set_bindings(WASD,DEFUALT_DISABLE_BIND);
             write_settings(WASD,DEFUALT_DISABLE_BIND);
+            return 0;
         } else if (wParam == ARROWS_ID) {
             set_bindings(ARROWS,DEFUALT_DISABLE_BIND);
             write_settings(ARROWS,DEFUALT_DISABLE_BIND);
+            return 0;
+        } else if (wParam == ESC_BIND_ID) {
+            listening_for_esc_bind = !listening_for_esc_bind;
+            paint_esc_label(hwnd, lParam);
+            return 0;
         }
     }
 
@@ -312,6 +382,7 @@ int main() {
     // cl socd_cleaner.c /link /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup
     FreeConsole();
 
+    ESC_PRESSED = IS_UP;
     disableKeyPressed = IS_UP;
     real[KEY_LEFT] = IS_UP;
     real[KEY_RIGHT] = IS_UP;
@@ -361,7 +432,7 @@ int main() {
         return error_message("Failed to register window class, error code is %d");
     };
     
-    HWND hwndMain = CreateWindowExW(
+    main_window = CreateWindowExW(
         0,
         CLASS_NAME,
         L"SOCD helper for Epic Gamers!",
@@ -369,12 +440,12 @@ int main() {
         CW_USEDEFAULT,
         CW_USEDEFAULT,
         460,
-        200,
+        250,
         NULL,
         NULL,
         hInstance,
         NULL);
-    if (hwndMain == NULL) {
+    if (main_window == NULL) {
         return error_message("Failed to create a window, error code is %d");
     }
     
@@ -387,7 +458,7 @@ int main() {
         90,
         100,
         30,
-        hwndMain,
+        main_window,
         (HMENU)WASD_ID,
         hInstance,
         NULL);
@@ -404,7 +475,7 @@ int main() {
         110,
         100,
         30,
-        hwndMain,
+        main_window,
         (HMENU)ARROWS_ID,
         hInstance,
         NULL);
@@ -421,13 +492,31 @@ int main() {
         130,
         100,
         30,
-        hwndMain,
+        main_window,
         (HMENU)CUSTOM_ID,
         hInstance,
         NULL);
     if (custom_hwnd == NULL) {
         return error_message("Failed to create Custom radiobutton, error code is %d");
     }
+
+    HWND esc_hwnd = CreateWindowExW(
+        0,
+        L"BUTTON",
+        L"Bind ESC",
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
+        10,
+        160,
+        100,
+        30,
+        main_window,
+        (HMENU)ESC_BIND_ID,
+        hInstance,
+        NULL);
+    if (esc_hwnd == NULL) {
+        return error_message("Failed to create ESC bind button, error code is %d");
+    }
+    paint_esc_label(main_window, NULL);
     
     int check_id;
     if (memcmp(CUSTOM_BINDS, WASD, sizeof(WASD)) == 0) {
@@ -437,7 +526,7 @@ int main() {
     } else {
         check_id = CUSTOM_ID;
     }
-    if (CheckRadioButton(hwndMain, WASD_ID, CUSTOM_ID, check_id) == 0) {
+    if (CheckRadioButton(main_window, WASD_ID, CUSTOM_ID, check_id) == 0) {
         return error_message("Failed to select default keybindings, error code is %d");
     }
     
@@ -453,7 +542,7 @@ int main() {
         10,
         400,
         80,
-        hwndMain,
+        main_window,
         (HMENU)100,
         hInstance,
         NULL);
@@ -465,6 +554,41 @@ int main() {
     while (GetMessageW(&msg, NULL, 0, 0)) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
+        switch (msg.message) {
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN:
+            if (listening_for_esc_bind) {
+                UINT real_virtual_key_code = msg.wParam;
+                listening_for_esc_bind = 0;
+                ESC_BIND = 0;
+
+                // key scancode is 16-23 bits of lParam
+                UINT scancode = (msg.lParam & 0x00ff0000) >> 16;
+                // extended is 24th bit of lParam. Only works for ctrl and alt
+                int extended = msg.lParam >> 24 & 1;
+
+                // Windows is weird when it comes to distinguishing between left and right counterparts of
+                // shift, ctrl and alt keys. Extended bit of lParam only works for alt and control but doesn't work for shift.
+                // MapVirtualKeyW only works for shift but doesn't work for alt and ctrl. So we should use both
+                // Funny enough, left/right windows key work just fine out of the box without any special treatment.
+                switch (real_virtual_key_code) {
+                case VK_SHIFT:
+                    real_virtual_key_code = MapVirtualKeyW(scancode, MAPVK_VSC_TO_VK_EX);
+                    break;
+                case VK_CONTROL:
+                    real_virtual_key_code = extended ? VK_RCONTROL : VK_LCONTROL;
+                    break;
+                case VK_MENU:
+                    real_virtual_key_code = extended ? VK_RMENU : VK_LMENU;
+                    break;
+                }
+                
+                if (real_virtual_key_code != VK_ESCAPE) {
+                    ESC_BIND = real_virtual_key_code;
+                }
+                paint_esc_label(msg.lParam);
+            }
+        }
     }
     return 0;
 }
