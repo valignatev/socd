@@ -8,13 +8,17 @@
 // Maintaining our own key states bookkeeping is kinda cringe
 // but we can't really use Get[Async]KeyState, see the first note at
 // https://docs.microsoft.com/en-us/previous-versions/windows/desktop/legacy/ms644985(v=vs.85)
-# define KEY_LEFT 0
-# define KEY_RIGHT 1
-# define KEY_UP 2
-# define KEY_DOWN 3
-# define IS_DOWN 1
-# define IS_UP 0
-# define whitelist_max_length 200
+#define KEY_LEFT 0
+#define KEY_RIGHT 1
+#define KEY_UP 2
+#define KEY_DOWN 3
+#define IS_DOWN 1
+#define IS_UP 0
+#define whitelist_max_length 200
+#define WASD_ID 100
+#define ARROWS_ID 200
+#define CUSTOM_ID 300
+#define ESC_BIND_ID 400
 
 HWND main_window;
 
@@ -33,14 +37,10 @@ int virtual[4]; // whether the key is pressed on a software level
 int DEFUALT_DISABLE_BIND = 0xA1; // e
 //              a     d     w     s
 int WASD[4] = {0x41, 0x44, 0x57, 0x53};
-const int WASD_ID = 100;
 //                <     >     ^     v
 int ARROWS[4] = {0x25, 0x27, 0x26, 0x28};
-const int ARROWS_ID = 200;
 // left, right, up, down
 int CUSTOM_BINDS[4];
-const int CUSTOM_ID = 300;
-const int ESC_BIND_ID = 400;
 int DISABLE_BIND;
 int disableKeyPressed;
 int ESC_BIND = 0;
@@ -341,7 +341,7 @@ void paint_esc_label(lParam) {
         30,
         main_window,
         (HMENU)500,
-        main_window,
+        (HINSTANCE)main_window,
         NULL);
     if (hwnd == NULL) {
         error_message("Failed to create ESC bind label, error code is %d");
