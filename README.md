@@ -42,7 +42,7 @@ that contains both. Now it's possible to specify programs that SOCD cleaner will
 focused.
 
 Currently there is no proper interface to set it up, but you can open your `socd.conf` file
-and add a new line per program name after your keybindings, so starting with line number 5. Program
+and add a new line per program name after your keybindings, so starting with line number 7. Program
 name should be specified as its .exe file name.
 
 If you don't specify any filenames, SOCD cleaner will just work globally.
