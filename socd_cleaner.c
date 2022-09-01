@@ -8,10 +8,10 @@
 // Maintaining our own key states bookkeeping is kinda cringe
 // but we can't really use Get[Async]KeyState, see the first note at
 // https://docs.microsoft.com/en-us/previous-versions/windows/desktop/legacy/ms644985(v=vs.85)
-#define KEY_LEFT 0
-#define KEY_RIGHT 1
-#define KEY_UP 2
-#define KEY_DOWN 3
+#define DIRECTION_LEFT 0
+#define DIRECTION_RIGHT 1
+#define DIRECTION_UP 2
+#define DIRECTION_DOWN 3
 #define IS_DOWN 1
 #define IS_UP 0
 #define whitelist_max_length 200
@@ -126,33 +126,33 @@ void read_settings() {
 }
 
 int find_opposing_key(int key) {
-    if (key == CUSTOM_BINDS[KEY_LEFT]) {
-        return CUSTOM_BINDS[KEY_RIGHT];
+    if (key == CUSTOM_BINDS[DIRECTION_LEFT]) {
+        return CUSTOM_BINDS[DIRECTION_RIGHT];
     }
-    if (key == CUSTOM_BINDS[KEY_RIGHT]) {
-        return CUSTOM_BINDS[KEY_LEFT];
+    if (key == CUSTOM_BINDS[DIRECTION_RIGHT]) {
+        return CUSTOM_BINDS[DIRECTION_LEFT];
     }
-    if (key == CUSTOM_BINDS[KEY_UP]) {
-        return CUSTOM_BINDS[KEY_DOWN];
+    if (key == CUSTOM_BINDS[DIRECTION_UP]) {
+        return CUSTOM_BINDS[DIRECTION_DOWN];
     }
-    if (key == CUSTOM_BINDS[KEY_DOWN]) {
-        return CUSTOM_BINDS[KEY_UP];
+    if (key == CUSTOM_BINDS[DIRECTION_DOWN]) {
+        return CUSTOM_BINDS[DIRECTION_UP];
     }
     return -1;
 }
 
 int find_index_by_key(int key) {
-    if (key == CUSTOM_BINDS[KEY_LEFT]) {
-        return KEY_LEFT;
+    if (key == CUSTOM_BINDS[DIRECTION_LEFT]) {
+        return DIRECTION_LEFT;
     }
-    if (key == CUSTOM_BINDS[KEY_RIGHT]) {
-        return KEY_RIGHT;
+    if (key == CUSTOM_BINDS[DIRECTION_RIGHT]) {
+        return DIRECTION_RIGHT;
     }
-    if (key == CUSTOM_BINDS[KEY_UP]) {
-        return KEY_UP;
+    if (key == CUSTOM_BINDS[DIRECTION_UP]) {
+        return DIRECTION_UP;
     }
-    if (key == CUSTOM_BINDS[KEY_DOWN]) {
-        return KEY_DOWN;
+    if (key == CUSTOM_BINDS[DIRECTION_DOWN]) {
+        return DIRECTION_DOWN;
     }
     return -1;
 }
@@ -249,14 +249,14 @@ void unset_kb_hook() {
         // Forget buttons that are pressed before unhooking from the keyboard
         // So that when we hook again we don't end up in a dirty state where one
         // of the buttons is being stuck from the previous hook
-        real[KEY_LEFT] = IS_UP;
-        real[KEY_RIGHT] = IS_UP;
-        real[KEY_UP] = IS_UP;
-        real[KEY_DOWN] = IS_UP;
-        virtual[KEY_LEFT] = IS_UP;
-        virtual[KEY_RIGHT] = IS_UP;
-        virtual[KEY_UP] = IS_UP;
-        virtual[KEY_DOWN] = IS_UP;
+        real[DIRECTION_LEFT] = IS_UP;
+        real[DIRECTION_RIGHT] = IS_UP;
+        real[DIRECTION_UP] = IS_UP;
+        real[DIRECTION_DOWN] = IS_UP;
+        virtual[DIRECTION_LEFT] = IS_UP;
+        virtual[DIRECTION_RIGHT] = IS_UP;
+        virtual[DIRECTION_UP] = IS_UP;
+        virtual[DIRECTION_DOWN] = IS_UP;
         hook_is_installed = 0;
     }
 }
@@ -384,14 +384,14 @@ int main() {
 
     ESC_PRESSED = IS_UP;
     disableKeyPressed = IS_UP;
-    real[KEY_LEFT] = IS_UP;
-    real[KEY_RIGHT] = IS_UP;
-    real[KEY_UP] = IS_UP;
-    real[KEY_DOWN] = IS_UP;
-    virtual[KEY_LEFT] = IS_UP;
-    virtual[KEY_RIGHT] = IS_UP;
-    virtual[KEY_UP] = IS_UP;
-    virtual[KEY_DOWN] = IS_UP;
+    real[DIRECTION_LEFT] = IS_UP;
+    real[DIRECTION_RIGHT] = IS_UP;
+    real[DIRECTION_UP] = IS_UP;
+    real[DIRECTION_DOWN] = IS_UP;
+    virtual[DIRECTION_LEFT] = IS_UP;
+    virtual[DIRECTION_RIGHT] = IS_UP;
+    virtual[DIRECTION_UP] = IS_UP;
+    virtual[DIRECTION_DOWN] = IS_UP;
 
     HINSTANCE hInstance = (HINSTANCE)GetModuleHandle(NULL);
     
