@@ -18,9 +18,17 @@ Use it at your own caution, especially if you do competitive gaming because
 some communities require to use something particular and ban any other alternatives.
 There you go, I warned you. Enjoy!
 
+## Warning
+
+The program is in progress, expect backwards incompatible config changes and all that. Hopefully not a big deal
+since there's not much to configure, but feel free to reach out to me or leave github issue if something that
+you were using suddenly breaks.
+
 ## (Beta) Custom keybindings
 
-You can specify your custom keybindings as you first 5 rows in `socd.conf`. (the fifth row is the disable key)
+You can specify your custom keybindings as you first 6 rows in `socd_vxx.conf`.
+First 4 rows are your directions - left, right, up, down, the fifth row is the disable key, sixth row is the esc binding.
+If the file doesn't exist - run the program so it creates one with the default config.
 You can get numbers for your keys [here](https://docs.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes),
 just make sure to remove `0x` and put only the number itself.
 Just clicking on "Custom" doesn't do anything for now, but it'll appear as selected automatically
@@ -39,16 +47,19 @@ name should be specified as its .exe file name.
 
 If you don't specify any filenames, SOCD cleaner will just work globally.
 
-Example `socd.conf` content:
+Example `socd_v008.conf` content:
 
 ```
 41
 44
 57
 53
+45
+55
 hollow_knight.exe
 TheMessenger.exe
 oriwotw.exe
+hl2.exe
 ```
 
 ## Compiling from source code
