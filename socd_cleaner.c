@@ -20,6 +20,18 @@
 #define CUSTOM_ID 300
 #define ESC_BIND_ID 400
 
+// This is scuffed. ESC is a scan code, everything else is virtual key codes
+#define KEY_ESC 1
+#define KEY_W 0x57
+#define KEY_A 0x41
+#define KEY_S 0x53
+#define KEY_D 0x44
+#define KEY_E 0x45
+#define KEY_UP VK_UP
+#define KEY_LEFT VK_LEFT
+#define KEY_DOWN VK_DOWN
+#define KEY_RIGHT VK_RIGHT
+
 HWND main_window;
 
 const char* CONFIG_NAME = "socd_updated.conf";
@@ -34,11 +46,9 @@ int listening_for_esc_bind = 0;
 
 int real[4]; // whether the key is pressed for real on keyboard
 int virtual[4]; // whether the key is pressed on a software level
-int DEFUALT_DISABLE_BIND = 0xA1; // e
-//              a     d     w     s
-int WASD[4] = {0x41, 0x44, 0x57, 0x53};
-//                <     >     ^     v
-int ARROWS[4] = {0x25, 0x27, 0x26, 0x28};
+int DEFUALT_DISABLE_BIND = KEY_E;
+int WASD[4] = {KEY_A, KEY_D, KEY_W, KEY_S};
+int ARROWS[4] = {KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN};
 // left, right, up, down
 int CUSTOM_BINDS[4];
 int DISABLE_BIND;
@@ -185,14 +195,14 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         {
             ESC_PRESSED = IS_DOWN;
             input.type = INPUT_KEYBOARD;
-            input.ki = (KEYBDINPUT){VK_ESCAPE, 0, 0, 0, 0};
+            input.ki = (KEYBDINPUT){0, KEY_ESC, KEYEVENTF_SCANCODE, 0, 0};
             SendInput(1, &input, sizeof(INPUT));
         }
         else if(wParam == WM_KEYUP || wParam == WM_SYSKEYUP)
         {
             ESC_PRESSED = IS_UP;
             input.type = INPUT_KEYBOARD;
-            input.ki = (KEYBDINPUT){VK_ESCAPE, 0, KEYEVENTF_KEYUP, 0, 0};
+            input.ki = (KEYBDINPUT){0, KEY_ESC, KEYEVENTF_KEYUP | KEYEVENTF_SCANCODE, 0, 0};
             SendInput(1, &input, sizeof(INPUT));
         }
         return CallNextHookEx(NULL, nCode, wParam, lParam);
@@ -204,6 +214,13 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     }
     int index = find_index_by_key(key);
     int opposing_index = find_index_by_key(opposing);
+
+    // Translate opposing virtual key code to the scancode before sending them.
+    // The reason for this is that a lot of games (mostly old ones and some new ones)
+    // Are using DirectInput even loops which only respect scancodes events and fully
+    // ignores virtual key codes. Source games (Half-Life2, Portal1/2, VTMB)
+    // are among notable examples.
+    opposing = MapVirtualKeyW(opposing, MAPVK_VK_TO_VSC_EX);
     
     // Holding Alt sends WM_SYSKEYDOWN/WM_SYSKEYUP
     // instead of WM_KEYDOWN/WM_KEYUP, check it as well
@@ -212,8 +229,9 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         virtual[index] = IS_DOWN;
         if (real[opposing_index] == IS_DOWN && virtual[opposing_index] == IS_DOWN && disableKeyPressed == IS_UP) {
             input.type = INPUT_KEYBOARD;
-            input.ki = (KEYBDINPUT){opposing, 0, KEYEVENTF_KEYUP, 0, 0};
+            input.ki = (KEYBDINPUT){0, opposing, KEYEVENTF_KEYUP | KEYEVENTF_SCANCODE, 0, 0};
             SendInput(1, &input, sizeof(INPUT));
+            /* printf("Send %d", opposing); */
             virtual[opposing_index] = IS_UP;
         }
     }
@@ -222,8 +240,9 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         virtual[index] = IS_UP;
         if (real[opposing_index] == IS_DOWN && disableKeyPressed == IS_UP) {
             input.type = INPUT_KEYBOARD;
-            input.ki = (KEYBDINPUT){opposing, 0, 0, 0, 0};
+            input.ki = (KEYBDINPUT){0, opposing, KEYEVENTF_SCANCODE, 0, 0};
             SendInput(1, &input, sizeof(INPUT));
+            /* printf("Send %d", opposing); */
             virtual[opposing_index] = IS_DOWN;
         }
     }
