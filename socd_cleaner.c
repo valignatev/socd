@@ -46,7 +46,7 @@ int disableKeyPressed;
 int ESC_BIND = 0;
 int ESC_PRESSED;
 
-int error_message(char* text) {
+int show_error_and_quit(char* text) {
     int error = GetLastError();
     // error is dword which is 32 bits, so 10 characters should be enough considering that we have an extra %d in the string
     char* error_buffer = malloc(strlen(text) + 10);
@@ -56,7 +56,7 @@ int error_message(char* text) {
         error_buffer,
         "RIP",
         MB_OK | MB_ICONERROR);
-    return 1;
+    ExitProcess(1);
 }
 
 void write_settings(int* bindings, int disableBind) {
@@ -277,7 +277,7 @@ void get_focused_program() {
         if (GetLastError() == 5) {
             return;
         }
-        error_message("Couldn't open active process, error code is: %d");
+        show_error_and_quit("Couldn't open active process, error code is: %d");
     }
     DWORD filename_size = MAX_PATH;
     // This function API is so fucking weird. Read its docs extremely carefully
@@ -344,7 +344,7 @@ void paint_esc_label(lParam) {
         (HINSTANCE)main_window,
         NULL);
     if (hwnd == NULL) {
-        error_message("Failed to create ESC bind label, error code is %d");
+        show_error_and_quit("Failed to create ESC bind label, error code is %d");
     }
     
 }
@@ -429,7 +429,7 @@ int main() {
     wc.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
     
     if (RegisterClassExW(&wc) == 0) {
-        return error_message("Failed to register window class, error code is %d");
+        show_error_and_quit("Failed to register window class, error code is %d");
     };
     
     main_window = CreateWindowExW(
@@ -446,7 +446,7 @@ int main() {
         hInstance,
         NULL);
     if (main_window == NULL) {
-        return error_message("Failed to create a window, error code is %d");
+        show_error_and_quit("Failed to create a window, error code is %d");
     }
     
     HWND wasd_hwnd = CreateWindowExW(
@@ -463,7 +463,7 @@ int main() {
         hInstance,
         NULL);
     if (wasd_hwnd == NULL) {
-        return error_message("Failed to create WASD radiobutton, error code is %d");
+        show_error_and_quit("Failed to create WASD radiobutton, error code is %d");
     }
     
     HWND arrows_hwnd = CreateWindowExW(
@@ -480,7 +480,7 @@ int main() {
         hInstance,
         NULL);
     if (arrows_hwnd == NULL) {
-        return error_message("Failed to create Arrows radiobutton, error code is %d");
+        show_error_and_quit("Failed to create Arrows radiobutton, error code is %d");
     }
     
     HWND custom_hwnd = CreateWindowExW(
@@ -497,7 +497,7 @@ int main() {
         hInstance,
         NULL);
     if (custom_hwnd == NULL) {
-        return error_message("Failed to create Custom radiobutton, error code is %d");
+        show_error_and_quit("Failed to create Custom radiobutton, error code is %d");
     }
 
     HWND esc_hwnd = CreateWindowExW(
@@ -514,7 +514,7 @@ int main() {
         hInstance,
         NULL);
     if (esc_hwnd == NULL) {
-        return error_message("Failed to create ESC bind button, error code is %d");
+        show_error_and_quit("Failed to create ESC bind button, error code is %d");
     }
     paint_esc_label(main_window, NULL);
     
@@ -527,7 +527,7 @@ int main() {
         check_id = CUSTOM_ID;
     }
     if (CheckRadioButton(main_window, WASD_ID, CUSTOM_ID, check_id) == 0) {
-        return error_message("Failed to select default keybindings, error code is %d");
+        show_error_and_quit("Failed to select default keybindings, error code is %d");
     }
     
     HWND text_hwnd = CreateWindowExW(
@@ -547,7 +547,7 @@ int main() {
         hInstance,
         NULL);
     if (text_hwnd == NULL) {
-        return error_message("Failed to create Text, error code is %d");
+        show_error_and_quit("Failed to create Text, error code is %d");
     }
     
     MSG msg;
