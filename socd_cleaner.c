@@ -34,7 +34,7 @@
 
 HWND main_window;
 
-const char* CONFIG_NAME = "socd_updated.conf";
+const char* CONFIG_NAME = "socd_v008.conf";
 const LPCWSTR CLASS_NAME = L"SOCD_CLASS";
 char config_line[100];
 char focused_program[MAX_PATH];
@@ -69,7 +69,43 @@ int show_error_and_quit(char* text) {
     ExitProcess(1);
 }
 
-void write_settings(int* bindings, int disableBind) {
+void paint_esc_label(lParam) {
+    LPCWSTR label;
+    if (listening_for_esc_bind) {
+        label = L"Press button to bind ESC to...";
+    } else {
+        if (!ESC_BIND) {
+            label = L"ESC isn't bound";
+        } else {
+            wchar_t label_buffer[100];
+            wchar_t key_name_buf[15];
+            GetKeyNameTextW(lParam, key_name_buf, 15);
+            wprintf(L"key name is %s\nvirtual key is %X", key_name_buf, ESC_BIND);
+            wsprintfW(label_buffer, L"ESC is bound to %s", key_name_buf);
+            label = label_buffer;
+        }
+    }
+    HWND hwnd = CreateWindowExW(
+        0,
+        L"STATIC",
+        label,
+        WS_VISIBLE | WS_CHILD,
+        120,
+        167,
+        400,
+        30,
+        main_window,
+        (HMENU)500,
+        (HINSTANCE)main_window,
+        NULL);
+    if (hwnd == NULL) {
+        show_error_and_quit("Failed to create ESC bind label, error code is %d");
+    }
+    
+}
+
+
+void write_settings(int* bindings, int disableBind, int esc_bind) {
     FILE* config_file = fopen(CONFIG_NAME, "w");
     if (config_file == NULL) {
         // This writes to console that we're freeing sigh
@@ -81,7 +117,7 @@ void write_settings(int* bindings, int disableBind) {
         fprintf(config_file, "%X\n", bindings[i]);
     }
     fprintf(config_file, "%X\n", disableBind);
-    fprintf(config_file, "%X\n", ESC_BIND);
+    fprintf(config_file, "%X\n", esc_bind);
     for (int i = 0; i < whitelist_max_length; i++) {
         if (programs_whitelist[i][0] == '\0') {
             break;
@@ -91,19 +127,20 @@ void write_settings(int* bindings, int disableBind) {
     fclose(config_file);
 }
 
-void set_bindings(int* bindings, int disableBind) {
+void set_bindings(int* bindings, int disableBind, int esc_bind) {
     CUSTOM_BINDS[0] = bindings[0];
     CUSTOM_BINDS[1] = bindings[1];
     CUSTOM_BINDS[2] = bindings[2];
     CUSTOM_BINDS[3] = bindings[3];
     DISABLE_BIND = disableBind; 
+    ESC_BIND = esc_bind;
 }
 
 void read_settings() {
     FILE* config_file = fopen(CONFIG_NAME, "r+");
     if (config_file == NULL) {
-        set_bindings(WASD, DEFUALT_DISABLE_BIND);
-        write_settings(WASD,DEFUALT_DISABLE_BIND);
+        set_bindings(WASD, DEFUALT_DISABLE_BIND, ESC_BIND);
+        write_settings(WASD, DEFUALT_DISABLE_BIND, ESC_BIND);
         return;
     }
     
@@ -116,8 +153,11 @@ void read_settings() {
 
     // 5th line is disable key bind
     char* result = fgets(config_line,100,config_file);
-    int button = (int)strtol(result,NULL,16);
-    DISABLE_BIND = button;
+    DISABLE_BIND = (int)strtol(result,NULL,16);
+
+    // 6th line is ESC key bind
+    result = fgets(config_line,100,config_file);
+    ESC_BIND = (int)strtol(result,NULL,16);
 
     // Then there are programs SOCD cleaner should track
     int i = 0;
@@ -171,7 +211,9 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     KBDLLHOOKSTRUCT* kbInput = (KBDLLHOOKSTRUCT*)lParam;
     
     // We ignore injected events so we don't mess with the inputs
-    // we inject ourselves with SendInput
+    // we inject ourselves with SendInput.
+    // TODO maybe it's better to set our own custom extended info and check it
+    // instead of LLKHF_INJECTED so we know FOR SURE it's ours
     if (nCode != HC_ACTION || kbInput->flags & LLKHF_INJECTED) {
         return CallNextHookEx(NULL, nCode, wParam, lParam);
     }
@@ -333,41 +375,6 @@ void detect_focused_program(
     unset_kb_hook();
 }
 
-void paint_esc_label(lParam) {
-    LPCWSTR label;
-    if (listening_for_esc_bind) {
-        label = L"Press button to bind ESC to...";
-    } else {
-        if (!ESC_BIND) {
-            label = L"ESC isn't bound";
-        } else {
-            wchar_t label_buffer[100];
-            wchar_t key_name_buf[15];
-            GetKeyNameTextW(lParam, key_name_buf, 15);
-            wprintf(L"key name is %s\nvirtual key is %X", key_name_buf, ESC_BIND);
-            wsprintfW(label_buffer, L"ESC is bound to %s", key_name_buf);
-            label = label_buffer;
-        }
-    }
-    HWND hwnd = CreateWindowExW(
-        0,
-        L"STATIC",
-        label,
-        WS_VISIBLE | WS_CHILD,
-        120,
-        167,
-        400,
-        30,
-        main_window,
-        (HMENU)500,
-        (HINSTANCE)main_window,
-        NULL);
-    if (hwnd == NULL) {
-        show_error_and_quit("Failed to create ESC bind label, error code is %d");
-    }
-    
-}
-
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
     case WM_DESTROY:
@@ -378,16 +385,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         // to SPACE without it repressing the button and asking for the bind infinitely
         SetFocus(main_window);
         if (wParam == WASD_ID) {
-            set_bindings(WASD,DEFUALT_DISABLE_BIND);
-            write_settings(WASD,DEFUALT_DISABLE_BIND);
+            set_bindings(WASD, DEFUALT_DISABLE_BIND, ESC_BIND);
+            write_settings(WASD, DEFUALT_DISABLE_BIND, ESC_BIND);
             return 0;
         } else if (wParam == ARROWS_ID) {
-            set_bindings(ARROWS,DEFUALT_DISABLE_BIND);
-            write_settings(ARROWS,DEFUALT_DISABLE_BIND);
+            set_bindings(ARROWS,DEFUALT_DISABLE_BIND, ESC_BIND);
+            write_settings(ARROWS,DEFUALT_DISABLE_BIND, ESC_BIND);
             return 0;
         } else if (wParam == ESC_BIND_ID) {
             listening_for_esc_bind = !listening_for_esc_bind;
-            paint_esc_label(hwnd, lParam);
+            paint_esc_label(lParam);
             return 0;
         }
     }
@@ -454,7 +461,7 @@ int main() {
     main_window = CreateWindowExW(
         0,
         CLASS_NAME,
-        L"SOCD helper for Epic Gamers!",
+        L"SOCD helper for Epic Gamers! v008",
         WS_OVERLAPPEDWINDOW | WS_VISIBLE,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
@@ -535,7 +542,19 @@ int main() {
     if (esc_hwnd == NULL) {
         show_error_and_quit("Failed to create ESC bind button, error code is %d");
     }
-    paint_esc_label(main_window, NULL);
+    int code = MapVirtualKeyW(ESC_BIND, MAPVK_VK_TO_VSC_EX);
+
+    /* We transform the scan code of the button to an lParam-style bit sequence that
+       paint_esc_label expects.
+       MapVirtualKey sets 0xE0 (or 0xE1, but we don't care for now) prefix to the scan code
+       if it's for the right handside button (so right ctrl or right alt).
+       We test for that and set 24th extended bit to 1 if that's the case */
+
+    int code_lparam = code << 16;
+    if (0xE000 & code) {
+        code_lparam =  (1 << 24) | code_lparam;
+    }
+    paint_esc_label(code_lparam);
     
     int check_id;
     if (memcmp(CUSTOM_BINDS, WASD, sizeof(WASD)) == 0) {
@@ -604,6 +623,7 @@ int main() {
                 
                 if (real_virtual_key_code != VK_ESCAPE) {
                     ESC_BIND = real_virtual_key_code;
+                    write_settings(CUSTOM_BINDS, DISABLE_BIND, ESC_BIND);
                 }
                 paint_esc_label(msg.lParam);
             }
