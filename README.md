@@ -1,5 +1,9 @@
 # SOCD cleaner for epic gamers
 
+## NOTE
+I haven't abandoned the program, was just a bit short on time to make it better and implement new features. Currently about to rewrite the whole thing.
+So feel free to open new issues and feature requests and all that. Thanks!
+
 ## Install
 Grab the latest version from [Releases page](https://github.com/valignatev/socd/releases).
 
