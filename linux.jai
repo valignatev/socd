@@ -1,25 +1,84 @@
+#load "./xcb.jai";
 // This might backfire, because this is configurable on Linux
 // Might want to allocate it at runtime instead
 MAX_PATH_LENGTH :: 4096;
 
 get_dpi_scale :: (window: Window_Type) -> float {
+    // @TODO: Implement
     return 1;
 }
 
 start_detecting_focused_programs :: () {
+    con := xcb_connect(null, null);
+    con_errors := xcb_connection_has_error(con);
+
+    if con_errors {
+        print("Can't connect to X11 with xcb, error cocde is: %\n", con_errors);
+        return;
+    }
+
+    net_active_atom: xcb_atom_t;
+    atom_name := "_NET_ACTIVE_WINDOW";
+    atom_cookie := xcb_intern_atom(con, cast(u8)false, cast(u8)atom_name.count, atom_name.data);
+
+    atom_error: *xcb_generic_error_t;
+    atom_reply := xcb_intern_atom_reply(con, atom_cookie, *atom_error);
+
+    if !atom_reply {
+        print("Can't get _NET_ACTIVE_WINDOW atom, error is: %\n", atom_error.*);
+        return;
+    }
+
+    net_active_atom = atom_reply.atom;
+
+    print("Atom: %\n", net_active_atom);
+
+    screen := xcb_setup_roots_iterator(xcb_get_setup(con)).data;
+    root_window := screen.root;
+
+    attrs: xcb_change_window_attributes_value_list_t;
+    attrs.event_mask = cast(u32)xcb_event_mask_t.PROPERTY_CHANGE;
+
+    change_cookie := xcb_change_window_attributes_aux_checked(con, root_window, .EVENT_MASK, *attrs);
+    change_error := xcb_request_check(con, change_cookie);
+    if change_error {
+        print("Failed to listen to window focus events, error is %\n", change_error.*);
+    }
+
+    xcb_flush(con);
+
+    while true {
+        event := xcb_wait_for_event(con);
+        if !event {
+            print("I/O error while getting a window focused event");
+            break;
+        }
+        response_type := event.response_type & ~0x80;
+        if response_type == XCB_PROPERTY_NOTIFY {
+            notify_event := cast(*xcb_property_notify_event_t)event;
+            // 0 is NewState, 1 is Deleted. NewState is probably when a window gets focus
+            print("Event is %\n", notify_event.*);
+            // if notify_event.atom == net_active_atom && notify_event.state == 0 {
+            //     print("Event is %\n", notify_event.*);
+            // }
+        }
+    }
     return;
 }
 
 unset_mapping_setting_hook :: () {
+    // @TODO: Implement
     return;
 }
 
 
 set_key_mapping_hook :: (window: Window_Type) {
+    // @TODO: Implement
     return;
 }
 
 get_key_name :: (key_scan_code: u32) -> string {
+    // @TODO: Implement
     return "NOT IMPLEMENTED";
 }
 
