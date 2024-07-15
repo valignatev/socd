@@ -18,18 +18,30 @@ start_detecting_focused_programs :: () {
     }
 
     net_active_atom: xcb_atom_t;
-    atom_name := "_NET_ACTIVE_WINDOW";
-    atom_cookie := xcb_intern_atom(con, cast(u8)false, cast(u8)atom_name.count, atom_name.data);
+    net_name_atom: xcb_atom_t;
+    active := "_NET_ACTIVE_WINDOW";
+    name := "_NET_WM_NAME";
+    active_cookie := xcb_intern_atom(con, cast(u8)false, cast(u8)active.count, active.data);
+    name_cookie := xcb_intern_atom(con, cast(u8)false, cast(u8)name.count, name.data);
 
-    atom_error: *xcb_generic_error_t;
-    atom_reply := xcb_intern_atom_reply(con, atom_cookie, *atom_error);
+    active_error: *xcb_generic_error_t;
+    name_error: *xcb_generic_error_t;
+    // @TODO: FREE THE REPLY
+    active_reply := xcb_intern_atom_reply(con, active_cookie, *active_error);
+    name_reply := xcb_intern_atom_reply(con, name_cookie, *name_error);
 
-    if !atom_reply {
-        print("Can't get _NET_ACTIVE_WINDOW atom, error is: %\n", atom_error.*);
+    if !active_reply {
+        print("Can't get _NET_ACTIVE_WINDOW atom, error is: %\n", active_error.*);
         return;
     }
 
-    net_active_atom = atom_reply.atom;
+    if !name_reply {
+        print("Can't get _NET_ACTIVE_WINDOW atom, error is: %\n", name_error.*);
+        return;
+    }
+
+    net_active_atom = active_reply.atom;
+    net_name_atom = name_reply.atom;
 
     print("Atom: %\n", net_active_atom);
 
@@ -57,10 +69,87 @@ start_detecting_focused_programs :: () {
         if response_type == XCB_PROPERTY_NOTIFY {
             notify_event := cast(*xcb_property_notify_event_t)event;
             // 0 is NewState, 1 is Deleted. NewState is probably when a window gets focus
-            print("Event is %\n", notify_event.*);
-            // if notify_event.atom == net_active_atom && notify_event.state == 0 {
-            //     print("Event is %\n", notify_event.*);
-            // }
+            if notify_event.atom == net_active_atom && notify_event.state == 0 {
+                // On Sway, I get two focus events for the same window when switching from
+                // another X11 window. But I get only one focus event when I switch from
+                // Wayland window to X11 window. Weird!
+                // print("Event is %\n", notify_event.*);
+                tree_error: *xcb_generic_error_t;
+                tree_cookie := xcb_query_tree(con, notify_event.window);
+                // @TODO: NEED TO FREE THE REPLY
+                reply := xcb_query_tree_reply(con, tree_cookie, *tree_error);
+
+                if !reply {
+                    print("Failed to get a window tree, err: %\n", tree_error.*);
+                }
+
+                print("tree reply is %\n", reply.*);
+                xcb_grab_server(con);
+                input_focus_reply := xcb_get_input_focus_reply(con, xcb_get_input_focus(con), null);
+                focused_window := input_focus_reply.focus;
+
+                name_error: *xcb_generic_error_t;
+                name_cookie := xcb_get_property(con, 0, focused_window, net_name_atom, xx xcb_get_property_type_t.XCB_GET_PROPERTY_TYPE_ANY, 0, ~(cast(u32)0));
+                name_reply := xcb_get_property_reply(con, name_cookie, *name_error);
+                name: string;
+                print("Name Reply: %\n", name_reply.*);
+
+                // On Sway, I get no reply when the X11 window loses focus and it switches
+                // to a Wayland-native application. So I let it be...
+                if !name_reply {
+                    // Maybe socd unhook logic here
+                    continue;
+                }
+                name.count = xcb_get_property_value_length(name_reply);
+                name.data = xcb_get_property_value(name_reply);
+
+                print("Name: %\n", name);
+                xcb_ungrab_server(con);
+
+                // // FREE THE CHILDREN!!!
+                // tree_children: []xcb_window_t;
+                // tree_children.count = reply.children_len;
+
+                // children := xcb_query_tree_children(reply);
+
+                // tree_children.data = children;
+
+                // print("children: %\n", tree_children);
+
+                    // active_error: *xcb_generic_error_t;
+                    // active_cookie := xcb_get_property(con, 0, notify_event.window, net_active_atom, xx xcb_get_property_type_t.XCB_GET_PROPERTY_TYPE_ANY, 0, ~(cast(u32)0));
+                    // active_reply := xcb_get_property_reply(con, active_cookie, *active_error);
+                    // print("% Active reply: %\n", notify_event.window, active_reply.*);
+                    // active: *u32;
+                    // active.* = (cast(*u32)xcb_get_property_value(active_reply)).*;
+
+                    // print("Root Active: %\n", active);
+                // for tree_children {
+                //     name_error: *xcb_generic_error_t;
+                //     name_cookie := xcb_get_property(con, 0, it, net_name_atom, xx xcb_get_property_type_t.XCB_GET_PROPERTY_TYPE_ANY, 0, ~(cast(u32)0));
+                //     name_reply := xcb_get_property_reply(con, name_cookie, *name_error);
+                //     name: string;
+                //     name.count = xcb_get_property_value_length(name_reply);
+                //     name.data = xcb_get_property_value(name_reply);
+
+                //     if name.count {
+                //         // print("% Name reply: %\n", it, name_reply.*);
+                //         print("% Name: %\n", it, name);
+
+                //         active_error: *xcb_generic_error_t;
+                //         active_cookie := xcb_get_property(con, 0, it, net_active_atom, xx xcb_atom_enum_t.CARDINAL, 0, ~(cast(u32)0));
+                //         active_reply := xcb_get_property_reply(con, active_cookie, *active_error);
+                //         print("% Active reply: %\n", it, active_reply.*);
+                //         active: []u8;
+                //         active.count = xcb_get_property_value_length(active_reply);
+                //         active.data = xcb_get_property_value(active_reply);
+
+                //         print("% Active: %\n",it, active);
+
+
+                //     }
+                // }
+            }
         }
     }
     return;
