@@ -9,6 +9,11 @@ get_dpi_scale :: (window: Window_Type) -> float {
 }
 
 start_detecting_focused_programs :: () {
+    // @TODO: Might be useful to detect currently focused program at the start.
+    // Theoretically, it would always be us, but there's actually a possibility
+    // to click on the icon and switch to other program faster than socd starts.
+    // For example, when you in a full-screen game, click Windows, press socd shortcut
+    // and then quickly switch back to the game within like 500 milliseconds.
     con := xcb_connect(null, null);
     con_errors := xcb_connection_has_error(con);
 
@@ -72,18 +77,9 @@ start_detecting_focused_programs :: () {
             if notify_event.atom == net_active_atom && notify_event.state == 0 {
                 // On Sway, I get two focus events for the same window when switching from
                 // another X11 window. But I get only one focus event when I switch from
-                // Wayland window to X11 window. Weird!
+                // Wayland window to X11 window. Weird, on pure X11 this doesn't happen.
                 // print("Event is %\n", notify_event.*);
-                tree_error: *xcb_generic_error_t;
-                tree_cookie := xcb_query_tree(con, notify_event.window);
-                // @TODO: NEED TO FREE THE REPLY
-                reply := xcb_query_tree_reply(con, tree_cookie, *tree_error);
 
-                if !reply {
-                    print("Failed to get a window tree, err: %\n", tree_error.*);
-                }
-
-                print("tree reply is %\n", reply.*);
                 xcb_grab_server(con);
                 input_focus_reply := xcb_get_input_focus_reply(con, xcb_get_input_focus(con), null);
                 focused_window := input_focus_reply.focus;
@@ -92,12 +88,14 @@ start_detecting_focused_programs :: () {
                 name_cookie := xcb_get_property(con, 0, focused_window, net_name_atom, xx xcb_get_property_type_t.XCB_GET_PROPERTY_TYPE_ANY, 0, ~(cast(u32)0));
                 name_reply := xcb_get_property_reply(con, name_cookie, *name_error);
                 name: string;
-                print("Name Reply: %\n", name_reply.*);
+                // print("Name Reply: %\n", name_reply.*);
 
                 // On Sway, I get no reply when the X11 window loses focus and it switches
                 // to a Wayland-native application. So I let it be...
                 if !name_reply {
                     // Maybe socd unhook logic here
+                    xcb_ungrab_server(con);
+                    xcb_flush(con);
                     continue;
                 }
                 name.count = xcb_get_property_value_length(name_reply);
@@ -105,50 +103,7 @@ start_detecting_focused_programs :: () {
 
                 print("Name: %\n", name);
                 xcb_ungrab_server(con);
-
-                // // FREE THE CHILDREN!!!
-                // tree_children: []xcb_window_t;
-                // tree_children.count = reply.children_len;
-
-                // children := xcb_query_tree_children(reply);
-
-                // tree_children.data = children;
-
-                // print("children: %\n", tree_children);
-
-                    // active_error: *xcb_generic_error_t;
-                    // active_cookie := xcb_get_property(con, 0, notify_event.window, net_active_atom, xx xcb_get_property_type_t.XCB_GET_PROPERTY_TYPE_ANY, 0, ~(cast(u32)0));
-                    // active_reply := xcb_get_property_reply(con, active_cookie, *active_error);
-                    // print("% Active reply: %\n", notify_event.window, active_reply.*);
-                    // active: *u32;
-                    // active.* = (cast(*u32)xcb_get_property_value(active_reply)).*;
-
-                    // print("Root Active: %\n", active);
-                // for tree_children {
-                //     name_error: *xcb_generic_error_t;
-                //     name_cookie := xcb_get_property(con, 0, it, net_name_atom, xx xcb_get_property_type_t.XCB_GET_PROPERTY_TYPE_ANY, 0, ~(cast(u32)0));
-                //     name_reply := xcb_get_property_reply(con, name_cookie, *name_error);
-                //     name: string;
-                //     name.count = xcb_get_property_value_length(name_reply);
-                //     name.data = xcb_get_property_value(name_reply);
-
-                //     if name.count {
-                //         // print("% Name reply: %\n", it, name_reply.*);
-                //         print("% Name: %\n", it, name);
-
-                //         active_error: *xcb_generic_error_t;
-                //         active_cookie := xcb_get_property(con, 0, it, net_active_atom, xx xcb_atom_enum_t.CARDINAL, 0, ~(cast(u32)0));
-                //         active_reply := xcb_get_property_reply(con, active_cookie, *active_error);
-                //         print("% Active reply: %\n", it, active_reply.*);
-                //         active: []u8;
-                //         active.count = xcb_get_property_value_length(active_reply);
-                //         active.data = xcb_get_property_value(active_reply);
-
-                //         print("% Active: %\n",it, active);
-
-
-                //     }
-                // }
+                xcb_flush(con);
             }
         }
     }
