@@ -79,7 +79,7 @@ get_key_mapping :: (source_scan_code: u32) -> destination_scan_code: u32 {
 main :: () {
     the_window := create_window();
 
-    start_detecting_focused_programs();
+    start_detecting_focused_program();
 
     Simp.set_render_target(the_window, .LEFT_HANDED);
     init_fonts(the_window);

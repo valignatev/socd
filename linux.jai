@@ -8,7 +8,7 @@ get_dpi_scale :: (window: Window_Type) -> float {
     return 1;
 }
 
-start_detecting_focused_programs :: () {
+detect_focused_program :: () {
     // @TODO: Might be useful to detect currently focused program at the start.
     // Theoretically, it would always be us, but there's actually a possibility
     // to click on the icon and switch to other program faster than socd starts.
@@ -24,6 +24,7 @@ start_detecting_focused_programs :: () {
 
     net_active_atom: xcb_atom_t;
     net_name_atom: xcb_atom_t;
+    net_name_old_atom: xcb_atom_t;
     active := "_NET_ACTIVE_WINDOW";
     name := "_NET_WM_NAME";
     active_cookie := xcb_intern_atom(con, cast(u8)false, cast(u8)active.count, active.data);
@@ -31,7 +32,6 @@ start_detecting_focused_programs :: () {
 
     active_error: *xcb_generic_error_t;
     name_error: *xcb_generic_error_t;
-    // @TODO: FREE THE REPLY
     active_reply := xcb_intern_atom_reply(con, active_cookie, *active_error);
     name_reply := xcb_intern_atom_reply(con, name_cookie, *name_error);
 
@@ -41,14 +41,12 @@ start_detecting_focused_programs :: () {
     }
 
     if !name_reply {
-        print("Can't get _NET_ACTIVE_WINDOW atom, error is: %\n", name_error.*);
+        print("Can't get _NET_WM_NAME atom, error is: %\n", name_error.*);
         return;
     }
 
     net_active_atom = active_reply.atom;
     net_name_atom = name_reply.atom;
-
-    print("Atom: %\n", net_active_atom);
 
     screen := xcb_setup_roots_iterator(xcb_get_setup(con)).data;
     root_window := screen.root;
@@ -80,34 +78,69 @@ start_detecting_focused_programs :: () {
                 // Wayland window to X11 window. Weird, on pure X11 this doesn't happen.
                 // print("Event is %\n", notify_event.*);
 
+                // TODO: Grabbing the server is kinda expensive and disruptive. And the only upside is that
+                // it guarantees that the window that is focused won't get unfocused or destroyed
+                // while we're fetching its options, which isn't a hard requirements for us.
+                // So maybe we don't need to grab the server and just handle the situation where we get bogus
+                // properties instead. Most likely, we'll get xcb_window_error_t
                 xcb_grab_server(con);
                 input_focus_reply := xcb_get_input_focus_reply(con, xcb_get_input_focus(con), null);
                 focused_window := input_focus_reply.focus;
 
                 name_error: *xcb_generic_error_t;
-                name_cookie := xcb_get_property(con, 0, focused_window, net_name_atom, xx xcb_get_property_type_t.XCB_GET_PROPERTY_TYPE_ANY, 0, ~(cast(u32)0));
+                name_old_error: *xcb_generic_error_t;
+
+                // Some programs don't comply with EWMH and set old WM_NAME instead, try to get it as well
+                name_cookie := xcb_get_property(con, 0, focused_window, net_name_atom, xx xcb_get_property_type_t.XCB_GET_PROPERTY_TYPE_ANY, 0, U32_MAX);
+                name_old_cookie := xcb_get_property(con, 0, focused_window, xx xcb_atom_enum_t.WM_NAME, xx xcb_atom_enum_t.STRING, 0, U32_MAX);
+
                 name_reply := xcb_get_property_reply(con, name_cookie, *name_error);
+                name_old_reply := xcb_get_property_reply(con, name_old_cookie, *name_old_error);
+
                 name: string;
-                // print("Name Reply: %\n", name_reply.*);
 
                 // On Sway, I get no reply when the X11 window loses focus and it switches
                 // to a Wayland-native application. So I let it be...
-                if !name_reply {
+                if !name_reply && !name_old_reply {
                     // Maybe socd unhook logic here
                     xcb_ungrab_server(con);
                     xcb_flush(con);
                     continue;
                 }
-                name.count = xcb_get_property_value_length(name_reply);
-                name.data = xcb_get_property_value(name_reply);
+
+                name_len := xcb_get_property_value_length(name_reply);
+                name_old_len := xcb_get_property_value_length(name_old_reply);
+                if !name_len {
+                    name.count = name_old_len;
+                    name.data = xcb_get_property_value(name_old_reply);
+                } else {
+                    name.count = name_len;
+                    name.data = xcb_get_property_value(name_reply);
+                }
 
                 print("Name: %\n", name);
                 xcb_ungrab_server(con);
                 xcb_flush(con);
+                c_free(name_reply);
+                c_free(name_old_reply);
             }
         }
     }
+    c_free(name_reply);
+    c_free(active_reply);
     return;
+}
+
+start_detecting_focused_program_in_a_thread :: (arg: *void) -> *void #c_call {
+    ctx: Context;
+    push_context ctx {
+        detect_focused_program();
+    }
+    return null;
+}
+start_detecting_focused_program :: () {
+    tid: pthread_t ;
+    pthread_create(*tid, null, start_detecting_focused_program_in_a_thread, null);
 }
 
 unset_mapping_setting_hook :: () {
@@ -212,7 +245,11 @@ create_window :: (window_x := 0, window_y := 0, parent: Window_Type = None, back
     return win;
 }
 
+libc :: #system_library "libc";
+c_free :: (memory: *void) #foreign libc "free";
+
 #import "X11";
+#import "POSIX";
 // For some reason defaults in create_window fail with unknown identifier without import Window_Creation like this.
 // Maybe a compiler bug? Need to ask about it
 WC :: #import "Window_Creation";
