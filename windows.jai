@@ -241,32 +241,28 @@ start_detecting_focused_program :: () {
 }
 
 set_kb_hook :: (instance: HINSTANCE) {
-    #if OS == .WINDOWS {
-        if !mapping_resolving_hook_is_installed {
-            print("hooking this shit\n");
-            mapping_resolving_hook = SetWindowsHookExW(WH_KEYBOARD_LL, cast(HOOKPROC)low_level_keyboard_proc, instance, 0);
-            if (mapping_resolving_hook != null) {
-                mapping_resolving_hook_is_installed = true;
-            } else {
-                print("hook failed oopsie\n");
-            }
+    if !mapping_resolving_hook_is_installed {
+        print("hooking this shit\n");
+        mapping_resolving_hook = SetWindowsHookExW(WH_KEYBOARD_LL, cast(HOOKPROC)low_level_keyboard_proc, instance, 0);
+        if (mapping_resolving_hook != null) {
+            mapping_resolving_hook_is_installed = true;
+        } else {
+            print("hook failed oopsie\n");
         }
     }
 }
 
 set_key_mapping_hook :: (window: Window_Type) {
-    #if OS == .WINDOWS {
-        if !mapping_setting_hook_is_installed {
-            // null as instance and GetCurrentThreadId() instead of zero to hook into inputs when focusing this program.
-            // Otherwise, the hook will only listen to keyboard from all other programs except this one!
-            mapping_setting_hook = SetWindowsHookExW(WH_KEYBOARD, cast(HOOKPROC)mapping_setting_hook_proc, null, GetCurrentThreadId());
-            if (mapping_setting_hook != null) {
-                mapping_setting_hook_is_installed = true;
-                print("listening for new mapping\n");
-            } else {
-                error := GetLastError();
-                log_error("mapping setting hook initialization failed: %\n", error);
-            }
+    if !mapping_setting_hook_is_installed {
+        // null as instance and GetCurrentThreadId() instead of zero to hook into inputs when focusing this program.
+        // Otherwise, the hook will only listen to keyboard from all other programs except this one!
+        mapping_setting_hook = SetWindowsHookExW(WH_KEYBOARD, cast(HOOKPROC)mapping_setting_hook_proc, null, GetCurrentThreadId());
+        if (mapping_setting_hook != null) {
+            mapping_setting_hook_is_installed = true;
+            print("listening for new mapping\n");
+        } else {
+            error := GetLastError();
+            log_error("mapping setting hook initialization failed: %\n", error);
         }
     }
 }
