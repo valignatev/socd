@@ -7,16 +7,20 @@
 // Temp key while setting an actual mapping.
 KEY_TEMP : u32 : 0x69696969;
 
-KEY_ESC  : u32 : 0x01;
-KEY_W    : u32 : 0x11;
-KEY_A    : u32 : 0x1e;
-KEY_S    : u32 : 0x1f;
-KEY_D    : u32 : 0x20;
-KEY_L    : u32 : 0x26;
-KEY_O    : u32 : 0x18;
-KEY_U    : u32 : 0x16;
-KEY_P    : u32 : 0x19;
-KEY_9    : u32 : 0xA;
+// TODO: Temp guard it because uinput exposes the same names.
+// WIll think later how to properly namespace it.
+#if OS == .WINDOWS {
+    KEY_ESC  : u32 : 0x01;
+    KEY_W    : u32 : 0x11;
+    KEY_A    : u32 : 0x1e;
+    KEY_S    : u32 : 0x1f;
+    KEY_D    : u32 : 0x20;
+    KEY_L    : u32 : 0x26;
+    KEY_O    : u32 : 0x18;
+    KEY_U    : u32 : 0x16;
+    KEY_P    : u32 : 0x19;
+    KEY_9    : u32 : 0xA;
+}
 
 // I think 256 key codes should be enough for any type of keyboard...
 // Indices are key scancodes
@@ -80,6 +84,10 @@ main :: () {
     the_window := create_window();
 
     start_detecting_focused_program();
+
+    if OS == .LINUX {
+        log_keys();
+    }
 
     Simp.set_render_target(the_window, .LEFT_HANDED);
     init_fonts(the_window);

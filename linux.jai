@@ -1,4 +1,5 @@
 #load "./xcb.jai";
+#load "./input.jai";
 // This might backfire, because this is configurable on Linux
 // Might want to allocate it at runtime instead
 MAX_PATH_LENGTH :: 4096;
@@ -123,12 +124,78 @@ detect_focused_program :: () {
                 xcb_flush(con);
                 c_free(name_reply);
                 c_free(name_old_reply);
+                // if name == "Hollow Knight" {
+                //     set_kb_hook();
+                // } else {
+                //     unset_kb_hook();
+                // }
             }
         }
     }
     c_free(name_reply);
     c_free(active_reply);
     return;
+}
+
+set_kb_hook :: () {
+    return;
+}
+
+unset_kb_hook :: () {
+    return;
+}
+
+kb_scores: [..]string;
+
+// This is basically test_bit from linux kernel: 
+// https://github.com/torvalds/linux/blob/master/tools/testing/selftests/iommu/iommufd_utils.h#L34
+test_key :: (key: u32) -> u32 #expand {
+    return `key_bits[key/8] & (1 << (key % 8));
+}
+
+keyboard_detector :: (file_info: *File_Visit_Info, user_data: [..]string) {
+    // print("%\n", file_info.*);
+
+    device_fd := open(file_info.full_name.data, O_RDONLY);
+    if device_fd < 0 {
+        print("Couldn't open device % for checking out whether it's a keyboard\n", file_info.full_name);
+        return;
+    }
+
+    name: [256]u8;
+    evbit: u32;
+    evbit_result := ioctl(device_fd, EVIOCGBIT(0, size_of(type_of(evbit))), *evbit);
+
+    // print("evbit: %\n, evbit_result: %\n", evbit, evbit_result);
+    if evbit & (1 << EV_KEY) {
+        // Should be 96
+        key_bits_num :: (KEY_MAX / 8) + 1;
+        key_bits: [key_bits_num]u8;
+        keys_ioctl_result := ioctl(device_fd, EVIOCGBIT(EV_KEY, key_bits.count), *key_bits);
+        if keys_ioctl_result != key_bits_num {
+            print("Something is wrong with reading key bits from device %, ioctl result is %, skipping it...\n", cast(string)name, keys_ioctl_result);
+            return;
+        }
+        is_keyboard := true;
+        if test_key(KEY_W) && test_key(KEY_A) && test_key(KEY_S) && test_key(KEY_D) {
+            name_ioctl_result := ioctl(device_fd, EVIOCGNAME(name.count), *name);
+            if name_ioctl_result < 0 {
+                print("Couldn't get keyboard name: %, but we can still use it!\n", name_ioctl_result);
+            } else {
+                print("% - %\n", cast(string)name, file_info.full_name);
+            }
+        } else {
+            is_keyboard = false;
+        }
+    }
+}
+
+log_keys :: () {
+    result := visit_files("/dev/input", recursive=false, user_data=kb_scores, proc=keyboard_detector, visit_symlinks=false, follow_directory_symlinks=false,, temp);
+
+    if !result {
+        print("Couldn't collect info about keyboard devices!\n");
+    }
 }
 
 start_detecting_focused_program_in_a_thread :: (arg: *void) -> *void #c_call {
@@ -138,6 +205,7 @@ start_detecting_focused_program_in_a_thread :: (arg: *void) -> *void #c_call {
     }
     return null;
 }
+
 start_detecting_focused_program :: () {
     tid: pthread_t ;
     pthread_create(*tid, null, start_detecting_focused_program_in_a_thread, null);
@@ -248,6 +316,7 @@ create_window :: (window_x := 0, window_y := 0, parent: Window_Type = None, back
 libc :: #system_library "libc";
 c_free :: (memory: *void) #foreign libc "free";
 
+#import "File_Utilities";
 #import "X11";
 #import "POSIX";
 // For some reason defaults in create_window fail with unknown identifier without import Window_Creation like this.
