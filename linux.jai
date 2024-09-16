@@ -227,18 +227,15 @@ close_descriptors :: (raw_descriptors: *void) -> *void #c_call {
     push_context ctx {
         descriptors := cast([256]s32)raw_descriptors;
         for descriptors {
-            if it {
-                result := close(it);
-                if result {
-                    System :: #import "System";
+            if !it break;
+            error := close(it);
+            if error {
+                System :: #import "System";
 
-                    // If we put this error report at a lower level, we could
-                    // indicate how far into the file the error occurred, etc.
-                    code, s := System.get_error_value_and_string();
-                    print("Closing file descriptor '%' failed: code %, '%'.\n", it, code, s);
-                } else {
-                    descriptors[it_index] = 0;
-                }
+                code, s := System.get_error_value_and_string();
+                print("Closing file descriptor '%' failed: code %, '%'.\n", it, code, s);
+            } else {
+                descriptors[it_index] = 0;
             }
         }
     }
