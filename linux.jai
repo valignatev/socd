@@ -202,14 +202,14 @@ unset_kb_hook :: () {
     return;
 }
 
-Allowed_Device :: struct {
+Device :: struct {
     event_file: string;
     name: string;
     file_descriptor: s32;
 }
 
 Device_Candidate :: struct {
-    using #as device: Allowed_Device;
+    using #as device: Device;
     // How likely it is an actual keyboard. The more - the better.
     score: s8;
 }
@@ -218,6 +218,42 @@ Device_Candidate :: struct {
 // https://github.com/torvalds/linux/blob/master/tools/testing/selftests/iommu/iommufd_utils.h#L34
 test_key :: (key: u32) -> u32 #expand {
     return `key_bits[key/8] & (1 << (key % 8));
+}
+
+opened_file_descriptors_for_candidates: [256]s32;
+
+close_descriptors :: (raw_descriptors: *void) -> *void #c_call {
+    ctx: Context;
+    push_context ctx {
+        descriptors := cast([256]s32)raw_descriptors;
+        for descriptors {
+            if it {
+                result := close(it);
+                if result {
+                    System :: #import "System";
+
+                    // If we put this error report at a lower level, we could
+                    // indicate how far into the file the error occurred, etc.
+                    code, s := System.get_error_value_and_string();
+                    print("Closing file descriptor '%' failed: code %, '%'.\n", it, code, s);
+                } else {
+                    descriptors[it_index] = 0;
+                }
+            }
+        }
+    }
+    return null;
+}
+
+free_candidates :: (candidate_arrays: ..*[..]Device_Candidate) {
+    for candidates: candidate_arrays {
+        for candidates.* {
+            if it.name.count free(it.name); 
+        }
+        array_free(candidates.*);
+    }
+    tid: pthread_t ;
+    pthread_create(*tid, null, close_descriptors, *opened_file_descriptors_for_candidates);
 }
 
 keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Device_Candidate) {
@@ -268,7 +304,7 @@ keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Devic
         return;
     }
 
-    candidate.score += 1;
+    candidate.score += 10;
 
     device_stat: stat_t;
     stat_result := stat(file_info.full_name.data, *device_stat);
@@ -339,25 +375,60 @@ keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Devic
 
     // According to USB spec, it is a proper keyboard with both of those equal 1
     if protocol == "01" && sub_class == "01" {
-        candidate.score += 1;
+        candidate.score += 100;
     }
 }
 
 log_keys :: () {
-
     candidates: [..]Device_Candidate;
+    devices_high_confidence: [..]Device_Candidate;
+    devices_meh_confidence:  [..]Device_Candidate;
 
-    result := visit_files("/dev/input", recursive=false, user_data=*candidates, proc=keyboard_detector, visit_symlinks=false, follow_directory_symlinks=false,, temp);
+    device: Device;
+
+    result := visit_files("/dev/input", recursive=false, user_data=*candidates, proc=keyboard_detector, visit_symlinks=false, follow_directory_symlinks=false);
 
     reset_temporary_storage();
     if !result {
         print("Couldn't collect info about keyboard devices!\n");
     }
 
-    sorted_candidates := quick_sort(candidates, candidate => -candidate.score);
-    for sorted_candidates {
-        print("%\n", it);
+    for candidates {
+        // If someone has over 256 device candidates - oh well, we're gonna leak those descriptors until the
+        // program finishes.
+        if it_index < opened_file_descriptors_for_candidates.count {
+            opened_file_descriptors_for_candidates[it_index] = it.file_descriptor;
+        }
+        if it.score > 100 {
+            array_add(*devices_high_confidence, it);
+            array_unordered_remove_by_index(*candidates, it_index);
+        } else if it.score > 10 {
+            array_add(*devices_meh_confidence, it);
+            array_unordered_remove_by_index(*candidates, it_index);
+        }
     }
+
+    if devices_high_confidence.count == 1 {
+        device = devices_high_confidence[0];
+        free_candidates(*devices_meh_confidence, *candidates);
+    } else if devices_high_confidence.count > 1 {
+        print("Found multiple keyboards, but we don't support that yet, selecting the first of them!\n");
+        device = devices_high_confidence[0];
+        array_unordered_remove_by_index(*devices_high_confidence, 0);
+        free_candidates(*devices_high_confidence, *devices_meh_confidence, *candidates);
+    } else if devices_meh_confidence.count > 0 {
+        print("Couldn't find any keyboards with high enough confidence, you have to select one manually\n");
+        // @TODO: Implement selecting a device
+        free_candidates(*devices_high_confidence, *devices_meh_confidence, *candidates);
+    } else {
+        print("Coulnd't find any keyboards on your computer, you have to select the device manually\n");
+        // @TODO: Implement selecting a device
+        free_candidates(*devices_high_confidence, *devices_meh_confidence, *candidates);
+    }
+
+    // We will reopen the device with read+write permissions to actually work with it.
+    device.file_descriptor = 0;
+    print("Final device: %\n", device);
 }
 
 start_detecting_focused_program_in_a_thread :: (arg: *void) -> *void #c_call {
