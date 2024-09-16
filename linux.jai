@@ -4,6 +4,63 @@
 // Might want to allocate it at runtime instead
 MAX_PATH_LENGTH :: 4096;
 
+patched_read_entire_file :: (name: string, zero_terminated := false, log_errors := true) -> string, bool {
+    s: string;
+    f, success := file_open(name, log_errors = log_errors);
+    if !success return s, false;
+
+    defer file_close(*f);
+
+    s, success = patched_read_entire_file(f, zero_terminated);
+
+    if log_errors && !success {
+        System :: #import "System";
+
+        // If we put this error report at a lower level, we could
+        // indicate how far into the file the error occurred, etc.
+        code, s := System.get_error_value_and_string();
+        log("Read of '%' failed: code %, '%'.\n", name, code, s);
+    }
+
+    return s, success;
+}
+
+patched_read_entire_file :: (f: File, zero_terminated := false) -> string, bool {
+    length, success := file_length(f);
+    if !success  return "", false;
+
+    zero_termination_size := cast(s32) zero_terminated;
+    data := cast(*u8) alloc(length + zero_termination_size);
+    if data == null return "", false;
+
+    // documentation seems to suggest that fread gaurantees size*count is fully read back otherwise error
+    // NOTE(NOOOO) - actually, if the number is shorter than the error it might also be just EOF.
+    // This is the case when reading from HID descriptor, for example, and fread doesn't distinguish between
+    // errors and EOF, so need to test manually. Hense, use patched procedure for now until I report it.
+    single_read_length := fread(data, 1, cast (u64) length, f.handle);
+    if single_read_length != cast(u64) length && !feof(f.handle) {
+        free(data);
+        return "", false;
+    }
+
+    s: string;
+    s.count = cast(s64) single_read_length;
+    s.data  = data;
+
+    if zero_terminated s.data[length] = 0;
+
+    return s, true;
+}
+
+// major and minor are straight from Linux kernel
+major :: inline (dev: u64) -> u64 {
+    return dev >> 8;
+}
+
+minor :: inline (dev: u64) -> u64 {
+    return dev & 0xff;
+}
+
 get_dpi_scale :: (window: Window_Type) -> float {
     // @TODO: Implement
     return 1;
@@ -145,7 +202,17 @@ unset_kb_hook :: () {
     return;
 }
 
-kb_scores: [..]string;
+Allowed_Device :: struct {
+    event_file: string;
+    name: string;
+    file_descriptor: s32;
+}
+
+Device_Candidate :: struct {
+    using #as device: Allowed_Device;
+    // How likely it is an actual keyboard. The more - the better.
+    score: s8;
+}
 
 // This is basically test_bit from linux kernel: 
 // https://github.com/torvalds/linux/blob/master/tools/testing/selftests/iommu/iommufd_utils.h#L34
@@ -153,7 +220,7 @@ test_key :: (key: u32) -> u32 #expand {
     return `key_bits[key/8] & (1 << (key % 8));
 }
 
-keyboard_detector :: (file_info: *File_Visit_Info, user_data: [..]string) {
+keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Device_Candidate) {
     // print("%\n", file_info.*);
 
     device_fd := open(file_info.full_name.data, O_RDONLY);
@@ -162,39 +229,134 @@ keyboard_detector :: (file_info: *File_Visit_Info, user_data: [..]string) {
         return;
     }
 
+    candidate := array_add(device_candidates);
+    candidate.event_file = file_info.full_name;
+    candidate.file_descriptor = device_fd;
+
     name: [256]u8;
     evbit: u32;
+
+    name_length := ioctl(device_fd, EVIOCGNAME(name.count), *name);
+    if name_length < 0 {
+        print("Couldn't get device name: %\n", candidate.event_file);
+    } else {
+        candidate.name = alloc_string(name_length - 1);
+        copy(candidate.name.data, name.data, candidate.name.count);
+    }
+
     evbit_result := ioctl(device_fd, EVIOCGBIT(0, size_of(type_of(evbit))), *evbit);
 
     // print("evbit: %\n, evbit_result: %\n", evbit, evbit_result);
-    if evbit & (1 << EV_KEY) {
-        // Should be 96
-        key_bits_num :: (KEY_MAX / 8) + 1;
-        key_bits: [key_bits_num]u8;
-        keys_ioctl_result := ioctl(device_fd, EVIOCGBIT(EV_KEY, key_bits.count), *key_bits);
-        if keys_ioctl_result != key_bits_num {
-            print("Something is wrong with reading key bits from device %, ioctl result is %, skipping it...\n", cast(string)name, keys_ioctl_result);
-            return;
+    if !(evbit & (1 << EV_KEY)) {
+        return;
+    }
+
+    candidate.score += 1;
+
+    // Every key code is encoded as a single positional bit in the key_bits returned by EVIOCGBIT,
+    // This is why we need KEY_MAX amount of bits, or (KEY_MAX / 8) + 1 amount of bytes.
+    // At least on desktop Linux this is 96.
+    key_bits_num :: (KEY_MAX / 8) + 1;
+    key_bits: [key_bits_num]u8;
+    keys_ioctl_result := ioctl(device_fd, EVIOCGBIT(EV_KEY, key_bits.count), *key_bits);
+    if keys_ioctl_result != key_bits_num {
+        print("Something is wrong with reading key bits from device %, ioctl result is %, skipping it...\n", cast(string)name, keys_ioctl_result);
+        return;
+    }
+
+    if !(test_key(KEY_W) && test_key(KEY_A) && test_key(KEY_S) && test_key(KEY_D)) {
+        return;
+    }
+
+    candidate.score += 1;
+
+    device_stat: stat_t;
+    stat_result := stat(file_info.full_name.data, *device_stat);
+    if stat_result < 0 {
+        print("Couldn't stat the device %\n", file_info.full_name);
+    }
+    dev_major := major(device_stat.st_rdev);
+    dev_minor := minor(device_stat.st_rdev);
+    dev_mode: string; 
+    if device_stat.st_mode & S_IFMT == {
+        case S_IFBLK;
+            dev_mode = "block";
+        case S_IFCHR;
+            dev_mode = "char";
+        case;
+            dev_mode = "unexpected_device_type";
+    };
+    syspath := tprint("/sys/dev/%/%:%/device/", dev_mode, dev_major, dev_minor);
+    absolute_path, success := get_absolute_path(syspath);
+    if !success {
+        print("Couldn't resolve absolute path to the device\n");
+        return;
+    }
+    // print("syspath: %\n", syspath);
+
+    protocol_string := tprint("%", "bInterfaceProtocol");
+    sub_class_string := tprint("%", "bInterfaceSubClass");
+
+    path := parse_path(absolute_path);
+    // print("absolute_path: %\n", path);
+
+    found := false;
+    while !found {
+
+        // Bail if we went all the way back to /sys/devices/pciXXXX:XX/XXXX:XX:XX.X/usbX/ and
+        // haven't found the descriptors yet.
+        if path.words.count <= 5 {
+            break;
         }
-        is_keyboard := true;
-        if test_key(KEY_W) && test_key(KEY_A) && test_key(KEY_S) && test_key(KEY_D) {
-            name_ioctl_result := ioctl(device_fd, EVIOCGNAME(name.count), *name);
-            if name_ioctl_result < 0 {
-                print("Couldn't get keyboard name: %, but we can still use it!\n", name_ioctl_result);
-            } else {
-                print("% - %\n", cast(string)name, file_info.full_name);
-            }
-        } else {
-            is_keyboard = false;
+        path.words[path.words.count - 1] = protocol_string;
+
+        fully_exists, how_much := how_much_of_path_exists_on_the_local_filesystem(path);
+        
+        if fully_exists {
+            found = true;
+            break;
         }
+
+        path.words.count -= 1;
+    }
+
+    if !found {
+        // print("Coulnd't find interface protocol and interface subclass for the device %\n", candidate.event_file);
+        return;
+    }
+
+    protocol_path := path_to_string(path,, temp);
+
+    path.words[path.words.count - 1] = sub_class_string;
+    sub_class_path := path_to_string(path,, temp);
+    // print("%\n", protocol_path);
+    // print("%\n", sub_class_path);
+
+    protocol  := trim_right(patched_read_entire_file(protocol_path,, temp));
+    sub_class := trim_right(patched_read_entire_file(sub_class_path,, temp));
+    // print("bInterfaceProtocol: %\n", protocol);
+    // print("bInterfaceSubClass: %\n", sub_class);
+
+    // According to USB spec, it is a proper keyboard with both of those equal 1
+    if protocol == "01" && sub_class == "01" {
+        candidate.score += 1;
     }
 }
 
 log_keys :: () {
-    result := visit_files("/dev/input", recursive=false, user_data=kb_scores, proc=keyboard_detector, visit_symlinks=false, follow_directory_symlinks=false,, temp);
 
+    candidates: [..]Device_Candidate;
+
+    result := visit_files("/dev/input", recursive=false, user_data=*candidates, proc=keyboard_detector, visit_symlinks=false, follow_directory_symlinks=false,, temp);
+
+    reset_temporary_storage();
     if !result {
         print("Couldn't collect info about keyboard devices!\n");
+    }
+
+    sorted_candidates := quick_sort(candidates, candidate => -candidate.score);
+    for sorted_candidates {
+        print("%\n", it);
     }
 }
 
@@ -316,9 +478,12 @@ create_window :: (window_x := 0, window_y := 0, parent: Window_Type = None, back
 libc :: #system_library "libc";
 c_free :: (memory: *void) #foreign libc "free";
 
+#import "Memory";
+#import "File";
 #import "File_Utilities";
-#import "X11";
 #import "POSIX";
+#import "Sort";
+#import "X11";
 // For some reason defaults in create_window fail with unknown identifier without import Window_Creation like this.
 // Maybe a compiler bug? Need to ask about it
 WC :: #import "Window_Creation";
