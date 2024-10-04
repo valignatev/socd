@@ -484,7 +484,6 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
 
         output_events: [2]input_event;
         event_time: timeval;
-        using kctsc: KEY_CODE_TO_SCANCODE;
 
         stop := false;
         while !stop {
