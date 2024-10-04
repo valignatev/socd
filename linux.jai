@@ -1,5 +1,6 @@
 #load "./xcb.jai";
-#load "./input.jai";
+#load "./uinput.jai";
+
 // This might backfire, because this is configurable on Linux
 // Might want to allocate it at runtime instead
 MAX_PATH_LENGTH :: 4096;
@@ -76,7 +77,7 @@ detect_focused_program :: () {
     con_errors := xcb_connection_has_error(con);
 
     if con_errors {
-        print("Can't connect to X11 with xcb, error cocde is: %\n", con_errors);
+        log_error("Can't connect to X11 with xcb, error cocde is: %\n", con_errors);
         return;
     }
 
@@ -94,12 +95,12 @@ detect_focused_program :: () {
     name_reply := xcb_intern_atom_reply(con, name_cookie, *name_error);
 
     if !active_reply {
-        print("Can't get _NET_ACTIVE_WINDOW atom, error is: %\n", active_error.*);
+        log_error("Can't get _NET_ACTIVE_WINDOW atom, error is: %\n", active_error.*);
         return;
     }
 
     if !name_reply {
-        print("Can't get _NET_WM_NAME atom, error is: %\n", name_error.*);
+        log_error("Can't get _NET_WM_NAME atom, error is: %\n", name_error.*);
         return;
     }
 
@@ -115,7 +116,7 @@ detect_focused_program :: () {
     change_cookie := xcb_change_window_attributes_aux_checked(con, root_window, .EVENT_MASK, *attrs);
     change_error := xcb_request_check(con, change_cookie);
     if change_error {
-        print("Failed to listen to window focus events, error is %\n", change_error.*);
+        log_error("Failed to listen to window focus events, error is %\n", change_error.*);
     }
 
     xcb_flush(con);
@@ -123,7 +124,7 @@ detect_focused_program :: () {
     while true {
         event := xcb_wait_for_event(con);
         if !event {
-            print("I/O error while getting a window focused event");
+            log_error("I/O error while getting a window focused event");
             break;
         }
         response_type := event.response_type & ~0x80;
@@ -217,7 +218,7 @@ Device_Candidate :: struct {
 // This is basically test_bit from linux kernel: 
 // https://github.com/torvalds/linux/blob/master/tools/testing/selftests/iommu/iommufd_utils.h#L34
 test_key :: (key: u32) -> u32 #expand {
-    return `key_bits[key/8] & (1 << (key % 8));
+    return `key_bits[key/8] & (xx 1 << (key % 8));
 }
 
 opened_file_descriptors_for_candidates: [256]s32;
@@ -233,7 +234,7 @@ close_descriptors :: (raw_descriptors: *void) -> *void #c_call {
                 System :: #import "System";
 
                 code, s := System.get_error_value_and_string();
-                print("Closing file descriptor '%' failed: code %, '%'.\n", it, code, s);
+                log_error("Closing file descriptor '%' failed: code %, '%'.\n", it, code, s);
             } else {
                 descriptors[it_index] = 0;
             }
@@ -254,11 +255,9 @@ free_candidates :: (candidate_arrays: ..*[..]Device_Candidate) {
 }
 
 keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Device_Candidate) {
-    // print("%\n", file_info.*);
-
     device_fd := open(file_info.full_name.data, O_RDONLY);
     if device_fd < 0 {
-        print("Couldn't open device % for checking out whether it's a keyboard\n", file_info.full_name);
+        log_error("Couldn't open device % for checking out whether it's a keyboard\n", file_info.full_name);
         return;
     }
 
@@ -271,7 +270,7 @@ keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Devic
 
     name_length := ioctl(device_fd, EVIOCGNAME(name.count), *name);
     if name_length < 0 {
-        print("Couldn't get device name: %\n", candidate.event_file);
+        log_error("Couldn't get device name: %\n", candidate.event_file);
     } else {
         candidate.name = alloc_string(name_length - 1);
         copy(candidate.name.data, name.data, candidate.name.count);
@@ -279,7 +278,6 @@ keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Devic
 
     evbit_result := ioctl(device_fd, EVIOCGBIT(0, size_of(type_of(evbit))), *evbit);
 
-    // print("evbit: %\n, evbit_result: %\n", evbit, evbit_result);
     if !(evbit & (1 << EV_KEY)) {
         return;
     }
@@ -293,7 +291,7 @@ keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Devic
     key_bits: [key_bits_num]u8;
     keys_ioctl_result := ioctl(device_fd, EVIOCGBIT(EV_KEY, key_bits.count), *key_bits);
     if keys_ioctl_result != key_bits_num {
-        print("Something is wrong with reading key bits from device %, ioctl result is %, skipping it...\n", cast(string)name, keys_ioctl_result);
+        log_error("Something is wrong with reading key bits from device %, ioctl result is %, skipping it...\n", cast(string)name, keys_ioctl_result);
         return;
     }
 
@@ -306,7 +304,7 @@ keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Devic
     device_stat: stat_t;
     stat_result := stat(file_info.full_name.data, *device_stat);
     if stat_result < 0 {
-        print("Couldn't stat the device %\n", file_info.full_name);
+        log_error("Couldn't stat the device %\n", file_info.full_name);
     }
     dev_major := major(device_stat.st_rdev);
     dev_minor := minor(device_stat.st_rdev);
@@ -322,16 +320,14 @@ keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Devic
     syspath := tprint("/sys/dev/%/%:%/device/", dev_mode, dev_major, dev_minor);
     absolute_path, success := get_absolute_path(syspath);
     if !success {
-        print("Couldn't resolve absolute path to the device\n");
+        log_error("Couldn't resolve absolute path to the device\n");
         return;
     }
-    // print("syspath: %\n", syspath);
 
     protocol_string := tprint("%", "bInterfaceProtocol");
     sub_class_string := tprint("%", "bInterfaceSubClass");
 
     path := parse_path(absolute_path);
-    // print("absolute_path: %\n", path);
 
     found := false;
     while !found {
@@ -354,7 +350,6 @@ keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Devic
     }
 
     if !found {
-        // print("Coulnd't find interface protocol and interface subclass for the device %\n", candidate.event_file);
         return;
     }
 
@@ -362,13 +357,9 @@ keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Devic
 
     path.words[path.words.count - 1] = sub_class_string;
     sub_class_path := path_to_string(path,, temp);
-    // print("%\n", protocol_path);
-    // print("%\n", sub_class_path);
 
     protocol  := trim_right(patched_read_entire_file(protocol_path,, temp));
     sub_class := trim_right(patched_read_entire_file(sub_class_path,, temp));
-    // print("bInterfaceProtocol: %\n", protocol);
-    // print("bInterfaceSubClass: %\n", sub_class);
 
     // According to USB spec, it is a proper keyboard with both of those equal 1
     if protocol == "01" && sub_class == "01" {
@@ -376,18 +367,20 @@ keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Devic
     }
 }
 
-log_keys :: () {
+get_loggable_device :: () -> *Device {
     candidates: [..]Device_Candidate;
     devices_high_confidence: [..]Device_Candidate;
     devices_meh_confidence:  [..]Device_Candidate;
 
-    device: Device;
+    // TODO: putting device on the Context should be better than just passing a stupid pointer around
+    // Not freeing it is probably fine though, unless a user will later on delete/edit profiles with different devices.
+    device := New(Device);
 
     result := visit_files("/dev/input", recursive=false, user_data=*candidates, proc=keyboard_detector, visit_symlinks=false, follow_directory_symlinks=false);
 
     reset_temporary_storage();
     if !result {
-        print("Couldn't collect info about keyboard devices!\n");
+        log_error("Couldn't collect info about keyboard devices!\n");
     }
 
     for candidates {
@@ -406,19 +399,19 @@ log_keys :: () {
     }
 
     if devices_high_confidence.count == 1 {
-        device = devices_high_confidence[0];
+        device.* = devices_high_confidence[0];
         free_candidates(*devices_meh_confidence, *candidates);
     } else if devices_high_confidence.count > 1 {
-        print("Found multiple keyboards, but we don't support that yet, selecting the first of them!\n");
-        device = devices_high_confidence[0];
+        log_error("Found multiple keyboards, but we don't support that yet, selecting the first of them!\n");
+        device.* = devices_high_confidence[0];
         array_unordered_remove_by_index(*devices_high_confidence, 0);
         free_candidates(*devices_high_confidence, *devices_meh_confidence, *candidates);
     } else if devices_meh_confidence.count > 0 {
-        print("Couldn't find any keyboards with high enough confidence, you have to select one manually\n");
+        log_error("Couldn't find any keyboards with high enough confidence, you have to select one manually\n");
         // @TODO: Implement selecting a device
         free_candidates(*devices_high_confidence, *devices_meh_confidence, *candidates);
     } else {
-        print("Coulnd't find any keyboards on your computer, you have to select the device manually\n");
+        log_error("Coulnd't find any keyboards on your computer, you have to select the device manually\n");
         // @TODO: Implement selecting a device
         free_candidates(*devices_high_confidence, *devices_meh_confidence, *candidates);
     }
@@ -426,6 +419,176 @@ log_keys :: () {
     // We will reopen the device with read+write permissions to actually work with it.
     device.file_descriptor = 0;
     print("Final device: %\n", device);
+    return device;
+}
+
+start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
+    ctx: Context;
+    push_context ctx {
+        device := cast(*Device)arg;
+        print("Device is %\n", device.*);
+
+        device_fd := open(device.event_file.data, O_RDONLY);
+
+        defer close(device_fd);
+        if device_fd < 0 {
+            log_error("Could not open % for reading its inputs\n", device.event_file);
+        }
+        device.file_descriptor = device_fd;
+
+        grab_result := ioctl(device_fd, EVIOCGRAB, 1);
+        if grab_result < 0 {
+            log_error("Could not grab % for controlling its inputs\n", device.event_file);
+        }
+        defer ioctl(device_fd, EVIOCGRAB, 0);
+
+        uinput_fd := open("/dev/uinput", O_WRONLY | O_NONBLOCK);
+        if uinput_fd < 0 {
+            log_error("Could not open \"/dev/uinput\" for creating a virtual keyboard\n");
+            return null;
+        }
+        defer close(uinput_fd);
+
+
+        key_bits_num :: (KEY_MAX / 8) + 1;
+        key_bits: [key_bits_num]u8;
+        keys_ioctl_result := ioctl(device_fd, EVIOCGBIT(EV_KEY, key_bits.count), *key_bits);
+        if keys_ioctl_result != key_bits_num {
+            log_error("Something is wrong with reading key bits from %, ioctl result is %, skipping it...\n", device.event_file, keys_ioctl_result);
+            return null;
+        }
+
+        // TODO: Error handling
+        ioctl(uinput_fd, UI_SET_EVBIT, EV_KEY);
+
+        // Inclusive intentionally
+        for KEY_ESC..cast(u32)KEY_MAX {
+            if test_key(it) {
+                ioctl(uinput_fd, UI_SET_KEYBIT, it);
+            }
+        }
+
+        usetup: uinput_setup;
+        usetup.id.bustype = BUS_USB;
+        usetup.id.vendor = 0x6666;
+        usetup.id.product = 0x6665;
+        usetup.name = xx "SOCD keyboard".data;
+
+        // NOTE: Documentation examples have UI_DEV_DESTROY call at the end of the program.
+        // But Linux automatically cleans up a virtual keyboard when I close the program.
+        // At least on my maching (tm). Maybe I should still call it?
+        ioctl(uinput_fd, UI_DEV_SETUP, *usetup);
+        ioctl(uinput_fd, UI_DEV_CREATE);
+
+        ev: input_event;
+
+        output_events: [2]input_event;
+        event_time: timeval;
+        using kctsc: KEY_CODE_TO_SCANCODE;
+
+        stop := false;
+        while !stop {
+            size := read(device_fd, *ev, size_of(input_event));
+
+            if (size < size_of(input_event)) {
+                log_error("Reading event from % failed\n", device.event_file);
+                continue;
+            }
+
+            // Pass the real event into our virtual device.
+            written := write(uinput_fd, *ev, size_of(input_event));
+            if written < 0 {
+                log_error("Could not pass the event on\n");
+            }
+
+            opposing_key, direction, opposing_direction := find_opposing_key_and_directions(ev.code);
+            if !opposing_key {
+                continue;
+            }
+
+            key_bit_result := ioctl(device_fd, EVIOCGKEY(key_bits.count), *key_bits);
+            if key_bit_result < key_bits_num {
+                log_error("Can't read % key state\n", device.event_file);
+                continue;
+            }
+            if ev.value == 1 {
+                kb_real_state[direction] = IS_DOWN;
+                kb_virtual_state[direction] = IS_DOWN;
+                if test_key(opposing_key) {
+                    output_events = .[
+                        // input_event.{
+                        //     time=.{},
+                        //     type=EV_MSC,
+                        //     code=MSC_SCAN,
+                        //     value=scancode_mapping[opposing_key],
+                        // },
+                        input_event.{
+                            time=.{},
+                            type=EV_KEY,
+                            code=cast(u16)opposing_key,
+                            value=IS_UP,
+                        },
+                        input_event.{
+                            time=.{},
+                            type=EV_SYN,
+                            code=SYN_REPORT,
+                            value=0,
+                        },
+                    ];
+                    written := write(uinput_fd, output_events.data, size_of(input_event) * output_events.count);
+                    if written < 0 {
+                        log_error("Could not release the key\n");
+                    } else {
+                        kb_virtual_state[opposing_direction] = IS_UP;
+                    }
+                }
+            } else if ev.value == 0 {
+                kb_real_state[direction] = IS_UP;
+                kb_virtual_state[direction] = IS_UP;
+                if test_key(opposing_key) {
+                    output_events = .[
+                        // input_event.{
+                        //     time=.{},
+                        //     type=EV_MSC,
+                        //     code=MSC_SCAN,
+                        //     value=scancode_mapping[opposing_key],
+                        // },
+                        input_event.{
+                            time=.{},
+                            type=EV_KEY,
+                            code=cast(u16)opposing_key,
+                            value=IS_DOWN,
+                        },
+                        input_event.{
+                            time=.{},
+                            type=EV_SYN,
+                            code=SYN_REPORT,
+                            value=0,
+                        },
+                    ];
+                    written := write(uinput_fd, output_events.data, size_of(input_event) * output_events.count);
+                    // todo: if no errors
+                    if written < 0 {
+                        log_error("Could not repress the key\n");
+                    } else {
+                        kb_virtual_state[opposing_direction] = IS_DOWN;
+                    }
+                }
+            }
+        }
+    }
+    return null;
+}
+
+start_logging_keys :: () {
+    device := get_loggable_device();
+
+    if device.file_descriptor {
+        log_error("File descriptor on the device can't be open here!\n");
+        return;
+    }
+    tid: pthread_t; 
+    pthread_create(*tid, null, start_logging_keys_in_a_thread, device);
 }
 
 start_detecting_focused_program_in_a_thread :: (arg: *void) -> *void #c_call {

@@ -83,10 +83,11 @@ get_key_mapping :: (source_scan_code: u32) -> destination_scan_code: u32 {
 main :: () {
     the_window := create_window();
 
+    // TODO: Need to separate detecting focused program and setting up keyboard hook. Probably...
     start_detecting_focused_program();
 
     if OS == .LINUX {
-        log_keys();
+        start_logging_keys();
     }
 
     Simp.set_render_target(the_window, .LEFT_HANDED);

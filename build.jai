@@ -7,13 +7,8 @@ build :: () {
 
     target_options := get_build_options(w);
 
-    imports: [..] string;
-    array_add(*imports, "./modules");
-    array_add(*imports, ..target_options.import_path);
-
     target_options.output_executable_name = "hitboxer";
     target_options.backend = .X64;
-    target_options.import_path = imports;
     set_build_options(target_options, w);
 
     set_build_options_dc(.{do_output=false});

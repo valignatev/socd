@@ -1,0 +1,173 @@
+-	 
+err	1
+err	2
+err	3 
+A	4 
+B	5 
+C	6 
+D	7 
+E	8 
+F	9
+G	10
+H       11
+I	12 
+J	13 
+K	14 
+L	15 
+M	16 
+N	17
+O	18 
+P	19 
+Q	20 
+R	21 
+S	22 
+T	23
+U	24 
+V	25 
+W	26 
+X	27 
+Y	28 
+Z	29 
+1	30
+2	31
+3	32
+4	33
+5	34
+6	35
+7	36
+8	37
+9	38
+0	39
+Enter	40
+Esc	41
+BSp	42
+Tab	43
+Space	44
+- / _	45
+= / +	46
+[ / {	47
+] / }	48 
+\ / |	49 
+...	50 
+; / :	51 
+' / "	52 
+` / ~	53 
+, / <	54 
+. / >	55 
+/ / ?	56 
+Caps Lock	57 
+F1	58 
+F2	59
+F3	60 
+F4	61 
+F5	62 
+F6	63 
+F7	64 
+F8	65 
+F9	66 
+F10	67 
+F11	68 
+F12	69 
+PrtScr	70 
+Scroll Lock	71
+Pause	72 
+Insert	73 
+Home	74 
+PgUp	75 
+Delete	76 
+End	77 
+PgDn	78 
+Right	79 
+Left	80 
+Down	81 
+Up	82 
+Num Lock	83
+KP /	84 
+KP *	85 
+KP -	86 
+KP +	87 
+KP Enter	88 
+KP 1 / End	89 
+KP 2 / Down	90 
+KP 3 / PgDn	91 
+KP 4 / Left	92 
+KP 5	93 
+KP 6 / Right	94 
+KP 7 / Home	95
+KP 8 / Up	96 
+KP 9 / PgUp	97 
+KP 0 / Ins	98 
+KP . / Del	99 
+...	100 
+Applic	101 
+Power	102 
+KP =	103 
+F13	104 
+F14	105 
+F15	106 
+F16	107
+F17	108 
+F18	109 
+F19	110 
+F20	111 
+F21	112 
+F22	113 
+F23	114 
+F24	115 
+Execute	116 
+Help	117 
+Menu	118 
+Select	119
+Stop	120 
+Again	121 
+Undo	122 
+Cut	123 
+Copy	124 
+Paste	125 
+Find	126 
+Mute	127 
+Volume Up	128 
+Volume Down	129 
+Locking Caps Lock	130 
+Locking Num Lock	131
+Locking Scroll Lock	132 
+KP ,	133 
+KP =	134 
+Internat	135 
+Internat	136 
+Internat	137 
+Internat	138 
+Internat	139 
+Internat	140 
+Internat	141 
+Internat	142 
+Internat	143
+LANG	144 
+LANG	145 
+LANG	146 
+LANG	147 
+LANG	148 
+LANG	149 
+LANG	150 
+LANG	151 
+LANG	152 
+Alt Erase	153 
+SysRq	154 
+Cancel	155
+Clear	156 
+Prior	157 
+Return	158 
+Separ	159 
+Out	160 
+Oper	161 
+Clear / Again	162 
+CrSel / Props	163 
+ExSel	164
+LCtrl	224 
+LShift	225 
+LAlt	226 
+LGUI	227 
+RCtrl	228 
+RShift	229 
+RAlt	230 
+RGUI	231
