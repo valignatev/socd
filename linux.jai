@@ -73,6 +73,8 @@ detect_focused_program :: () {
     // to click on the icon and switch to other program faster than socd starts.
     // For example, when you in a full-screen game, click Windows, press socd shortcut
     // and then quickly switch back to the game within like 500 milliseconds.
+    // I haven't been able to pull this off on Linux, but Windows is too slow
+    // to attach all needed hooks.
     con := xcb_connect(null, null);
     con_errors := xcb_connection_has_error(con);
 
@@ -515,12 +517,6 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
                 kb_virtual_state[direction] = IS_DOWN;
                 if test_key(opposing_key) {
                     output_events = .[
-                        // input_event.{
-                        //     time=.{},
-                        //     type=EV_MSC,
-                        //     code=MSC_SCAN,
-                        //     value=scancode_mapping[opposing_key],
-                        // },
                         input_event.{
                             time=.{},
                             type=EV_KEY,
@@ -546,12 +542,6 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
                 kb_virtual_state[direction] = IS_UP;
                 if test_key(opposing_key) {
                     output_events = .[
-                        // input_event.{
-                        //     time=.{},
-                        //     type=EV_MSC,
-                        //     code=MSC_SCAN,
-                        //     value=scancode_mapping[opposing_key],
-                        // },
                         input_event.{
                             time=.{},
                             type=EV_KEY,
