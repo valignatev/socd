@@ -147,16 +147,19 @@ void read_settings() {
     // First 4 lines are key bindings
     for (int i=0; i < 4; i++) {
         char* result = fgets(config_line, 100, config_file);
+	      if (strncmp("0x", result, 2) == 0) { result += 2; }
         int button = (int)strtol(result, NULL, 16);
         CUSTOM_BINDS[i] = button;
     }
 
     // 5th line is disable key bind
     char* result = fgets(config_line,100,config_file);
+    if (strncmp("0x", result, 2) == 0) { result += 2; }
     DISABLE_BIND = (int)strtol(result,NULL,16);
 
     // 6th line is ESC key bind
     result = fgets(config_line,100,config_file);
+    if (strncmp("0x", result, 2) == 0) { result += 2; }
     ESC_BIND = (int)strtol(result,NULL,16);
 
     // Then there are programs SOCD cleaner should track
