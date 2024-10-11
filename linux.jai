@@ -211,25 +211,25 @@ Device :: struct {
     file_descriptor: s32;
 }
 
-Device_Candidate :: struct {
-    using #as device: Device;
-    // How likely it is an actual keyboard. The more - the better.
-    score: s8;
-}
-
 // This is basically test_bit from linux kernel: 
 // https://github.com/torvalds/linux/blob/master/tools/testing/selftests/iommu/iommufd_utils.h#L34
 test_key :: (key: u32) -> u32 #expand {
     return `key_bits[key/8] & (xx 1 << (key % 8));
 }
 
-opened_file_descriptors_for_candidates: [256]s32;
+File_Descriptors :: struct {
+    counter: s32;
+    array: [256]s32;
+}
+
+opened_file_descriptors_for_candidates: File_Descriptors;
 
 close_descriptors :: (raw_descriptors: *void) -> *void #c_call {
     ctx: Context;
     push_context ctx {
-        descriptors := cast([256]s32)raw_descriptors;
-        for descriptors {
+        descriptors := cast(*File_Descriptors)raw_descriptors;
+        for descriptors.array {
+            log("Closing file descriptor %\n", it);
             if !it break;
             error := close(it);
             if error {
@@ -238,44 +238,39 @@ close_descriptors :: (raw_descriptors: *void) -> *void #c_call {
                 code, s := System.get_error_value_and_string();
                 log_error("Closing file descriptor '%' failed: code %, '%'.\n", it, code, s);
             } else {
-                descriptors[it_index] = 0;
+                descriptors.array[it_index] = 0;
             }
         }
     }
     return null;
 }
 
-free_candidates :: (candidate_arrays: ..*[..]Device_Candidate) {
-    for candidates: candidate_arrays {
-        for candidates.* {
-            if it.name.count free(it.name); 
-        }
-        array_free(candidates.*);
-    }
+free_candidates :: (candidates: *[..]Device) {
+    array_free(candidates.*);
     tid: pthread_t ;
     pthread_create(*tid, null, close_descriptors, *opened_file_descriptors_for_candidates);
 }
 
-keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Device_Candidate) {
+keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Device) {
     device_fd := open(file_info.full_name.data, O_RDONLY);
     if device_fd < 0 {
         log_error("Couldn't open device % for checking out whether it's a keyboard\n", file_info.full_name);
         return;
     }
 
-    candidate := array_add(device_candidates);
-    candidate.event_file = file_info.full_name;
-    candidate.file_descriptor = device_fd;
+    opened_file_descriptors_for_candidates.array[opened_file_descriptors_for_candidates.counter] = device_fd;
+    opened_file_descriptors_for_candidates.counter += 1;
 
     name: [256]u8;
+    device_name: string;
     evbit: u32;
 
     name_length := ioctl(device_fd, EVIOCGNAME(name.count), *name);
     if name_length < 0 {
-        log_error("Couldn't get device name: %\n", candidate.event_file);
+        log_error("Couldn't get device name: %\n", file_info.full_name);
     } else {
-        candidate.name = alloc_string(name_length - 1);
-        copy(candidate.name.data, name.data, candidate.name.count);
+        device_name = alloc_string(name_length - 1);
+        copy(device_name.data, name.data, device_name.count);
     }
 
     evbit_result := ioctl(device_fd, EVIOCGBIT(0, size_of(type_of(evbit))), *evbit);
@@ -284,8 +279,6 @@ keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Devic
         return;
     }
 
-    candidate.score += 1;
-
     // Every key code is encoded as a single positional bit in the key_bits returned by EVIOCGBIT,
     // This is why we need KEY_MAX amount of bits, or (KEY_MAX / 8) + 1 amount of bytes.
     // At least on desktop Linux this is 96.
@@ -293,7 +286,7 @@ keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Devic
     key_bits: [key_bits_num]u8;
     keys_ioctl_result := ioctl(device_fd, EVIOCGBIT(EV_KEY, key_bits.count), *key_bits);
     if keys_ioctl_result != key_bits_num {
-        log_error("Something is wrong with reading key bits from device %, ioctl result is %, skipping it...\n", cast(string)name, keys_ioctl_result);
+        log_error("Something is wrong with reading key bits from device %, ioctl result is %, skipping it...\n", device_name, keys_ioctl_result);
         return;
     }
 
@@ -301,149 +294,61 @@ keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Devic
         return;
     }
 
-    // Try to grab and ungrab to see if it's busy
-    // TODO: What if the device becomes ungrabbed later and becomes the one we were looking for?
-    if !ioctl(device_fd, EVIOCGRAB, 1) {
-        // The device is free, we can proceed. Ungrab it here
-        ioctl(device_fd, EVIOCGRAB, 0);
-    } else if errno() == EBUSY {
-        // The device is busy, we won't be anble to use it anyway, abort
-        log_error("Device % - % is busy, can't work with it\n", file_info.full_name, cast(string)name);
-        return;
-    }
-
-
-    print("% - %\n", file_info.full_name, cast(string)name);
-
-    candidate.score += 10;
-
-    device_stat: stat_t;
-    stat_result := stat(file_info.full_name.data, *device_stat);
-    if stat_result < 0 {
-        log_error("Couldn't stat the device %\n", file_info.full_name);
-    }
-    dev_major := major(device_stat.st_rdev);
-    dev_minor := minor(device_stat.st_rdev);
-    dev_mode: string; 
-    if device_stat.st_mode & S_IFMT == {
-        case S_IFBLK;
-            dev_mode = "block";
-        case S_IFCHR;
-            dev_mode = "char";
-        case;
-            dev_mode = "unexpected_device_type";
-    };
-    syspath := tprint("/sys/dev/%/%:%/device/", dev_mode, dev_major, dev_minor);
-    absolute_path, success := get_absolute_path(syspath);
-    if !success {
-        log_error("Couldn't resolve absolute path to the device\n");
-        return;
-    }
-
-    protocol_string := tprint("%", "bInterfaceProtocol");
-    sub_class_string := tprint("%", "bInterfaceSubClass");
-
-    path := parse_path(absolute_path);
-
-    found := false;
-    while !found {
-
-        // Bail if we went all the way back to /sys/devices/pciXXXX:XX/XXXX:XX:XX.X/usbX/ and
-        // haven't found the descriptors yet.
-        if path.words.count <= 5 {
-            break;
-        }
-        path.words[path.words.count - 1] = protocol_string;
-
-        fully_exists, how_much := how_much_of_path_exists_on_the_local_filesystem(path);
-        
-        if fully_exists {
-            found = true;
-            break;
-        }
-
-        path.words.count -= 1;
-    }
-
-    if !found {
-        return;
-    }
-
-    protocol_path := path_to_string(path,, temp);
-
-    path.words[path.words.count - 1] = sub_class_string;
-    sub_class_path := path_to_string(path,, temp);
-
-    protocol  := trim_right(patched_read_entire_file(protocol_path,, temp));
-    sub_class := trim_right(patched_read_entire_file(sub_class_path,, temp));
-
-    // According to USB spec, it is a proper keyboard with both of those equal 1
-    if protocol == "01" && sub_class == "01" {
-        candidate.score += 100;
-    }
+    candidate := array_add(device_candidates);
+    candidate.event_file = file_info.full_name;
+    candidate.file_descriptor = device_fd;
+    candidate.name = device_name;
 }
 
 get_loggable_device :: () -> *Device {
-    candidates: [..]Device_Candidate;
-    devices_high_confidence: [..]Device_Candidate;
-    devices_meh_confidence:  [..]Device_Candidate;
-
-    // TODO: putting device on the Context should be better than just passing a stupid pointer around
-    // Not freeing it is probably fine though, unless a user will later on delete/edit profiles with different devices.
+    candidates: [..]Device;
     device := New(Device);
 
-    result := visit_files("/dev/input", recursive=false, user_data=*candidates, proc=keyboard_detector, visit_symlinks=false, follow_directory_symlinks=false);
+    result := visit_files("/dev/input", recursive=false, user_data=*candidates, proc=keyboard_detector, visit_symlinks=false, follow_directory_symlinks=false,, temp);
 
-    reset_temporary_storage();
     if !result {
         log_error("Couldn't collect info about keyboard devices!\n");
     }
 
+    fds: [..]pollfd;
+    array_reserve(*fds, candidates.count);
+
     for candidates {
-        if !it.file_descriptor continue;
-        // If someone has over 256 device candidates - oh well, we're gonna leak those descriptors until the
-        // program finishes.
-        if it_index < opened_file_descriptors_for_candidates.count {
-            opened_file_descriptors_for_candidates[it_index] = it.file_descriptor;
-        }
-        if it.score > 100 {
-            array_add(*devices_high_confidence, it);
-            array_unordered_remove_by_index(*candidates, it_index);
-        } else if it.score > 10 {
-            array_add(*devices_meh_confidence, it);
-            array_unordered_remove_by_index(*candidates, it_index);
+        poll_event := array_add(*fds);
+        poll_event.fd = it.file_descriptor;
+        poll_event.events = POLLIN | POLLPRI;
+        print("%\n", it);
+    }
+
+    poll_result := poll(fds.data, cast(u64)fds.count, -1);
+    if poll_result <= 0 {
+        log_error("Can't detect a keyboard: % (ERROR REASON HERE)\n", errno());
+    }
+
+    for fds {
+        if (it.revents & POLLIN) {
+            device.event_file = copy_string(candidates[it_index].event_file);
+            device.name = copy_string(candidates[it_index].name);
+            break;
         }
     }
 
-    if devices_high_confidence.count == 1 {
-        device.* = devices_high_confidence[0];
-        free_candidates(*devices_meh_confidence, *candidates);
-    } else if devices_high_confidence.count > 1 {
-        log_error("Found multiple keyboards, but we don't support that yet, selecting the first of them!\n");
-        device.* = devices_high_confidence[0];
-        array_unordered_remove_by_index(*devices_high_confidence, 0);
-        free_candidates(*devices_high_confidence, *devices_meh_confidence, *candidates);
-    } else if devices_meh_confidence.count > 0 {
-        log_error("Couldn't find any keyboards with high enough confidence, you have to select one manually\n");
-        // @TODO: Implement selecting a device
-        free_candidates(*devices_high_confidence, *devices_meh_confidence, *candidates);
-    } else {
-        log_error("Coulnd't find any keyboards on your computer, you have to select the device manually\n");
-        // @TODO: Implement selecting a device
-        free_candidates(*devices_high_confidence, *devices_meh_confidence, *candidates);
-    }
+    free_candidates(*candidates);
+    reset_temporary_storage();
+    print("Final device: %\n", device.*);
 
-    // We will reopen the device with read+write permissions to actually work with it.
-    device.file_descriptor = 0;
-    print("Final device: %\n", device);
+    // TODO: I'm doing this to wait for the main keyboard buffer to get flushed before grabbing it.
+    // Otherwise, keys get stuck. or touchpad thinks that key is pressed and stops moving.
+    // Instead, I should just run a small loop until EV_SYN before grabbing the keyboard.
+    sleep_milliseconds(100);
     return device;
 }
 
 start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
     ctx: Context;
     push_context ctx {
-        device := cast(*Device)arg;
-        print("Device is %\n", device.*);
+
+        device := get_loggable_device();
 
         device_fd := open(device.event_file.data, O_RDONLY);
 
@@ -590,14 +495,8 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
 }
 
 start_logging_keys :: () {
-    device := get_loggable_device();
-
-    if device.file_descriptor {
-        log_error("File descriptor on the device can't be open here!\n");
-        return;
-    }
     tid: pthread_t; 
-    pthread_create(*tid, null, start_logging_keys_in_a_thread, device);
+    pthread_create(*tid, null, start_logging_keys_in_a_thread, null);
 }
 
 start_detecting_focused_program_in_a_thread :: (arg: *void) -> *void #c_call {

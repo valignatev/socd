@@ -276,7 +276,7 @@ working_directory_set := false;
 mapping_resolving_hook_is_installed := false;
 mapping_setting_hook_is_installed := false;
 
-#import "Basic";
+#import "Basic"()(TEMP_ALLOCATOR_POISON_FREED_MEMORY=true);
 Input :: #import "Input";
 Simp :: #import "Simp";
 #import "GetRect_LeftHanded";
