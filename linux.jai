@@ -446,7 +446,12 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
 
         uinput_fd := open("/dev/uinput", O_WRONLY | O_NONBLOCK);
         if uinput_fd < 0 {
-            log_error("Could not open \"/dev/uinput\" for creating a virtual keyboard\n");
+
+            System :: #import "System";
+
+            code, s := System.get_error_value_and_string();
+            log_error("Could not open \"/dev/uinput\" for creating a virtual keyboard, error: %\n", s);
+            if code == EACCES log_error("Reopen the program with root privileges, or configure required udev rules\n");
             return null;
         }
         defer close(uinput_fd);
