@@ -301,6 +301,20 @@ keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Devic
         return;
     }
 
+    // Try to grab and ungrab to see if it's busy
+    // TODO: What if the device becomes ungrabbed later and becomes the one we were looking for?
+    if !ioctl(device_fd, EVIOCGRAB, 1) {
+        // The device is free, we can proceed. Ungrab it here
+        ioctl(device_fd, EVIOCGRAB, 0);
+    } else if errno() == EBUSY {
+        // The device is busy, we won't be anble to use it anyway, abort
+        log_error("Device % - % is busy, can't work with it\n", file_info.full_name, cast(string)name);
+        return;
+    }
+
+
+    print("% - %\n", file_info.full_name, cast(string)name);
+
     candidate.score += 10;
 
     device_stat: stat_t;
@@ -386,6 +400,7 @@ get_loggable_device :: () -> *Device {
     }
 
     for candidates {
+        if !it.file_descriptor continue;
         // If someone has over 256 device candidates - oh well, we're gonna leak those descriptors until the
         // program finishes.
         if it_index < opened_file_descriptors_for_candidates.count {
