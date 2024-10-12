@@ -337,26 +337,55 @@ get_loggable_device :: () -> *Device {
     reset_temporary_storage();
     print("Final device: %\n", device.*);
 
-    // TODO: I'm doing this to wait for the main keyboard buffer to get flushed before grabbing it.
-    // Otherwise, keys get stuck. or touchpad thinks that key is pressed and stops moving.
-    // Instead, I should just run a small loop until EV_SYN before grabbing the keyboard.
-    sleep_milliseconds(100);
     return device;
 }
 
 start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
+    key_bits_num :: (KEY_MAX / 8) + 1;
+    key_bits: [key_bits_num]u8;
+    output_events: [2]input_event;
+
     ctx: Context;
     push_context ctx {
-
         device := get_loggable_device();
 
-        device_fd := open(device.event_file.data, O_RDONLY);
+        device_fd := open(device.event_file.data, O_RDWR);
 
         defer close(device_fd);
         if device_fd < 0 {
             log_error("Could not open % for reading its inputs\n", device.event_file);
         }
         device.file_descriptor = device_fd;
+
+        key_bit_result := ioctl(device_fd, EVIOCGKEY(key_bits.count), *key_bits);
+        if key_bit_result < key_bits_num {
+            log_error("Can't read % key state\n", device.event_file);
+            return null;
+        }
+
+        // Resetting the keyboard state before grabbing it. Otherwise key might get stuck in an auto-repeat
+        // state which is awkward with things like touchpads that auto-disable them "on typing". I got this
+        // while testing the program on my laptop.
+        for KEY_ESC..cast(u16)KEY_MAX {
+            if test_key(it) {
+                output_events[0] = input_event.{
+                    time=.{},
+                    type=EV_KEY,
+                    code=it,
+                    value=IS_UP,
+                };
+                output_events[1] = input_event.{
+                    time=.{},
+                    type=EV_SYN,
+                    code=SYN_REPORT,
+                    value=0,
+                };
+                written := write(device_fd, output_events.data, size_of(input_event) * output_events.count);
+                if written < 0 {
+                    log_error("Could not release the key\n");
+                }
+            }
+        }
 
         grab_result := ioctl(device_fd, EVIOCGRAB, 1);
         if grab_result < 0 {
@@ -376,9 +405,6 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
         }
         defer close(uinput_fd);
 
-
-        key_bits_num :: (KEY_MAX / 8) + 1;
-        key_bits: [key_bits_num]u8;
         keys_ioctl_result := ioctl(device_fd, EVIOCGBIT(EV_KEY, key_bits.count), *key_bits);
         if keys_ioctl_result != key_bits_num {
             log_error("Something is wrong with reading key bits from %, ioctl result is %, skipping it...\n", device.event_file, keys_ioctl_result);
@@ -409,9 +435,6 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
 
         ev: input_event;
 
-        output_events: [2]input_event;
-        event_time: timeval;
-
         stop := false;
         while !stop {
             size := read(device_fd, *ev, size_of(input_event));
@@ -438,54 +461,41 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
                 continue;
             }
             if ev.value == 1 {
-                kb_real_state[direction] = IS_DOWN;
-                kb_virtual_state[direction] = IS_DOWN;
                 if test_key(opposing_key) {
-                    output_events = .[
-                        input_event.{
-                            time=.{},
-                            type=EV_KEY,
-                            code=cast(u16)opposing_key,
-                            value=IS_UP,
-                        },
-                        input_event.{
-                            time=.{},
-                            type=EV_SYN,
-                            code=SYN_REPORT,
-                            value=0,
-                        },
-                    ];
+                    output_events[0] = input_event.{
+                        time=.{},
+                        type=EV_KEY,
+                        code=cast(u16)opposing_key,
+                        value=IS_UP,
+                    };
+                    output_events[1] = input_event.{
+                        time=.{},
+                        type=EV_SYN,
+                        code=SYN_REPORT,
+                        value=0,
+                    };
                     written := write(uinput_fd, output_events.data, size_of(input_event) * output_events.count);
                     if written < 0 {
                         log_error("Could not release the key\n");
-                    } else {
-                        kb_virtual_state[opposing_direction] = IS_UP;
                     }
                 }
             } else if ev.value == 0 {
-                kb_real_state[direction] = IS_UP;
-                kb_virtual_state[direction] = IS_UP;
                 if test_key(opposing_key) {
-                    output_events = .[
-                        input_event.{
-                            time=.{},
-                            type=EV_KEY,
-                            code=cast(u16)opposing_key,
-                            value=IS_DOWN,
-                        },
-                        input_event.{
-                            time=.{},
-                            type=EV_SYN,
-                            code=SYN_REPORT,
-                            value=0,
-                        },
-                    ];
+                    output_events[0] = input_event.{
+                        time=.{},
+                        type=EV_KEY,
+                        code=cast(u16)opposing_key,
+                        value=IS_DOWN,
+                    };
+                    output_events[1] = input_event.{
+                        time=.{},
+                        type=EV_SYN,
+                        code=SYN_REPORT,
+                        value=0,
+                    };
                     written := write(uinput_fd, output_events.data, size_of(input_event) * output_events.count);
-                    // todo: if no errors
                     if written < 0 {
                         log_error("Could not repress the key\n");
-                    } else {
-                        kb_virtual_state[opposing_direction] = IS_DOWN;
                     }
                 }
             }
