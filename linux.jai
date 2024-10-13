@@ -1,5 +1,6 @@
 #load "./xcb.jai";
 #load "./uinput.jai";
+#load "./xkbcommon.jai";
 
 // This might backfire, because this is configurable on Linux
 // Might want to allocate it at runtime instead
@@ -433,8 +434,44 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
         ioctl(uinput_fd, UI_DEV_SETUP, *usetup);
         ioctl(uinput_fd, UI_DEV_CREATE);
 
-        ev: input_event;
+        conn := xcb_connect(null, null);
+        print("xcb_connection is %\n", conn);
+        first_xkb_event: u8;
 
+        major: u16 = 1;
+        minor: u16 = 0;
+        ret := xkb_x11_setup_xkb_extension(
+            conn,
+            major,
+            minor,
+            0,
+            *major, *minor, *first_xkb_event, null,
+        );
+        if (!ret) {
+            log_error("Couldn't setup XKB extension\n");
+        }
+
+        ctx := xkb_context_new(0);
+
+        core_kbd_device_id := xkb_x11_get_core_keyboard_device_id(conn);
+        if (core_kbd_device_id == -1) {
+            log_error("Couldn't find core keyboard device\n");
+        } else {
+            log("Core keyboard device is %\n", core_kbd_device_id);
+        }
+
+        keymap := xkb_x11_keymap_new_from_device(ctx, conn, core_kbd_device_id, 0);
+        // print("Keymap: %\n", to_string(xkb_keymap_get_as_string(keymap, 1)));
+
+        state := xkb_state_new(keymap);
+        if (!state) {
+            log_error("Couldn't create xkb state for device\n");
+        }
+
+        sym_buffer: [256]u8;
+        utf8_buffer: [256]u8;
+        evdev_offset: u32 = 8;
+        ev: input_event;
         stop := false;
         while !stop {
             size := read(device_fd, *ev, size_of(input_event));
@@ -448,6 +485,15 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
             written := write(uinput_fd, *ev, size_of(input_event));
             if written < 0 {
                 log_error("Could not pass the event on\n");
+            }
+
+            xkb_keycode: xkb_keycode_t = evdev_offset + xx ev.code;
+            keysym := xkb_state_key_get_one_sym(state, xkb_keycode);
+
+            if ev.type == EV_KEY && ev.value == IS_DOWN {
+                xkb_keysym_get_name(keysym, sym_buffer.data, sym_buffer.count);
+                xkb_state_key_get_utf8(state, xkb_keycode, utf8_buffer.data, utf8_buffer.count);
+                print("Pressed: % - %\n", to_string(sym_buffer.data), to_string(utf8_buffer.data));
             }
 
             opposing_key, direction, opposing_direction := find_opposing_key_and_directions(ev.code);

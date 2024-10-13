@@ -8,7 +8,6 @@ build :: () {
     target_options := get_build_options(w);
 
     target_options.output_executable_name = "hitboxer";
-    target_options.backend = .X64;
     set_build_options(target_options, w);
 
     set_build_options_dc(.{do_output=false});
