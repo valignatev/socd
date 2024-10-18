@@ -15,25 +15,22 @@ get_key_name :: (key_scan_code: u32) -> string {
     if cached {
         return cached;
     }
-    #if OS == .WINDOWS {
-        lparam := scan_code_to_lparam(key_scan_code);
-        length := GetKeyNameTextW(lparam, key_name_buffer.data, key_name_buffer.count);
-        if length == 0 {
-            error := GetLastError();
-            log_error("Couldn't get the key name for the key with scancode %. Error is %\n", key_scan_code, error);
-            return "KEY ERROR";
-        }
-        key_name, ok := wide_to_utf8_new(key_name_buffer.data, length);
-        if !ok {
-            error := GetLastError();
-            log_error("Couldn't convert the key name to UTF8 for scancode %. Buffer content is %. Error is %\n", key_scan_code, key_name_buffer, error);
-            return "KEY ERROR";
-        }
-        KEY_NAMES[key_scan_code] = key_name;
-        return key_name;
-    } else {
-        return "NOT IMPLEMENTED";
+
+    lparam := scan_code_to_lparam(key_scan_code);
+    length := GetKeyNameTextW(lparam, key_name_buffer.data, key_name_buffer.count);
+    if length == 0 {
+        error := GetLastError();
+        log_error("Couldn't get the key name for the key with scancode %. Error is %\n", key_scan_code, error);
+        return "KEY ERROR";
     }
+    key_name, ok := wide_to_utf8_new(key_name_buffer.data, length);
+    if !ok {
+        error := GetLastError();
+        log_error("Couldn't convert the key name to UTF8 for scancode %. Buffer content is %. Error is %\n", key_scan_code, key_name_buffer, error);
+        return "KEY ERROR";
+    }
+    KEY_NAMES[key_scan_code] = key_name;
+    return key_name;
 }
 
 // TODO: Try to find a way to be more optimal (like bailing out earlier) on key repeats:
@@ -308,6 +305,10 @@ create_window :: () -> Window_Type {
     SetWindowLongPtrW(the_window, GWL_STYLE, WS_VISIBLE | WS_OVERLAPPED | WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU);
 
     return the_window;
+}
+
+platform_init :: () -> success: bool #must {
+    return true;
 }
 
 HHOOK :: *void;

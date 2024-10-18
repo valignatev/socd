@@ -81,12 +81,19 @@ get_key_mapping :: (source_scan_code: u32) -> destination_scan_code: u32 {
 }
 
 main :: () {
+
+    success := platform_init();
+    if !success {
+        log_error("Initialization failed\n");
+        exit(1);
+    }
+
     the_window := create_window();
 
     // TODO: Need to separate detecting focused program and setting up keyboard hook. Probably...
     start_detecting_focused_program();
 
-    if OS == .LINUX {
+    #if OS == .LINUX {
         start_logging_keys();
     }
 

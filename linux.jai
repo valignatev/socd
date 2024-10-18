@@ -5,6 +5,13 @@
 // This might backfire, because this is configurable on Linux
 // Might want to allocate it at runtime instead
 MAX_PATH_LENGTH :: 4096;
+XKB_EVDEV_OFFSET : u32 : 8;
+
+global_xcb_connection: *xcb_connection_t;
+// I genuinely don't know how bad it is to make libxkbcommon stuff global. Seems working idk...
+global_xkb_context: *xkb_context;
+global_xkb_keymap: *xkb_keymap;
+global_xkb_state: *xkb_state;
 
 patched_read_entire_file :: (name: string, zero_terminated := false, log_errors := true) -> string, bool {
     s: string;
@@ -76,14 +83,7 @@ detect_focused_program :: () {
     // and then quickly switch back to the game within like 500 milliseconds.
     // I haven't been able to pull this off on Linux, but Windows is too slow
     // to attach all needed hooks.
-    con := xcb_connect(null, null);
-    con_errors := xcb_connection_has_error(con);
-
-    if con_errors {
-        log_error("Can't connect to X11 with xcb, error cocde is: %\n", con_errors);
-        return;
-    }
-
+    con := global_xcb_connection;
     net_active_atom: xcb_atom_t;
     net_name_atom: xcb_atom_t;
     net_name_old_atom: xcb_atom_t;
@@ -434,43 +434,8 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
         ioctl(uinput_fd, UI_DEV_SETUP, *usetup);
         ioctl(uinput_fd, UI_DEV_CREATE);
 
-        conn := xcb_connect(null, null);
-        print("xcb_connection is %\n", conn);
-        first_xkb_event: u8;
-
-        major: u16 = 1;
-        minor: u16 = 0;
-        ret := xkb_x11_setup_xkb_extension(
-            conn,
-            major,
-            minor,
-            0,
-            *major, *minor, *first_xkb_event, null,
-        );
-        if (!ret) {
-            log_error("Couldn't setup XKB extension\n");
-        }
-
-        ctx := xkb_context_new(0);
-
-        core_kbd_device_id := xkb_x11_get_core_keyboard_device_id(conn);
-        if (core_kbd_device_id == -1) {
-            log_error("Couldn't find core keyboard device\n");
-        } else {
-            log("Core keyboard device is %\n", core_kbd_device_id);
-        }
-
-        keymap := xkb_x11_keymap_new_from_device(ctx, conn, core_kbd_device_id, 0);
-        // print("Keymap: %\n", to_string(xkb_keymap_get_as_string(keymap, 1)));
-
-        state := xkb_state_new(keymap);
-        if (!state) {
-            log_error("Couldn't create xkb state for device\n");
-        }
-
         sym_buffer: [256]u8;
         utf8_buffer: [256]u8;
-        evdev_offset: u32 = 8;
         ev: input_event;
         stop := false;
         while !stop {
@@ -487,12 +452,12 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
                 log_error("Could not pass the event on\n");
             }
 
-            xkb_keycode: xkb_keycode_t = evdev_offset + xx ev.code;
-            keysym := xkb_state_key_get_one_sym(state, xkb_keycode);
+            xkb_keycode: xkb_keycode_t = XKB_EVDEV_OFFSET + xx ev.code;
+            keysym := xkb_state_key_get_one_sym(global_xkb_state, xkb_keycode);
 
             if ev.type == EV_KEY && ev.value == IS_DOWN {
                 xkb_keysym_get_name(keysym, sym_buffer.data, sym_buffer.count);
-                xkb_state_key_get_utf8(state, xkb_keycode, utf8_buffer.data, utf8_buffer.count);
+                xkb_state_key_get_utf8(global_xkb_state, xkb_keycode, utf8_buffer.data, utf8_buffer.count);
                 print("Pressed: % - %\n", to_string(sym_buffer.data), to_string(utf8_buffer.data));
             }
 
@@ -580,8 +545,45 @@ set_key_mapping_hook :: (window: Window_Type) {
 }
 
 get_key_name :: (key_scan_code: u32) -> string {
-    // @TODO: Implement
-    return "NOT IMPLEMENTED";
+    if key_scan_code == KEY_TEMP return "...";
+    cached := KEY_NAMES[key_scan_code];
+    if cached return cached;
+
+    // Special case for Escape - because libxkbcommon has ^[ for it as utf8 representation lol.
+    if key_scan_code == KEY_ESC {
+        KEY_NAMES[KEY_ESC] = "ESC";
+        return "ESC";
+    }
+
+    key_name: string;
+
+    xkb_keycode: xkb_keycode_t = XKB_EVDEV_OFFSET + key_scan_code;
+    keysym := xkb_state_key_get_one_sym(global_xkb_state, xkb_keycode);
+    // This doesn't do anything for some reason
+    keysym = xkb_keysym_to_upper(keysym);
+
+    // First is a dummy call just to get a length of the string
+    length := xkb_state_key_get_utf8(global_xkb_state, xkb_keycode, null, 0);
+    if length {
+        // Allocate one more for that sweet null terminator. We'll subtract the count later
+        key_name = alloc_string(length + 1);
+        xkb_state_key_get_utf8(global_xkb_state, xkb_keycode, key_name.data, xx (key_name.count));
+
+    // If the key doesn't have utf8 representation in libxkbcommon - get its keysym name instead.
+    } else {
+        length := xkb_keysym_get_name(keysym, null, 0);
+        key_name = alloc_string(length + 1);
+        xkb_keysym_get_name(keysym, key_name.data, xx key_name.count);
+    }
+
+    key_name.count -= 1;
+    if key_name.count == 1 {
+        // This only supports English letters (and no unicode)
+        to_upper_in_place(key_name);
+    }
+
+    KEY_NAMES[key_scan_code] = key_name;
+    return key_name;
 }
 
 // Mostly a copy from Window_Creation module with some custom window hints.
@@ -670,6 +672,58 @@ create_window :: (window_x := 0, window_y := 0, parent: Window_Type = None, back
     return win;
 }
 
+
+platform_init :: () -> success: bool #must {
+
+    // init xcb X11 connection and libxkbcommon
+    global_xcb_connection = xcb_connect(null, null);
+    con_errors := xcb_connection_has_error(global_xcb_connection);
+
+    if con_errors {
+        log_error("Can't connect to X11 with xcb, error cocde is: %\n", con_errors);
+        return false;
+    }
+
+    base_xkb_event: u8;
+
+    major: u16 = 1;
+    minor: u16 = 0;
+    ret := xkb_x11_setup_xkb_extension(
+        global_xcb_connection,
+        major,
+        minor,
+        0,
+        *major, *minor, *base_xkb_event, null,
+    );
+
+    if (!ret) {
+        log_error("Couldn't setup XKB extension\n");
+        return false;
+    }
+
+    global_xkb_context = xkb_context_new(0);
+
+    core_kbd_device_id := xkb_x11_get_core_keyboard_device_id(global_xcb_connection);
+    if (core_kbd_device_id == -1) {
+        log_error("Couldn't find core keyboard device\n");
+        return false;
+    } else {
+        log("Core keyboard device is %\n", core_kbd_device_id);
+    }
+
+    global_xkb_keymap = xkb_x11_keymap_new_from_device(global_xkb_context, global_xcb_connection, core_kbd_device_id, 0);
+    // print("Keymap: %\n", to_string(xkb_keymap_get_as_string(keymap, 1)));
+
+    global_xkb_state = xkb_state_new(global_xkb_keymap);
+    if (!global_xkb_state) {
+        log_error("Couldn't create xkb state for device\n");
+        return false;
+    }
+
+    return true;
+
+}
+
 libc :: #system_library "libc";
 c_free :: (memory: *void) #foreign libc "free";
 
@@ -679,6 +733,5 @@ c_free :: (memory: *void) #foreign libc "free";
 #import "POSIX";
 #import "Sort";
 #import "X11";
-// For some reason defaults in create_window fail with unknown identifier without import Window_Creation like this.
-// Maybe a compiler bug? Need to ask about it
+// To expose module-scoped WC.DEFAULT_WINDOW_CREATION_COLOR and WC.DEFAULT_MSAA
 WC :: #import "Window_Creation";
