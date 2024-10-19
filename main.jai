@@ -168,7 +168,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     up_pressed := button(r, get_key_name(BINDS[DIRECTION_UP]), *button_theme);
 
     if up_pressed {
-        print("UP button pressed\n");
+        log("UP button pressed\n");
     }
 
     r = get_rect(k*0.5, k*1.5, k, k);
@@ -260,17 +260,14 @@ init_fonts :: (window: Window_Type) {
         path := path_strip_filename(get_path_of_running_executable());
         set_working_directory(path);
         working_directory_set = true;
-        // print("%\n", path);
     }
 
     dpi := get_dpi_scale(window);
-    // print("DPI is %, window_height is %, window_width is %\n", dpi, window_height, window_width);
     if button_font {
         free(button_font);
         button_font = null;
     }
     pixel_height := window_height / dpi / 24;
-    // print("pixel_height is %\n", pixel_height);
     button_font = Simp.get_font_at_size("data", "OpenSans-Bold.ttf", cast(s64)(pixel_height * dpi));
     assert(button_font != null);
 }

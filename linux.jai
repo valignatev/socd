@@ -138,7 +138,6 @@ detect_focused_program :: () {
                 // On Sway, I get two focus events for the same window when switching from
                 // another X11 window. But I get only one focus event when I switch from
                 // Wayland window to X11 window. Weird, on pure X11 this doesn't happen.
-                // print("Event is %\n", notify_event.*);
 
                 // TODO: Grabbing the server is kinda expensive and disruptive. And the only upside is that
                 // it guarantees that the window that is focused won't get unfocused or destroyed
@@ -180,7 +179,7 @@ detect_focused_program :: () {
                     name.data = xcb_get_property_value(name_reply);
                 }
 
-                print("Name: %\n", name);
+                log("Name: %\n", name);
                 xcb_ungrab_server(con);
                 xcb_flush(con);
                 c_free(name_reply);
@@ -318,7 +317,7 @@ get_loggable_device :: () -> *Device {
         poll_event := array_add(*fds);
         poll_event.fd = it.file_descriptor;
         poll_event.events = POLLIN | POLLPRI;
-        print("%\n", it);
+        log("%\n", it);
     }
 
     poll_result := poll(fds.data, cast(u64)fds.count, -1);
@@ -336,7 +335,7 @@ get_loggable_device :: () -> *Device {
 
     free_candidates(*candidates);
     reset_temporary_storage();
-    print("Final device: %\n", device.*);
+    log("Final device: %\n", device.*);
 
     return device;
 }
@@ -458,7 +457,7 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
             if ev.type == EV_KEY && ev.value == IS_DOWN {
                 xkb_keysym_get_name(keysym, sym_buffer.data, sym_buffer.count);
                 xkb_state_key_get_utf8(global_xkb_state, xkb_keycode, utf8_buffer.data, utf8_buffer.count);
-                print("Pressed: % - %\n", to_string(sym_buffer.data), to_string(utf8_buffer.data));
+                log("Pressed: % - %\n", to_string(sym_buffer.data), to_string(utf8_buffer.data));
             }
 
             opposing_key, direction, opposing_direction := find_opposing_key_and_directions(ev.code);
@@ -712,7 +711,6 @@ platform_init :: () -> success: bool #must {
     }
 
     global_xkb_keymap = xkb_x11_keymap_new_from_device(global_xkb_context, global_xcb_connection, core_kbd_device_id, 0);
-    // print("Keymap: %\n", to_string(xkb_keymap_get_as_string(keymap, 1)));
 
     global_xkb_state = xkb_state_new(global_xkb_keymap);
     if (!global_xkb_state) {

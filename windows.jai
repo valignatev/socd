@@ -52,11 +52,11 @@ low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 
     push_context ctx {
         key_name := get_key_name(key_scan_code);
 
-        print("Key is % - %\n", key_scan_code, key_name);
+        log("Key is % - %\n", key_scan_code, key_name);
         mapping := get_key_mapping(key_scan_code);
         if mapping {
             key_name := get_key_name(mapping);
-            print("Found mapping: %\n", key_name);
+            log("Found mapping: %\n", key_name);
 
             if wparam == WM_KEYDOWN || wparam == WM_SYSKEYDOWN {
                 input: INPUT;
@@ -65,20 +65,20 @@ low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 
                 events_count := SendInput(1, *input, size_of(INPUT));
                 if events_count == 0 {
                     error := GetLastError();
-                    print("SendInput failed with error: %\n", error);
+                    log_error("SendInput failed with error: %\n", error);
                 }
-                print("Sent % down events\n", events_count);
+                log("Sent % down events\n", events_count);
             } else if wparam == WM_KEYUP || wparam == WM_SYSKEYUP {
-                print("Found up event\n");
+                log("Found up event\n");
                 input: INPUT;
                 input.type = .INPUT_KEYBOARD;
                 input.ki = KEYBDINPUT.{0, cast(u16)mapping, KEYEVENTF_KEYUP | KEYEVENTF_SCANCODE, 0, null};
                 events_count := SendInput(1, *input, size_of(INPUT));
                 if events_count == 0 {
                     error := GetLastError();
-                    print("SendInput failed with error: %\n", error);
+                    log_error("SendInput failed with error: %\n", error);
                 }
-                print("Sent % up events\n", events_count);
+                log("Sent % up events\n", events_count);
 
             }
             return CallNextHookEx(null, n_code, wparam, lparam);
@@ -99,11 +99,11 @@ low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 
                 events_count := SendInput(1, *input, size_of(INPUT));
                 if events_count == 0 {
                     error := GetLastError();
-                    print("SendInput failed with error: %\n", error);
+                    log_error("SendInput failed with error: %\n", error);
                 } else {
                     kb_virtual_state[opposing_direction] = IS_UP;
                 }
-                print("Sent % events\n", events_count);
+                log("Sent % events\n", events_count);
             }
         } else if wparam == WM_KEYUP || wparam == WM_SYSKEYUP {
             kb_real_state[direction] = IS_UP;
@@ -115,7 +115,7 @@ low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 
                 events_count := SendInput(1, *input, size_of(INPUT));
                 if events_count == 0 {
                     error := GetLastError();
-                    print("SendInput failed with error: %\n", error);
+                    log_error("SendInput failed with error: %\n", error);
                 } else {
                     kb_virtual_state[opposing_direction] = IS_DOWN;
                 }
@@ -142,7 +142,7 @@ mapping_setting_hook_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s6
         is_extended := cast(u32)(hiword & KF_EXTENDED) == KF_EXTENDED;
 
         if is_extended {
-            print("We are extended\n");
+            log("We are extended\n");
             key_scan_code = (0xe0 << 8) | raw_scan_code;
         } else {
             key_scan_code = raw_scan_code;
@@ -162,7 +162,7 @@ mapping_setting_hook_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s6
             error := GetLastError();
             log_error("Couldn't convert the key name to UTF8 for scancode %. Buffer content is %. Error is %\n", key_scan_code, key_name_buffer, error);
         }
-            print("New mapping key pressed: %\n", key_name);
+            log("New mapping key pressed: %\n", key_name);
             if current_mapping_state == .SETTING_SOURCE {
                 mapping_sources[0] = key_scan_code;
                 current_mapping_state = .SETTING_DESTINATION;
@@ -204,7 +204,7 @@ detect_focused_program :: (
             if (GetLastError() == 5) {
                 return;
             }
-            print("Couldn't open the foreground process, error code is %\n", GetLastError());
+            log_error("Couldn't open the foreground process, error code is %\n", GetLastError());
         }
 
         filename_size : u32 = MAX_PATH;
@@ -213,7 +213,7 @@ detect_focused_program :: (
         CloseHandle(foreground_process);
         PathStripPathW(focused_program_path.data);
         focused_program_name, ok := wide_to_utf8_new(focused_program_path.data);
-        print("Window activated: %\n", focused_program_name);
+        log("Window activated: %\n", focused_program_name);
 
         program_handle := GetModuleHandleW(null);
 
@@ -239,12 +239,12 @@ start_detecting_focused_program :: () {
 
 set_kb_hook :: (instance: HINSTANCE) {
     if !mapping_resolving_hook_is_installed {
-        print("hooking this shit\n");
+        log("hooking this shit\n");
         mapping_resolving_hook = SetWindowsHookExW(WH_KEYBOARD_LL, cast(HOOKPROC)low_level_keyboard_proc, instance, 0);
         if (mapping_resolving_hook != null) {
             mapping_resolving_hook_is_installed = true;
         } else {
-            print("hook failed oopsie\n");
+            log_error("hook failed oopsie\n");
         }
     }
 }
@@ -256,7 +256,7 @@ set_key_mapping_hook :: (window: Window_Type) {
         mapping_setting_hook = SetWindowsHookExW(WH_KEYBOARD, cast(HOOKPROC)mapping_setting_hook_proc, null, GetCurrentThreadId());
         if (mapping_setting_hook != null) {
             mapping_setting_hook_is_installed = true;
-            print("listening for new mapping\n");
+            log("listening for new mapping\n");
         } else {
             error := GetLastError();
             log_error("mapping setting hook initialization failed: %\n", error);
@@ -267,7 +267,7 @@ set_key_mapping_hook :: (window: Window_Type) {
 unset_kb_hook :: () {
     if !mapping_resolving_hook_is_installed return;
 
-    print("unhooking this shit\n");
+    log("unhooking this shit\n");
     UnhookWindowsHookEx(mapping_resolving_hook);
     // Forget buttons that are pressed before unhooking from the keyboard
     // So that when we hook again we don't end up in a dirty state where one
@@ -285,7 +285,7 @@ unset_kb_hook :: () {
 
 unset_mapping_setting_hook :: () {
     if !mapping_setting_hook_is_installed return;
-    print("unhooking mapping setting hook\n");
+    log("unhooking mapping setting hook\n");
     UnhookWindowsHookEx(mapping_setting_hook);
     mapping_setting_hook_is_installed = false;
 }
