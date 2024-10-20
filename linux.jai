@@ -211,7 +211,7 @@ Device :: struct {
     file_descriptor: s32;
 }
 
-// This is basically test_bit from linux kernel: 
+// This is basically test_bit from linux kernel:
 // https://github.com/torvalds/linux/blob/master/tools/testing/selftests/iommu/iommufd_utils.h#L34
 test_key :: (key: u32) -> u32 #expand {
     return `key_bits[key/8] & (xx 1 << (key % 8));
@@ -340,6 +340,48 @@ get_loggable_device :: () -> *Device {
     return device;
 }
 
+// Fork of file_list that only returns directories under a path
+dir_list :: (path: string, recursive := false, follow_directory_symlinks := true) -> [] string #must {
+    files : [..] string;
+
+    visitor :: (info: *File_Visit_Info, user_data: *[..] string) {
+        array_add(user_data, copy_string(info.full_name));
+    }
+
+    visit_files(path, recursive, *files, visitor, follow_directory_symlinks=follow_directory_symlinks, visit_files=false, visit_directories=true);
+
+    return files;
+}
+
+get_virtual_keyboard_path :: (info: *File_Visit_Info, user_data: $T) {
+    if !info.is_directory {
+        return;
+    }
+
+    uevent_path : = tprint("%/uevent", info.full_name);
+    udevice_info, success := patched_read_entire_file(uevent_path);
+    if !success {
+        log_error("Couldn't read device uevent info: %\n", uevent_path);
+        return;
+    }
+
+    has_our_product_string := begins_with(udevice_info, "PRODUCT=3/6666/6665");
+    if !has_our_product_string {
+        return;
+    }
+
+    dirs := dir_list(info.full_name);
+    for dirs {
+        if contains(it, "/event") {
+            path_chunks := split(it, "/");
+            event_name := path_chunks[path_chunks.count-1];
+            log("Found event: %\n", event_name);
+
+            return;
+        }
+    }
+}
+
 start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
     key_bits_num :: (KEY_MAX / 8) + 1;
     key_bits: [key_bits_num]u8;
@@ -366,6 +408,7 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
         // Resetting the keyboard state before grabbing it. Otherwise key might get stuck in an auto-repeat
         // state which is awkward with things like touchpads that auto-disable them "on typing". I got this
         // while testing the program on my laptop.
+        // TODO: Resete the keyboard state when I ungrab it. Because, for example, Caps Lock state gets stuck.
         for KEY_ESC..cast(u16)KEY_MAX {
             if test_key(it) {
                 output_events[0] = input_event.{
@@ -393,7 +436,8 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
         }
         defer ioctl(device_fd, EVIOCGRAB, 0);
 
-        uinput_fd := open("/dev/uinput", O_WRONLY | O_NONBLOCK);
+        uinput_fd := open("/dev/uinput", O_RDWR | O_NONBLOCK);
+
         if uinput_fd < 0 {
 
             System :: #import "System";
@@ -445,6 +489,7 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
                 continue;
             }
 
+
             // Pass the real event into our virtual device.
             written := write(uinput_fd, *ev, size_of(input_event));
             if written < 0 {
@@ -460,6 +505,44 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
                 log("Pressed: % - %\n", to_string(sym_buffer.data), to_string(utf8_buffer.data));
             }
 
+            // TODO: Handle repeating events, they should not break shit.
+            if current_mapping_state == .SETTING_SOURCE {
+                if  ev.value == IS_DOWN {
+                    mapping_sources[0] = ev.code;
+                    current_mapping_state = .SETTING_DESTINATION;
+                }
+                continue;
+            } else if current_mapping_state == .SETTING_DESTINATION {
+                if ev.value == IS_DOWN {
+                    mapping_destinations[0] = ev.code;
+                    current_mapping_state = .NOTHING;
+                }
+                continue;
+            }
+
+            mapping := get_key_mapping(ev.code);
+
+            if mapping {
+                mapping_name := get_key_name(mapping);
+                log("Found mapping: %\n", mapping_name);
+                output_events[0] = input_event.{
+                    type=EV_KEY,
+                    code=cast(u16)mapping,
+                    value=ev.value,
+                };
+                output_events[1] = input_event.{
+                    type=EV_SYN,
+                    code=SYN_REPORT,
+                    value=0,
+                };
+
+                written := write(uinput_fd, output_events.data, size_of(input_event) * output_events.count);
+                if written < 0 {
+                    log_error("Could not write one to one mapping for %\n", mapping_name);
+                }
+                continue;
+            }
+
             opposing_key, direction, opposing_direction := find_opposing_key_and_directions(ev.code);
             if !opposing_key {
                 continue;
@@ -473,13 +556,11 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
             if ev.value == 1 {
                 if test_key(opposing_key) {
                     output_events[0] = input_event.{
-                        time=.{},
                         type=EV_KEY,
                         code=cast(u16)opposing_key,
                         value=IS_UP,
                     };
                     output_events[1] = input_event.{
-                        time=.{},
                         type=EV_SYN,
                         code=SYN_REPORT,
                         value=0,
@@ -515,7 +596,7 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
 }
 
 start_logging_keys :: () {
-    tid: pthread_t; 
+    tid: pthread_t;
     pthread_create(*tid, null, start_logging_keys_in_a_thread, null);
 }
 
@@ -539,7 +620,7 @@ unset_mapping_setting_hook :: () {
 
 
 set_key_mapping_hook :: (window: Window_Type) {
-    // @TODO: Implement
+    // It does nothing for now, because logging loop handles that.
     return;
 }
 
@@ -549,9 +630,13 @@ get_key_name :: (key_scan_code: u32) -> string {
     if cached return cached;
 
     // Special case for Escape - because libxkbcommon has ^[ for it as utf8 representation lol.
-    if key_scan_code == KEY_ESC {
-        KEY_NAMES[KEY_ESC] = "ESC";
-        return "ESC";
+    if key_scan_code == {
+        case KEY_ESC;
+            KEY_NAMES[KEY_ESC] = "ESC";
+            return "ESC";
+        case KEY_TAB;
+            KEY_NAMES[KEY_TAB] = "TAB";
+            return "TAB";
     }
 
     key_name: string;

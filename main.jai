@@ -209,9 +209,9 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
     // label(s, "Mappings will be here.", *label_theme);
     if new_mappings_pressed {
-        current_mapping_state = .SETTING_SOURCE;
         array_insert_at(*mapping_sources, KEY_TEMP, 0);
         array_insert_at(*mapping_destinations, KEY_TEMP, 0);
+        current_mapping_state = .SETTING_SOURCE;
         set_key_mapping_hook(window);
     }
     for mapping_sources {
