@@ -55,6 +55,8 @@ focused_program_path: [MAX_PATH_LENGTH]u16;
 kb_real_state: [4]u32; // whether the key is pressed on a physical keyboard
 kb_virtual_state: [4]u32; // whether the key is pressed on a software level
 
+// TODO: On windows we get process exe name, on Linux (X11) we can only get the window title,
+// so there is a discrepancy. Need to handle that somehow...
 ALLOWED_PROGRAMS :: string.["Hollow Knight.exe"];
 
 Mapping_State :: enum {

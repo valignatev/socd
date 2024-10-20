@@ -7,6 +7,8 @@
 MAX_PATH_LENGTH :: 4096;
 XKB_EVDEV_OFFSET : u32 : 8;
 
+KB_HOOK_SET := false;
+
 global_xcb_connection: *xcb_connection_t;
 // I genuinely don't know how bad it is to make libxkbcommon stuff global. Seems working idk...
 global_xkb_context: *xkb_context;
@@ -184,11 +186,15 @@ detect_focused_program :: () {
                 xcb_flush(con);
                 c_free(name_reply);
                 c_free(name_old_reply);
-                // if name == "Hollow Knight" {
-                //     set_kb_hook();
-                // } else {
-                //     unset_kb_hook();
-                // }
+                // TODO: Better way to handle the title name, contains is probably not very
+                // robust
+                for ALLOWED_PROGRAMS {
+                    if contains(it, name) {
+                        set_kb_hook();
+                    } else {
+                        unset_kb_hook();
+                    }
+                }
             }
         }
     }
@@ -198,10 +204,12 @@ detect_focused_program :: () {
 }
 
 set_kb_hook :: () {
+    KB_HOOK_SET = true;
     return;
 }
 
 unset_kb_hook :: () {
+    KB_HOOK_SET = false;
     return;
 }
 
@@ -503,6 +511,10 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
                 xkb_keysym_get_name(keysym, sym_buffer.data, sym_buffer.count);
                 xkb_state_key_get_utf8(global_xkb_state, xkb_keycode, utf8_buffer.data, utf8_buffer.count);
                 log("Pressed: % - %\n", to_string(sym_buffer.data), to_string(utf8_buffer.data));
+            }
+
+            if !KB_HOOK_SET {
+                continue;
             }
 
             // TODO: Handle repeating events, they should not break shit.
