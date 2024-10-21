@@ -399,7 +399,7 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
     push_context ctx {
         device := get_loggable_device();
 
-        device_fd := open(device.event_file.data, O_RDWR);
+        device_fd := open(device.event_file.data, O_RDONLY);
 
         defer close(device_fd);
         if device_fd < 0 {
@@ -413,29 +413,32 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
             return null;
         }
 
-        // Resetting the keyboard state before grabbing it. Otherwise key might get stuck in an auto-repeat
-        // state which is awkward with things like touchpads that auto-disable them "on typing". I got this
-        // while testing the program on my laptop.
-        // TODO: Resete the keyboard state when I ungrab it. Because, for example, Caps Lock state gets stuck.
-        for KEY_ESC..cast(u16)KEY_MAX {
-            if test_key(it) {
-                output_events[0] = input_event.{
-                    time=.{},
-                    type=EV_KEY,
-                    code=it,
-                    value=IS_UP,
-                };
-                output_events[1] = input_event.{
-                    time=.{},
-                    type=EV_SYN,
-                    code=SYN_REPORT,
-                    value=0,
-                };
-                written := write(device_fd, output_events.data, size_of(input_event) * output_events.count);
-                if written < 0 {
-                    log_error("Could not release the key\n");
+        ev: input_event;
+        // Wait for all button on the original keyboard to get unpressed before grabbing it.
+        // The reason is - something else might be listening for inputs on the original keyboard
+        // and it'll get stuck if we suddenly grab it. For example, touchpad prevents the cursor from moving
+        // when you touch it while typing. If I grab the keyboard while it thinks that some key is pressed -
+        // it goes into the infinite stuck loop until I ungrab the keyboard. Hence, this loop.
+        // Maybe there's a better way to do it, idk...
+        while true {
+            size := read(device_fd, *ev, size_of(input_event));
+            if ev.type != EV_KEY {
+                continue;
+            }
+
+            key_bit_result = ioctl(device_fd, EVIOCGKEY(key_bits.count), *key_bits);
+            if key_bit_result < key_bits_num {
+                log_error("Can't read % key state\n", device.event_file);
+                // Not sure if this is a continue or a return
+                continue;
+            }
+
+            for KEY_ESC..cast(u16)KEY_MAX {
+                if test_key(it) {
+                    continue;
                 }
             }
+            break;
         }
 
         grab_result := ioctl(device_fd, EVIOCGRAB, 1);
@@ -487,7 +490,6 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
 
         sym_buffer: [256]u8;
         utf8_buffer: [256]u8;
-        ev: input_event;
         stop := false;
         while !stop {
             size := read(device_fd, *ev, size_of(input_event));
@@ -510,25 +512,24 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
             if ev.type == EV_KEY && ev.value == IS_DOWN {
                 xkb_keysym_get_name(keysym, sym_buffer.data, sym_buffer.count);
                 xkb_state_key_get_utf8(global_xkb_state, xkb_keycode, utf8_buffer.data, utf8_buffer.count);
-                log("Pressed: % - %\n", to_string(sym_buffer.data), to_string(utf8_buffer.data));
+                //log("Pressed: % - %\n", to_string(sym_buffer.data), to_string(utf8_buffer.data));
             }
 
-            if !KB_HOOK_SET {
-                continue;
-            }
-
-            // TODO: Handle repeating events, they should not break shit.
             if current_mapping_state == .SETTING_SOURCE {
-                if  ev.value == IS_DOWN {
+                if ev.value == IS_DOWN && ev.type == EV_KEY {
                     mapping_sources[0] = ev.code;
                     current_mapping_state = .SETTING_DESTINATION;
                 }
                 continue;
             } else if current_mapping_state == .SETTING_DESTINATION {
-                if ev.value == IS_DOWN {
+                if ev.value == IS_DOWN && ev.type == EV_KEY {
                     mapping_destinations[0] = ev.code;
                     current_mapping_state = .NOTHING;
                 }
+                continue;
+            }
+
+            if !KB_HOOK_SET {
                 continue;
             }
 
@@ -644,11 +645,17 @@ get_key_name :: (key_scan_code: u32) -> string {
     // Special case for Escape - because libxkbcommon has ^[ for it as utf8 representation lol.
     if key_scan_code == {
         case KEY_ESC;
-            KEY_NAMES[KEY_ESC] = "ESC";
-            return "ESC";
-        case KEY_TAB;
-            KEY_NAMES[KEY_TAB] = "TAB";
-            return "TAB";
+            KEY_NAMES[KEY_ESC] = "Esc";
+            return "Esc";
+        case KEY_BACKSPACE;
+            KEY_NAMES[KEY_BACKSPACE] = "Backspace";
+            return "Backspace";
+        case KEY_PAGEUP;
+            KEY_NAMES[KEY_PAGEUP] = "PgUp";
+            return "PgUp";
+        case KEY_PAGEDOWN;
+            KEY_NAMES[KEY_PAGEDOWN] = "PgDown";
+            return "PgDown";
     }
 
     key_name: string;
@@ -665,18 +672,22 @@ get_key_name :: (key_scan_code: u32) -> string {
         key_name = alloc_string(length + 1);
         xkb_state_key_get_utf8(global_xkb_state, xkb_keycode, key_name.data, xx (key_name.count));
 
-    // If the key doesn't have utf8 representation in libxkbcommon - get its keysym name instead.
-    } else {
+    // If the key doesn't have utf8 representation in libxkbcommon (or it's a whitespace character) - get its keysym name instead.
+    }
+    // -1 to account for trailing null character
+    if !length || !(trim(key_name).count - 1) {
         length := xkb_keysym_get_name(keysym, null, 0);
         key_name = alloc_string(length + 1);
         xkb_keysym_get_name(keysym, key_name.data, xx key_name.count);
     }
 
     key_name.count -= 1;
-    if key_name.count == 1 {
-        // This only supports English letters (and no unicode)
-        to_upper_in_place(key_name);
-    }
+
+    // Capitalizing the key_name
+    dummy := key_name;
+    dummy.count = 1;
+    // This only supports English letters
+    to_upper_in_place(dummy);
 
     KEY_NAMES[key_scan_code] = key_name;
     return key_name;
