@@ -361,6 +361,7 @@ dir_list :: (path: string, recursive := false, follow_directory_symlinks := true
     return files;
 }
 
+// Unused but might be useful
 get_virtual_keyboard_path :: (info: *File_Visit_Info, user_data: $T) {
     if !info.is_directory {
         return;
@@ -420,9 +421,10 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
         // when you touch it while typing. If I grab the keyboard while it thinks that some key is pressed -
         // it goes into the infinite stuck loop until I ungrab the keyboard. Hence, this loop.
         // Maybe there's a better way to do it, idk...
-        while true {
+        can_grab := false;
+        while !can_grab {
             size := read(device_fd, *ev, size_of(input_event));
-            if ev.type != EV_KEY {
+            if ev.type != EV_KEY || ev.value == 2 {
                 continue;
             }
 
@@ -433,13 +435,15 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
                 continue;
             }
 
+            can_grab = true;
             for KEY_ESC..cast(u16)KEY_MAX {
                 if test_key(it) {
-                    continue;
+                    can_grab = false;
+                    break;
                 }
             }
-            break;
         }
+        print("Break\n");
 
         grab_result := ioctl(device_fd, EVIOCGRAB, 1);
         if grab_result < 0 {
@@ -482,10 +486,9 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
         usetup.id.product = 0x6665;
         usetup.name = xx "SOCD keyboard".data;
 
-        // NOTE: Documentation examples have UI_DEV_DESTROY call at the end of the program.
-        // But Linux automatically cleans up a virtual keyboard when I close the program.
-        // At least on my maching (tm). Maybe I should still call it?
         ioctl(uinput_fd, UI_DEV_SETUP, *usetup);
+        // Should I really call destroy? Seems like Linux destroys my virtual keyboard anyway
+        defer ioctl(uinput_fd, UI_DEV_DESTROY);
         ioctl(uinput_fd, UI_DEV_CREATE);
 
         sym_buffer: [256]u8;
@@ -787,7 +790,7 @@ platform_init :: () -> success: bool #must {
     con_errors := xcb_connection_has_error(global_xcb_connection);
 
     if con_errors {
-        log_error("Can't connect to X11 with xcb, error cocde is: %\n", con_errors);
+        log_error("Can't connect to X11 with xcb, error code is: %\n", con_errors);
         return false;
     }
 

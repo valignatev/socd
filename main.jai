@@ -82,6 +82,35 @@ get_key_mapping :: (source_scan_code: u32) -> destination_scan_code: u32 {
     return 0;
 }
 
+Binding_Mode :: enum u32 {
+    Map;
+    Override;
+    Neutral;
+}
+
+Key_Kind :: enum u32 {
+    Keyboard;
+    Mouse;
+    Controller;
+}
+
+Mapping_Key :: struct {
+    kind: Key_Kind;
+    code: u32;
+}
+
+Mapping :: struct {
+    source: Mapping_Key;
+    destination: Mapping_Key;
+    mode: Binding_Mode;
+}
+
+Profile :: struct {
+    version: u32;
+    program: string;
+    mappings: [..]Mapping;
+}
+
 main :: () {
 
     success := platform_init();
