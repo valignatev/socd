@@ -82,33 +82,195 @@ get_key_mapping :: (source_scan_code: u32) -> destination_scan_code: u32 {
     return 0;
 }
 
-Binding_Mode :: enum u32 {
-    Map;
-    Override;
-    Neutral;
+SETTINGS_VERSION :: 1;
+
+Platform :: enum u32 {
+    WINDOWS;
+    LINUX;
 }
 
-Key_Kind :: enum u32 {
-    Keyboard;
-    Mouse;
-    Controller;
+Mapping_Mode :: enum u32 {
+    MAP;
+    OVERRIDE;
+    NEUTRAL;
 }
 
-Mapping_Key :: struct {
-    kind: Key_Kind;
+Bind_Kind :: enum u32 {
+    KEYBOARD;
+    MOUSE;
+    CONTROLLER;
+}
+
+Mapping_Bind :: struct {
+    kind: Bind_Kind;
     code: u32;
 }
 
 Mapping :: struct {
-    source: Mapping_Key;
-    destination: Mapping_Key;
-    mode: Binding_Mode;
+    source: Mapping_Bind;
+    destination: Mapping_Bind;
+    mode: Mapping_Mode;
 }
 
 Profile :: struct {
-    version: u32;
+    platform: Platform;
     program: string;
     mappings: [..]Mapping;
+}
+
+profiles: [..]Profile;
+
+init_settings :: () -> should_parse: bool, config: string, filename: string {
+
+    found, exe_path, exe_name := split_from_right(get_path_of_running_executable(), #char "/");
+    if !found {
+        log_error("Error: unable to find path to the executable to find the config file next to it. Your settings won't be saved!\n");
+        return false, "", "";
+    }
+
+    settings_filename := tprint("%/%", exe_path, "settings.socd");
+
+    raw_settings, success := read_entire_file(settings_filename,, temp);
+    if !success {
+        log("Coulnd't find settings.socd file, trying to create a new one");
+        written : = write_entire_file(settings_filename, tprint("[%] # Config version, do not delete this!!! Actually, you're not supposed to modify this by hand at all! You will regret manually editing this file!\n", SETTINGS_VERSION));
+        if !written {
+            // TODO: Error detection
+            log_error("Couldn't create the settings.socd, your settings won't be saved!");
+        }
+        return false, "", settings_filename;
+    }
+
+    return true, raw_settings, settings_filename;
+}
+
+// TODO: Actually write a test for this lol
+parse_settings :: (raw_settings: string, settings_filename: string) {
+    handler: tfh.Text_File_Handler;
+    defer tfh.deinit(*handler);
+
+    tfh.start_from_memory(*handler, "settings.socd", settings_filename, raw_settings);
+
+    if handler.failed {
+        tfh.error(*handler, "Your settings won't be saved. Delete the file so we can properly re-create it.\n");
+        return;
+    }
+
+    if handler.version != SETTINGS_VERSION {
+        tfh.error(*handler, "Unexpected version! Expected: %, got: %\n", SETTINGS_VERSION, handler.version);
+    }
+
+    while true {
+        line, line_found := tfh.consume_next_line(*handler);
+
+        if !line_found break;
+        // Looking for separator
+        if !equal(line, "PROFILE_START") {
+            tfh.warn(*handler, "Expected profile separator, but found %\n, assuming no profiles configured", line);
+            break;
+        }
+
+        profile: Profile;
+        profile_parsed := false;
+        while !profile_parsed {
+            line, line_found = tfh.consume_next_line(*handler);
+            if !line_found {
+                // No configured profiles
+                tfh.warn(*handler, "Expected profile settings, but found %, assuming no profiles configured", line);
+                break;
+            }
+
+            colon_found, left, right := split_from_left(line, #char ":");
+
+            if !colon_found {
+                if equal(left, "PROFILE_END") {
+                    log("Profile parsed successfully\n");
+                    array_add(*profiles, profile);
+                    profile_parsed = true;
+                } else {
+                    error_msg :: #string ERR
+Expected to find profile configuration string (aka something separated by colon) or PROFILE_END.
+Ignoring the line and trying to continue parsing. Config line was `%`
+                    ERR
+                    tfh.error(*handler, error_msg, line);
+                }
+                continue;
+            }
+
+            left = trim(left);
+            to_lower_in_place(left);
+            if left == {
+                case "program";
+                    profile.program = trim(right);
+                    log("Found profile program: %\n", profile.program);
+
+                case "platform";
+                    platform := trim(right);
+                    to_upper_in_place(platform);
+                    if platform == {
+                        case "WINDOWS"; profile.platform = .WINDOWS;
+                        case "LINUX"; profile.platform = .LINUX;
+                        case;
+                            tfh.error(*handler, "Incorrect platform: %. Assuming Windows\n", platform);
+                            continue;
+                    }
+
+                case "mapping";
+                    mapping: Mapping;
+                    mapping_config := split(trim(right), separator=" ");
+                    if mapping_config.count != 3 {
+                        tfh.error(*handler, "Incorrect mapping configuration, ignoring it. Expected MODE:source_bind:destination_bind, got %\n", right);
+                        continue;
+                    }
+                    // Mapping mode
+                    {
+                        mapping_mode := trim(mapping_config[0]);
+                        to_upper_in_place(mapping_mode);
+                        if mapping_mode == {
+                            case "OVERRIDE"; mapping.mode = .OVERRIDE;
+                            case "NEUTRAL"; mapping.mode = .NEUTRAL; case "MAP"; mapping.mode = .MAP;
+                            case;
+                                tfh.error(*handler, "Incorrect mapping mode, ignoring it. Expected one of OVERRIDE|NEUTRAL|MAP, got %\n", mapping_mode);
+                                continue;
+                        }
+                    }
+
+                    // Source bind
+                    {
+                        bind, success, remainder := string_to_int(mapping_config[1], T=u32);
+                        if !success {
+                            tfh.error(*handler, "Incorrect bind, ignoring it. Got % which is an illegal key/button code\n", bind);
+                            continue;
+                        }
+                        if bind <= 0 || bind >= KEY_MAX {
+                            tfh.error(*handler, "Key bind is out of bounds, ignoring it. Got %\n", bind);
+                            continue;
+                        }
+                        mapping.source.code = bind;
+                    }
+
+                    // Dest bind, copy-paste
+                    {
+                        bind, success, remainder := string_to_int(mapping_config[2], T=u32);
+                        if !success {
+                            tfh.error(*handler, "Incorrect bind, ignoring it. Got % which is an illegal key/button code\n", bind);
+                            continue;
+                        }
+                        if bind <= 0 || bind >= KEY_MAX {
+                            tfh.error(*handler, "Key bind is out of bounds, ignoring it. Got %\n", bind);
+                            continue;
+                        }
+                        mapping.destination.code = bind;
+                    }
+
+                    log("Mapping parsed: %\n", mapping);
+                    array_add(*profile.mappings, mapping);
+
+                case; tfh.error(*handler, "Unexpected profile configuration ignored: %\n", left);
+            }
+        }
+        log("Parsed profile: %\n", profile);
+    }
 }
 
 main :: () {
@@ -135,6 +297,11 @@ main :: () {
     // Set up mappings, temporarily
     array_add(*mapping_sources, KEY_P, KEY_U);
     array_add(*mapping_destinations, KEY_L, KEY_ESC);
+
+    should_parse_config, raw_settings, settings_filename := init_settings();
+    if should_parse_config {
+        parse_settings(raw_settings, settings_filename);
+    }
 
     quit := false;
     while !quit {
@@ -319,3 +486,4 @@ Simp :: #import "Simp";
 #import "String";
 #import "System";
 #import "Window_Creation";
+tfh :: #import "Text_File_Handler";
