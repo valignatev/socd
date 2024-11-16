@@ -365,10 +365,6 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     button_theme.label_theme.alignment = .Center;
     up_pressed := button(r, get_key_name(BINDS[DIRECTION_UP]), *button_theme);
 
-    if up_pressed {
-        log("UP button pressed\n");
-    }
-
     r = get_rect(k*0.5, k*1.5, k, k);
     button_theme.label_theme.alignment = .Center;
     left_pressed := button(r, get_key_name(BINDS[DIRECTION_LEFT]), *button_theme);
@@ -394,7 +390,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     mapping_row_height := k * 0.7;
     s := inside;
     s.h = mapping_row_height;
-    s.y += scroll_value_mappings_region;
+    s.y -= scroll_value_mappings_region;
 
     button_theme.label_theme.alignment = .Left;
     new_mappings_pressed := button(s, "Add mapping", *button_theme, disable_press = current_mapping_state != .NOTHING);
