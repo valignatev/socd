@@ -296,10 +296,6 @@ xkb_state_led_name_is_active :: (state: *xkb_state, name: *u8) -> s32 #foreign l
 
 xkb_state_led_index_is_active :: (state: *xkb_state, idx: xkb_led_index_t) -> s32 #foreign libxkbcommon;
 
-// TODO: Add this to bindings generator
-_x11_compat_meta: struct {
-    loaded: bool;
-}
 xkb_x11_setup_xkb_extension :: (xcb_connection: *void, xkb_major_version: u16, xkb_minor_version: u16, flags: u32, xkb_major_version_out: *u16, xkb_minor_version_out: *u16, base_event_out: *u8, base_error_out: *u8) -> s32 #foreign libxkbcommon_x11;
 xkb_x11_get_core_keyboard_device_id :: (xcb_connection: *void) -> s32 #foreign libxkbcommon_x11;
 xkb_x11_keymap_new_from_device :: (ctx: *xkb_context, xkb_connection: *void, device_id: s32, flags: xkb_keymap_compile_flags) -> *xkb_keymap #foreign libxkbcommon_x11;

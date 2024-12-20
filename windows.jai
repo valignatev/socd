@@ -48,8 +48,7 @@ low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 
 
     key_virtual_code := kb_input.vkCode;
     key_scan_code := kb_input.scanCode;
-    ctx: Context;
-    push_context ctx {
+    push_context {
         key_name := get_key_name(key_scan_code);
 
         log("Key is % - %\n", key_scan_code, key_name);
@@ -127,8 +126,7 @@ low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 
 }
 
 mapping_setting_hook_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 #c_call {
-    ctx: Context;
-    push_context ctx {
+    push_context {
         key_virtual_code := wparam;
         // How to interpret lparam: https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input
         hiword := (lparam >> 16) & 0xffff;
@@ -196,8 +194,7 @@ detect_focused_program :: (
         // for some reason. Just ignore it.
         return;
     }
-    ctx: Context;
-    push_context ctx {
+    push_context {
         foreground_process := OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, 0, process_id);
         if !foreground_process {
             // Sometimes we can't open a process (#5 "access denied"). Ignore it I guess.

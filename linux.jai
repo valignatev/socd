@@ -233,8 +233,7 @@ File_Descriptors :: struct {
 opened_file_descriptors_for_candidates: File_Descriptors;
 
 close_descriptors :: (raw_descriptors: *void) -> *void #c_call {
-    ctx: Context;
-    push_context ctx {
+    push_context {
         descriptors := cast(*File_Descriptors)raw_descriptors;
         for descriptors.array {
             log("Closing file descriptor %\n", it);
@@ -396,8 +395,7 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
     key_bits: [key_bits_num]u8;
     output_events: [2]input_event;
 
-    ctx: Context;
-    push_context ctx {
+    push_context {
         device := get_loggable_device();
 
         device_fd := open(device.event_file.data, O_RDONLY);
@@ -617,8 +615,7 @@ start_logging_keys :: () {
 }
 
 start_detecting_focused_program_in_a_thread :: (arg: *void) -> *void #c_call {
-    ctx: Context;
-    push_context ctx {
+    push_context {
         detect_focused_program();
     }
     return null;
