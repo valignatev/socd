@@ -15,54 +15,6 @@ global_xkb_context: *xkb_context;
 global_xkb_keymap: *xkb_keymap;
 global_xkb_state: *xkb_state;
 
-patched_read_entire_file :: (name: string, zero_terminated := false, log_errors := true) -> string, bool {
-    s: string;
-    f, success := file_open(name, log_errors = log_errors);
-    if !success return s, false;
-
-    defer file_close(*f);
-
-    s, success = patched_read_entire_file(f, zero_terminated);
-
-    if log_errors && !success {
-        System :: #import "System";
-
-        // If we put this error report at a lower level, we could
-        // indicate how far into the file the error occurred, etc.
-        code, s := System.get_error_value_and_string();
-        log("Read of '%' failed: code %, '%'.\n", name, code, s);
-    }
-
-    return s, success;
-}
-
-patched_read_entire_file :: (f: File, zero_terminated := false) -> string, bool {
-    length, success := file_length(f);
-    if !success  return "", false;
-
-    zero_termination_size := cast(s32) zero_terminated;
-    data := cast(*u8) alloc(length + zero_termination_size);
-    if data == null return "", false;
-
-    // documentation seems to suggest that fread gaurantees size*count is fully read back otherwise error
-    // NOTE(NOOOO) - actually, if the number is shorter than the error it might also be just EOF.
-    // This is the case when reading from HID descriptor, for example, and fread doesn't distinguish between
-    // errors and EOF, so need to test manually. Hense, use patched procedure for now until I report it.
-    single_read_length := fread(data, 1, cast (u64) length, f.handle);
-    if single_read_length != cast(u64) length && !feof(f.handle) {
-        free(data);
-        return "", false;
-    }
-
-    s: string;
-    s.count = cast(s64) single_read_length;
-    s.data  = data;
-
-    if zero_terminated s.data[length] = 0;
-
-    return s, true;
-}
-
 // major and minor are straight from Linux kernel
 major :: inline (dev: u64) -> u64 {
     return dev >> 8;
@@ -367,7 +319,7 @@ get_virtual_keyboard_path :: (info: *File_Visit_Info, user_data: $T) {
     }
 
     uevent_path : = tprint("%/uevent", info.full_name);
-    udevice_info, success := patched_read_entire_file(uevent_path);
+    udevice_info, success := read_entire_file(uevent_path);
     if !success {
         log_error("Couldn't read device uevent info: %\n", uevent_path);
         return;
@@ -517,15 +469,61 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
             }
 
             if current_mapping_state == .SETTING_SOURCE {
+                log("SETTING SOURCE\n");
                 if ev.value == IS_DOWN && ev.type == EV_KEY {
-                    mapping_sources[0] = ev.code;
+                    active_profile.mappings_array[active_mapping_index].source.code = ev.code;
                     current_mapping_state = .SETTING_DESTINATION;
+                    log("Set source %\n", ev.code);
                 }
                 continue;
             } else if current_mapping_state == .SETTING_DESTINATION {
                 if ev.value == IS_DOWN && ev.type == EV_KEY {
-                    mapping_destinations[0] = ev.code;
+                    active_profile.mappings_array[active_mapping_index].destination.code = ev.code;
+                    mapping: = active_profile.mappings_array[active_mapping_index];
+                    mapping.destination.code = ev.code;
+                    table_set(*active_profile.mappings, mapping.source.code, mapping.destination);
                     current_mapping_state = .NOTHING;
+                    active_mapping_index = -1;
+                    log("Set destination %\n", ev.code);
+                }
+                continue;
+            } else if current_mapping_state == .SETTING_JUST_SOURCE || current_mapping_state == .SETTING_JUST_DESTINATION {
+                if ev.value == IS_DOWN && ev.type == EV_KEY {
+                    log("SETTING JUST ONE BIND\n");
+                    if current_mapping_state == .SETTING_JUST_SOURCE {
+                        print("Before\n");
+                        for v, k: active_profile.mappings {
+                            print("%, %\n", v, k);
+                        }
+                        mapping := active_profile.mappings_array[active_mapping_index];
+                        active_profile.mappings_array[active_mapping_index].source.code = ev.code;
+
+                        table_set(*active_profile.mappings, active_profile.mappings_array[active_mapping_index].source.code, mapping.destination);
+                        old_source, found := table_find(*active_profile.mappings, mapping.destination.code);
+                        print("Old source is %\n", old_source);
+                        if mapping.mode == .OVERRIDE {
+                            table_set(*active_profile.mappings, mapping.destination.code, active_profile.mappings_array[active_mapping_index].source);
+                        }
+                        // I don't think it matters whether we found it.
+                        table_remove(*active_profile.mappings, old_source.code);
+                        print("After\n");
+                        for v, k: active_profile.mappings {
+                            print("%, %\n", v, k);
+                        }
+                    } else if current_mapping_state == .SETTING_JUST_DESTINATION {
+                        active_profile.mappings_array[active_mapping_index].destination.code = ev.code;
+                        mapping := active_profile.mappings_array[active_mapping_index];
+
+                        table_set(*active_profile.mappings, mapping.source.code, mapping.destination);
+                        if mapping.mode == .OVERRIDE {
+                            table_set(*active_profile.mappings, mapping.destination.code, mapping.source);
+                            table_remove(*active_profile.mappings, mapping.source.code);
+                        }
+                    }
+
+                    current_mapping_state = .NOTHING;
+                    active_mapping_index = -1;
+                    log("Set source %\n", ev.code);
                 }
                 continue;
             }
@@ -534,14 +532,17 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
                 continue;
             }
 
-            mapping := get_key_mapping(ev.code);
+            bind := get_key_mapping(ev.code);
+            if bind == dummy_bind {
+                continue;
+            }
 
-            if mapping {
-                mapping_name := get_key_name(mapping);
-                log("Found mapping: %\n", mapping_name);
+            if bind.mode == .MAP {
+                bind_name := get_key_name(bind.code);
+                log("Found mapping: %\n", bind_name);
                 output_events[0] = input_event.{
                     type=EV_KEY,
-                    code=cast(u16)mapping,
+                    code=cast(u16)bind.code,
                     value=ev.value,
                 };
                 output_events[1] = input_event.{
@@ -552,55 +553,58 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
 
                 written := write(uinput_fd, output_events.data, size_of(input_event) * output_events.count);
                 if written < 0 {
-                    log_error("Could not write one to one mapping for %\n", mapping_name);
+                    log_error("Could not write one to one mapping for %\n", bind_name);
                 }
                 continue;
             }
 
-            opposing_key, direction, opposing_direction := find_opposing_key_and_directions(ev.code);
-            if !opposing_key {
-                continue;
-            }
+            if bind.mode == .OVERRIDE {
+                // opposing_key, direction, opposing_direction := find_opposing_key_and_directions(ev.code);
+                // if !opposing_key {
+                //     continue;
+                // }
+                opposing_code := bind.code;
 
-            key_bit_result := ioctl(device_fd, EVIOCGKEY(key_bits.count), *key_bits);
-            if key_bit_result < key_bits_num {
-                log_error("Can't read % key state\n", device.event_file);
-                continue;
-            }
-            if ev.value == 1 {
-                if test_key(opposing_key) {
-                    output_events[0] = input_event.{
-                        type=EV_KEY,
-                        code=cast(u16)opposing_key,
-                        value=IS_UP,
-                    };
-                    output_events[1] = input_event.{
-                        type=EV_SYN,
-                        code=SYN_REPORT,
-                        value=0,
-                    };
-                    written := write(uinput_fd, output_events.data, size_of(input_event) * output_events.count);
-                    if written < 0 {
-                        log_error("Could not release the key\n");
+                key_bit_result := ioctl(device_fd, EVIOCGKEY(key_bits.count), *key_bits);
+                if key_bit_result < key_bits_num {
+                    log_error("Can't read % key state\n", device.event_file);
+                    continue;
+                }
+                if ev.value == 1 {
+                    if test_key(opposing_code) {
+                        output_events[0] = input_event.{
+                            type=EV_KEY,
+                            code=cast(u16)opposing_code,
+                            value=IS_UP,
+                        };
+                        output_events[1] = input_event.{
+                            type=EV_SYN,
+                            code=SYN_REPORT,
+                            value=0,
+                        };
+                        written := write(uinput_fd, output_events.data, size_of(input_event) * output_events.count);
+                        if written < 0 {
+                            log_error("Could not release the key\n");
+                        }
                     }
-                }
-            } else if ev.value == 0 {
-                if test_key(opposing_key) {
-                    output_events[0] = input_event.{
-                        time=.{},
-                        type=EV_KEY,
-                        code=cast(u16)opposing_key,
-                        value=IS_DOWN,
-                    };
-                    output_events[1] = input_event.{
-                        time=.{},
-                        type=EV_SYN,
-                        code=SYN_REPORT,
-                        value=0,
-                    };
-                    written := write(uinput_fd, output_events.data, size_of(input_event) * output_events.count);
-                    if written < 0 {
-                        log_error("Could not repress the key\n");
+                } else if ev.value == 0 {
+                    if test_key(opposing_code) {
+                        output_events[0] = input_event.{
+                            time=.{},
+                            type=EV_KEY,
+                            code=cast(u16)opposing_code,
+                            value=IS_DOWN,
+                        };
+                        output_events[1] = input_event.{
+                            time=.{},
+                            type=EV_SYN,
+                            code=SYN_REPORT,
+                            value=0,
+                        };
+                        written := write(uinput_fd, output_events.data, size_of(input_event) * output_events.count);
+                        if written < 0 {
+                            log_error("Could not repress the key\n");
+                        }
                     }
                 }
             }

@@ -32,8 +32,6 @@ DIRECTION_UP : s32 : 2;
 DIRECTION_DOWN : s32 : 3;
 
 BINDS :: u32.[KEY_A, KEY_D, KEY_W, KEY_S];
-mapping_sources: [..]u32;
-mapping_destinations: [..]u32;
 
 IS_UP :: 0;
 IS_DOWN :: 1;
@@ -41,9 +39,10 @@ IS_DOWN :: 1;
 current_time: float64;
 last_time: float64;
 
+scroll_value_profiles_region: float;
 scroll_value_mappings_region: float;
 
-window_width := 800;
+window_width := 900;
 window_height := 600;
 
 current_theme: s32 = xx Default_Themes.Default;
@@ -63,23 +62,17 @@ Mapping_State :: enum {
     NOTHING :: 0;
     SETTING_SOURCE :: 1;
     SETTING_DESTINATION :: 2;
-    DELETING :: 3;
+    SETTING_JUST_SOURCE :: 3;
+    SETTING_JUST_DESTINATION :: 4;
+    DELETING :: 5;
 }
 
 current_mapping_state := Mapping_State.NOTHING;
 
-find_opposing_key_and_directions :: (scan_code: u32) -> (opposing_key: u32, direction: s32, opposing_direction: s32) {
-    if scan_code == BINDS[DIRECTION_LEFT] return BINDS[DIRECTION_RIGHT], DIRECTION_LEFT, DIRECTION_RIGHT;
-    if scan_code == BINDS[DIRECTION_RIGHT] return BINDS[DIRECTION_LEFT], DIRECTION_RIGHT, DIRECTION_LEFT;
-    if scan_code == BINDS[DIRECTION_UP] return BINDS[DIRECTION_DOWN], DIRECTION_UP, DIRECTION_DOWN;
-    if scan_code == BINDS[DIRECTION_DOWN] return BINDS[DIRECTION_UP], DIRECTION_DOWN, DIRECTION_UP;
-    return 0, -1, -1;
-}
-
-get_key_mapping :: (source_scan_code: u32) -> destination_scan_code: u32 {
-    found, index := array_find(mapping_sources, source_scan_code);
-    if found return mapping_destinations[index];
-    return 0;
+get_key_mapping :: (source_scan_code: u32) -> Mapping_Bind {
+    destination, found := table_find(*active_profile.mappings, source_scan_code);
+    if found return destination;
+    return dummy_bind;
 }
 
 SETTINGS_VERSION :: 1;
@@ -103,22 +96,48 @@ Bind_Kind :: enum u32 {
 
 Mapping_Bind :: struct {
     kind: Bind_Kind;
+    mode: Mapping_Mode;
+    source: u32;
     code: u32;
 }
 
+// TODO: change this, to array of mappings from source to destination, or a Hash_Table
 Mapping :: struct {
     source: Mapping_Bind;
     destination: Mapping_Bind;
     mode: Mapping_Mode;
 }
 
+// hash_function :: (source: u32) -> u32 { return source + 2; }
+// Key can be something like N lower bits is code, and then some high byte for the Bind_Kind.
+Mappings :: Table(u32, Mapping_Bind, /*hash_function*/);
+
+dummy_bind := Mapping_Bind.{};
+
+operator== :: (a: Mapping_Bind, b: Mapping_Bind) -> bool {
+    if a.code == b.code && a.mode == b.mode && a.kind == b.kind return true;
+    return false;
+}
+
 Profile :: struct {
     platform: Platform;
     program: string;
-    mappings: [..]Mapping;
+    // mappings: [..]Mapping;
+    mappings: Mappings;
+    // Array of binds for showing in UI and for some interemediate states,
+    // mostly because iteration over the hash table is not
+    // consistent after adding/removing keys.
+    mappings_array: [..]Mapping;
 }
 
+active_profile: Profile;
+active_mapping_index := -1;
 profiles: [..]Profile;
+
+CONFIG_HEADER :: #string HEADER
+[%] # Config version, do not delete this!!! Actually, you're not supposed to modify this by hand at all! You will regret manually editing this file!
+
+HEADER
 
 init_settings :: () -> should_parse: bool, config: string, filename: string {
 
@@ -130,10 +149,11 @@ init_settings :: () -> should_parse: bool, config: string, filename: string {
 
     settings_filename := tprint("%/%", exe_path, "settings.socd");
 
-    raw_settings, success := read_entire_file(settings_filename,, temp);
+    // @leak - raw_settings never freed
+    raw_settings, success := read_entire_file(settings_filename);
     if !success {
         log("Coulnd't find settings.socd file, trying to create a new one");
-        written : = write_entire_file(settings_filename, tprint("[%] # Config version, do not delete this!!! Actually, you're not supposed to modify this by hand at all! You will regret manually editing this file!\n", SETTINGS_VERSION));
+        written : = write_entire_file(settings_filename, tprint(CONFIG_HEADER, SETTINGS_VERSION));
         if !written {
             // TODO: Error detection
             log_error("Couldn't create the settings.socd, your settings won't be saved!");
@@ -217,6 +237,8 @@ Ignoring the line and trying to continue parsing. Config line was `%`
 
                 case "mapping";
                     mapping: Mapping;
+                    mapping_bind: Mapping_Bind;
+                    source: u32;
                     mapping_config := split(trim(right), separator=" ");
                     if mapping_config.count != 3 {
                         tfh.error(*handler, "Incorrect mapping configuration, ignoring it. Expected MODE:source_bind:destination_bind, got %\n", right);
@@ -227,8 +249,18 @@ Ignoring the line and trying to continue parsing. Config line was `%`
                         mapping_mode := trim(mapping_config[0]);
                         to_upper_in_place(mapping_mode);
                         if mapping_mode == {
-                            case "OVERRIDE"; mapping.mode = .OVERRIDE;
-                            case "NEUTRAL"; mapping.mode = .NEUTRAL; case "MAP"; mapping.mode = .MAP;
+                            case "OVERRIDE"; {
+                                mapping.mode = .OVERRIDE;
+                                mapping_bind.mode = .OVERRIDE;
+                            }
+                            case "NEUTRAL"; {
+                                mapping.mode = .NEUTRAL;
+                                mapping_bind.mode = .NEUTRAL;
+                            }
+                            case "MAP"; {
+                                mapping.mode = .MAP;
+                                mapping_bind.mode = .MAP;
+                            }
                             case;
                                 tfh.error(*handler, "Incorrect mapping mode, ignoring it. Expected one of OVERRIDE|NEUTRAL|MAP, got %\n", mapping_mode);
                                 continue;
@@ -246,7 +278,8 @@ Ignoring the line and trying to continue parsing. Config line was `%`
                             tfh.error(*handler, "Key bind is out of bounds, ignoring it. Got %\n", bind);
                             continue;
                         }
-                        mapping.source.code = bind;
+                        source = bind;
+                        mapping.source = .{code=bind, mode=mapping_bind.mode};
                     }
 
                     // Dest bind, copy-paste
@@ -260,11 +293,17 @@ Ignoring the line and trying to continue parsing. Config line was `%`
                             tfh.error(*handler, "Key bind is out of bounds, ignoring it. Got %\n", bind);
                             continue;
                         }
-                        mapping.destination.code = bind;
+                        mapping_bind.code = bind;
+                        mapping.destination = .{code=bind, mode=mapping_bind.mode};
                     }
 
                     log("Mapping parsed: %\n", mapping);
-                    array_add(*profile.mappings, mapping);
+                    table_set(*profile.mappings, source, mapping_bind);
+                    array_add(*profile.mappings_array, mapping);
+
+                    if mapping.mode == .OVERRIDE {
+                        table_set(*profile.mappings, mapping.destination.code, mapping.source);
+                    }
 
                 case; tfh.error(*handler, "Unexpected profile configuration ignored: %\n", left);
             }
@@ -293,10 +332,6 @@ main :: () {
     Simp.set_render_target(the_window, .LEFT_HANDED);
     init_fonts(the_window);
     ui_init();
-
-    // Set up mappings, temporarily
-    array_add(*mapping_sources, KEY_P, KEY_U);
-    array_add(*mapping_destinations, KEY_L, KEY_ESC);
 
     should_parse_config, raw_settings, settings_filename := init_settings();
     if should_parse_config {
@@ -342,109 +377,133 @@ main :: () {
 draw_one_frame :: (dt: float, window: Window_Type) {
     proc := default_theme_procs[current_theme];
     my_theme = proc();
+    my_theme.button_theme.font = button_font;
+    my_theme.button_theme.enable_variable_frame_thickness = true;
+    my_theme.button_theme.rectangle_shape.rounding_flags = 0;
+    my_theme.button_theme.label_theme.alignment = .Left;
     set_default_theme(my_theme);  // Just in case we don't explicitly pass themes sometimes...!
 
     bg_col := my_theme.background_color;
     Simp.clear_render_target(bg_col.x, bg_col.y, bg_col.z, 1);
 
     x:, y:, window_width, window_height = get_dimensions(window, true);
-    ui_per_frame_update(window, xx window_width, xx window_height, current_time);
-
-    button_theme := my_theme.button_theme;
-    button_theme.font = button_font;
-    button_theme.enable_variable_frame_thickness = true;
-    // 'k' is some resolution-adjusting unit of distance. Right now it is
-    // 1/12.5 of the screen width, so 64px of 800x600.
-    k := window_width * .08;
+    ui_per_frame_update(window, 800, 800, current_time);
 
     //
-    // Directions
+    // Profiles
     //
-    r := get_rect(k*1.5, k*0.5, k, k);
+    profiles_theme := my_theme.scrollable_region_theme;
+    profiles_theme.region_background.shape.rounding_flags = 0;
+    profiles_theme.scrollbar_size = 0.01;
 
-    button_theme.label_theme.alignment = .Center;
-    up_pressed := button(r, get_key_name(BINDS[DIRECTION_UP]), *button_theme);
+    profiles_width := 300.0;
+    profiles_height := 500.0;
+    r := get_rect(10, 10, profiles_width, profiles_height);
+    profiles_region, inside_profiles_region := begin_scrollable_region(r, *profiles_theme);
 
-    r = get_rect(k*0.5, k*1.5, k, k);
-    button_theme.label_theme.alignment = .Center;
-    left_pressed := button(r, get_key_name(BINDS[DIRECTION_LEFT]), *button_theme);
+    s := inside_profiles_region;
+    s.h = 50;
+    // Offset the button a bit so that there are no borders visible.
+    // Maybe it's better to just straight up erase the border somehow
+    s.y -= scroll_value_profiles_region;
 
-    r = get_rect(k*1.5, k*2.5, k, k);
-    button_theme.label_theme.alignment = .Center;
-    down_pressed := button(r, get_key_name(BINDS[DIRECTION_DOWN]), *button_theme);
+    profile_button_theme := my_theme.button_theme;
+    profile_button_theme.frame_color = profile_button_theme.surface_color;
+    for profiles {
+        pressed := button(s, it.program, *profile_button_theme);
+        if pressed {
+            log("Profile % pressed\n", it.program);
+            active_profile = it;
+        }
+    }
 
+    end_scrollable_region(profiles_region, s.x + s.w, s.y, *scroll_value_profiles_region);
 
-    r = get_rect(k*2.5, k*1.5, k, k);
-    button_theme.label_theme.alignment = .Center;
-    right_pressed := button(r, get_key_name(BINDS[DIRECTION_RIGHT]), *button_theme);
+    add_button_rect := get_rect(10, profiles_height + 10 + 5, profiles_width / 2 - 5, 50);
+    del_button_rect := get_rect(10 + profiles_width / 2 + 5, profiles_height + 10 + 5, profiles_width / 2 - 5, 50);
+
+    _, _, add_profile_released := button(add_button_rect, "Add", *my_theme.button_theme);
+    if add_profile_released {
+        log("Add released\n");
+    }
+
+    _, _, del_profile_released := button(del_button_rect, "Delete", *my_theme.button_theme);
+    if del_profile_released {
+        log("Del released\n");
+    }
 
     //
-    // Mappings
+    // Active profile settings
     //
-    mappings_theme := my_theme.scrollable_region_theme;
-    mappings_theme.region_background.shape.rounding_flags = 0;
+    profile_start := profiles_width + 30;
+    profile_width := 500.0;
 
-    r = get_rect(k*4, k*0.5, k*8, k*5);
-
-    region, inside := begin_scrollable_region(r, *mappings_theme);
-    mapping_row_height := k * 0.7;
-    s := inside;
-    s.h = mapping_row_height;
-    s.y -= scroll_value_mappings_region;
-
-    button_theme.label_theme.alignment = .Left;
-    new_mappings_pressed := button(s, "Add mapping", *button_theme, disable_press = current_mapping_state != .NOTHING);
-
-    s.y += floor(mapping_row_height * 1.1 + 1);
-
-    // label_theme := my_theme.label_theme;
-    // label_theme.alignment = .Left;
-    // label_theme.font = button_font;
-
-    // label(s, "Mappings will be here.", *label_theme);
-    if new_mappings_pressed {
-        array_insert_at(*mapping_sources, KEY_TEMP, 0);
-        array_insert_at(*mapping_destinations, KEY_TEMP, 0);
+    add_mapping_rect := get_rect(profile_start, 10, profile_width, 50);
+    _, _, add_mapping_released := button(add_mapping_rect, "Add mapping", *my_theme.button_theme);
+    if add_mapping_released {
+        source := Mapping_Bind.{code=KEY_TEMP};
+        dest := Mapping_Bind.{code=KEY_TEMP};
+        array_insert_at(*active_profile.mappings_array, .{source=source, destination=dest}, 0);
         current_mapping_state = .SETTING_SOURCE;
+        active_mapping_index = 0;
         set_key_mapping_hook(window);
     }
-    for mapping_sources {
-        source_name := ifx it == KEY_TEMP "..." else get_key_name(it);
-        text_source := tprint("%", source_name);
-        destination_name := ifx mapping_destinations[it_index] == KEY_TEMP "..." else get_key_name(mapping_destinations[it_index]);
-        text_destination := tprint("%", destination_name);
-        r := get_rect(s.x, s.y, k*2, mapping_row_height);
-        button_theme.label_theme.alignment = .Center;
-        pressed_source := button(r, text_source, *button_theme, it_index, disable_press = current_mapping_state == .SETTING_DESTINATION);
 
-        // Scuffed arrow
-        Simp.set_shader_for_color(true);
-        Simp.immediate_quad(s.x + k*2.1, s.y + mapping_row_height*0.4, s.x + k*3.2, s.y + mapping_row_height*0.6, button_theme.surface_color_over);
-        Simp.immediate_triangle(
-            .{s.x + k*3.2, s.y + mapping_row_height*0.1, 0},
-            .{s.x + k*4,   s.y + mapping_row_height*0.5, 0},
-            .{s.x + k*3.2, s.y + mapping_row_height*0.9, 0},
-            button_theme.surface_color_over,
-            button_theme.surface_color_over,
-            button_theme.surface_color_over,
-        );
+    mappings_theme := profiles_theme;
+    mappings_theme.scrollbar_size = 0.01;
+    mappings_height := 400.0;
+    mappings_rect := get_rect(profile_start, 10 + add_mapping_rect.h + 10, profile_width, mappings_height);
 
-        r = get_rect(s.x + k*4, s.y, k*2, mapping_row_height);
-        pressed_destination := button(r, text_destination, *button_theme, it_index, disable_press = current_mapping_state == .SETTING_SOURCE);
+    mappings_region, inside_mappings_region := begin_scrollable_region(mappings_rect, *mappings_theme);
+    s = inside_mappings_region;
+    s.y -= scroll_value_mappings_region;
 
-        r = get_rect(s.x + k*6.1, s.y, s.w - k*6.1, mapping_row_height);
-        pressed_delete_mapping := button(r, "X", *button_theme, it_index);
-        if pressed_delete_mapping {
-            current_mapping_state = .DELETING;
-            // TODO: Deletion confirmation
-            array_ordered_remove_by_index(*mapping_sources, it_index);
-            array_ordered_remove_by_index(*mapping_destinations, it_index);
-            current_mapping_state = .NOTHING;
+    mappings_button_theme := my_theme.button_theme;
+    mappings_button_theme.label_theme.alignment = .Center;
+    for * mapping: active_profile.mappings_array {
+        button_width := (s.w - 50)/3 - 1;
+        source_rect := get_rect(s.x, s.y, button_width, 50);
+        source_name := get_key_name(mapping.source.code);
+        _, _, released_source := button(source_rect, source_name, *mappings_button_theme, identifier=it_index, disable_press = current_mapping_state == .SETTING_DESTINATION);
+        if released_source {
+            current_mapping_state = .SETTING_JUST_SOURCE;
+            active_mapping_index = it_index;
+            mapping.*.source.code = KEY_TEMP;
+            print("Source pressed\n");
         }
-        s.y += floor(mapping_row_height * 1.1 + 1);
+
+        mode_rect := get_rect(s.x + source_rect.w + 1, s.y, button_width, 50);
+        pressed_mode := button(mode_rect, tprint("%", mapping.mode), *my_theme.button_theme, identifier=it_index, disable_press = current_mapping_state == .SETTING_DESTINATION);
+        if pressed_mode {
+            print("Mode pressed\n");
+        }
+
+        dest_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1, s.y, button_width, 50);
+        dest_name := get_key_name(mapping.destination.code);
+        _, _, released_dest := button(dest_rect, dest_name, *mappings_button_theme, identifier=it_index, disable_press = current_mapping_state == .SETTING_DESTINATION);
+        if released_dest {
+            current_mapping_state = .SETTING_JUST_DESTINATION;
+            active_mapping_index = it_index;
+            mapping.*.destination.code = KEY_TEMP;
+            print("Dest pressed\n");
+        }
+
+        del_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1 + dest_rect.w + 1 + 1, s.y, 50, 50);
+        _, _, del_released := button(del_rect, "X", *mappings_button_theme, identifier=it_index);
+
+        if del_released {
+            table_remove(*active_profile.mappings, mapping.source.code);
+            if mapping.mode == .OVERRIDE {
+                table_remove(*active_profile.mappings, mapping.destination.code);
+            }
+            array_ordered_remove_by_index(*active_profile.mappings_array, it_index);
+        }
+
+        s.y += floor(50 * 1.1 + 1);
+
     }
 
-    end_scrollable_region(region, s.x + s.w, s.y, *scroll_value_mappings_region);
+    end_scrollable_region(mappings_region, s.x + s.w, s.y, *scroll_value_mappings_region);
 
     Simp.swap_buffers(window);
 }
@@ -461,7 +520,9 @@ init_fonts :: (window: Window_Type) {
         free(button_font);
         button_font = null;
     }
-    pixel_height := window_height / dpi / 24;
+
+    // Window height was here
+    pixel_height := 600 / dpi / 24;
     button_font = Simp.get_font_at_size("data", "OpenSans-Bold.ttf", cast(s64)(pixel_height * dpi));
     assert(button_font != null);
 }
@@ -475,6 +536,7 @@ mapping_resolving_hook_is_installed := false;
 mapping_setting_hook_is_installed := false;
 
 #import "Basic"()(TEMP_ALLOCATOR_POISON_FREED_MEMORY=true);
+#import "Hash_Table";
 Input :: #import "Input";
 Simp :: #import "Simp";
 #import "GetRect_LeftHanded";
@@ -483,3 +545,5 @@ Simp :: #import "Simp";
 #import "System";
 #import "Window_Creation";
 tfh :: #import "Text_File_Handler";
+
+#import "Print_Vars";
