@@ -1,6 +1,8 @@
 /*
 ~~TODOS~~
 FOR SHIPPING:
+- Add currently active profile to settings file.
+- Implement saving to the profile.
 - Implement NEUTRAL
 - Fix numpad bug on Windows
 - Better device grab on Linux that doesn't just wait for the first pressed key.
@@ -455,6 +457,8 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     dropdown_theme.theme_for_current_choice.rectangle_shape.rounding_flags = 0;
 
     type_info_mapping_mode := type_info(Mapping_Mode);
+    index_to_remove: s64 = -1;
+    dropdown_state_to_clean_up: Dropdown_State;
     for * mapping: active_profile.mappings_array {
         button_width := (s.w - 50)/3 - 1;
         source_rect := get_rect(s.x, s.y, button_width, 50);
@@ -468,14 +472,16 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         }
 
         mode_rect := get_rect(s.x + source_rect.w + 1, s.y, button_width, 50);
-        changed, mode_state := dropdown(mode_rect, type_info_mapping_mode.names, xx *mapping.mode, dropdown_theme, identifier=it_index);
+        changed, mode_state := dropdown(mode_rect, type_info_mapping_mode.names, xx *mapping.mode, dropdown_theme, identifier=mapping.source.code);
+        // HACK: we might be reusing the leaked dropdown state with the same hash, left after removing a mapping with the same code
+        // so test for null pointer. Need a better way to clear stale states, or remove current_value_pointer from it
         if changed {
+            new_mode := cast(Mapping_Mode, mode_state.current_value_pointer.*);
             print("mappings before:\n");
             for active_profile.mappings {
                 dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
                 print("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
             }
-            new_mode := cast(Mapping_Mode, mode_state.current_value_pointer.*);
             destination_ptr := table_find_pointer(*active_profile.mappings, mapping.source.code);
             old_mode := destination_ptr.mode;
             destination_ptr.*.mode = new_mode;
@@ -514,11 +520,8 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         _, _, del_released := button(del_rect, "X", *mappings_button_theme, identifier=it_index);
 
         if del_released {
-            table_remove(*active_profile.mappings, mapping.source.code);
-            if mapping.mode == .OVERRIDE {
-                table_remove(*active_profile.mappings, mapping.destination.code);
-            }
-            array_ordered_remove_by_index(*active_profile.mappings_array, it_index);
+            index_to_remove = it_index;
+            dropdown_state_to_clean_up = mode_state;
         }
 
         s.y += floor(50 * 1.1 + 1);
@@ -529,6 +532,18 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
     draw_popups();
     Simp.swap_buffers(window);
+
+    if index_to_remove >= 0 {
+        mapping_to_remove := active_profile.mappings_array[index_to_remove];
+        table_remove(*active_profile.mappings, mapping_to_remove.source.code);
+        if mapping_to_remove.mode == .OVERRIDE || mapping_to_remove.mode == .NEUTRAL {
+            table_remove(*active_profile.mappings, mapping_to_remove.destination.code);
+        }
+        array_ordered_remove_by_index(*active_profile.mappings_array, index_to_remove);
+        table_remove(*state_table, dropdown_state_to_clean_up.hash);
+
+        index_to_remove = -1;
+    }
 }
 
 init_fonts :: (window: Window_Type) {
