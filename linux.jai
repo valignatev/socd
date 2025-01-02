@@ -140,12 +140,10 @@ detect_focused_program :: () {
                 c_free(name_old_reply);
                 // TODO: Better way to handle the title name, contains is probably not very
                 // robust
-                for ALLOWED_PROGRAMS {
-                    if contains(it, name) {
-                        set_kb_hook();
-                    } else {
-                        unset_kb_hook();
-                    }
+                if contains(active_profile.program, name) {
+                    set_kb_hook();
+                } else {
+                    unset_kb_hook();
                 }
             }
         }

@@ -1,6 +1,24 @@
+// TODO: uinput exposes the same names.
+KEY_ESC  : u32 : 0x01;
+KEY_W    : u32 : 0x11;
+KEY_A    : u32 : 0x1e;
+KEY_S    : u32 : 0x1f;
+KEY_D    : u32 : 0x20;
+KEY_L    : u32 : 0x26;
+KEY_O    : u32 : 0x18;
+KEY_U    : u32 : 0x16;
+KEY_P    : u32 : 0x19;
+KEY_9    : u32 : 0xA;
+
 MAX_PATH_LENGTH :: MAX_PATH;
 mapping_resolving_hook: HHOOK;
 mapping_setting_hook: HHOOK;
+
+// TODO: these buffers should probably be thread(context)-locals. Just in case...
+key_name_buffer: [301]u16;
+kb_real_state: [4]u32; // whether the key is pressed on a physical keyboard
+kb_virtual_state: [4]u32; // whether the key is pressed on a software level
+
 
 scan_code_to_lparam :: (scan_code: u32) -> u32 {
     lparam := scan_code << 16;

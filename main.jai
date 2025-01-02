@@ -7,31 +7,9 @@
 // Temp key while setting an actual mapping.
 KEY_TEMP : u32 : 0x69696969;
 
-// TODO: Temp guard it because uinput exposes the same names.
-// WIll think later how to properly namespace it.
-#if OS == .WINDOWS {
-    KEY_ESC  : u32 : 0x01;
-    KEY_W    : u32 : 0x11;
-    KEY_A    : u32 : 0x1e;
-    KEY_S    : u32 : 0x1f;
-    KEY_D    : u32 : 0x20;
-    KEY_L    : u32 : 0x26;
-    KEY_O    : u32 : 0x18;
-    KEY_U    : u32 : 0x16;
-    KEY_P    : u32 : 0x19;
-    KEY_9    : u32 : 0xA;
-}
-
 // I think 256 key codes should be enough for any type of keyboard...
 // Indices are key scancodes
 KEY_NAMES: [65535]string;
-
-DIRECTION_LEFT : s32 : 0;
-DIRECTION_RIGHT : s32 : 1;
-DIRECTION_UP : s32 : 2;
-DIRECTION_DOWN : s32 : 3;
-
-BINDS :: u32.[KEY_A, KEY_D, KEY_W, KEY_S];
 
 IS_UP :: 0;
 IS_DOWN :: 1;
@@ -47,16 +25,6 @@ window_height := 600;
 
 current_theme: s32 = xx Default_Themes.Default;
 my_theme: Overall_Theme;  // This gets filled out by calling the Theme_Proc for current_theme.
-
-// TODO: these buffers should probably be thread(context)-locals. Just in case...
-key_name_buffer: [301]u16;
-focused_program_path: [MAX_PATH_LENGTH]u16;
-kb_real_state: [4]u32; // whether the key is pressed on a physical keyboard
-kb_virtual_state: [4]u32; // whether the key is pressed on a software level
-
-// TODO: On windows we get process exe name, on Linux (X11) we can only get the window title,
-// so there is a discrepancy. Need to handle that somehow...
-ALLOWED_PROGRAMS :: string.["Hollow Knight.exe"];
 
 Mapping_State :: enum {
     NOTHING :: 0;
