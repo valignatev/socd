@@ -407,7 +407,7 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
 
             code, s := System.get_error_value_and_string();
             log_error("Could not open \"/dev/uinput\" for creating a virtual keyboard, error: %\n", s);
-            if code == EACCES log_error("Reopen the program with root privileges, or configure required udev rules\n");
+            log_error("Reopen the program with root privileges, or configure required udev rules\n");
             return null;
         }
         defer close(uinput_fd);
@@ -444,6 +444,7 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
         stop := false;
         while !stop {
             size := read(device_fd, *ev, size_of(input_event));
+            write_original := true;
 
             if (size < size_of(input_event)) {
                 log_error("Reading event from % failed\n", device.event_file);
@@ -452,9 +453,13 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
 
 
             // Pass the real event into our virtual device.
-            written := write(uinput_fd, *ev, size_of(input_event));
-            if written < 0 {
-                log_error("Could not pass the event on\n");
+            // TODO: I guess we shouldn't write the original key if we want to remap it.
+            // For now, both original and the remapped key are passed further.
+            defer if write_original {
+                written := write(uinput_fd, *ev, size_of(input_event));
+                if written < 0 {
+                    log_error("Could not pass the event on\n");
+                }
             }
 
             xkb_keycode: xkb_keycode_t = XKB_EVDEV_OFFSET + xx ev.code;
@@ -538,6 +543,7 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
             }
 
             if bind.mode == .MAP {
+                write_original = false;
                 bind_name := get_key_name(bind.code);
                 log("Found mapping: %\n", bind_name);
                 output_events[0] = input_event.{
@@ -558,11 +564,7 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
                 continue;
             }
 
-            if bind.mode == .OVERRIDE {
-                // opposing_key, direction, opposing_direction := find_opposing_key_and_directions(ev.code);
-                // if !opposing_key {
-                //     continue;
-                // }
+            if bind.mode == .OVERRIDE || bind.mode == .NEUTRAL {
                 opposing_code := bind.code;
 
                 key_bit_result := ioctl(device_fd, EVIOCGKEY(key_bits.count), *key_bits);
@@ -572,6 +574,9 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
                 }
                 if ev.value == 1 {
                     if test_key(opposing_code) {
+                        if bind.mode == .NEUTRAL {
+                            write_original = false;
+                        }
                         output_events[0] = input_event.{
                             type=EV_KEY,
                             code=cast(u16)opposing_code,
