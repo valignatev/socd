@@ -139,7 +139,7 @@ detect_focused_program :: () {
                 c_free(name_reply);
                 c_free(name_old_reply);
                 // TODO: Better way to handle the title name, contains is probably not very
-                // robust
+                // robust. Also it's case-sensitive for now :(
                 if contains(active_profile.program, name) {
                     set_kb_hook();
                 } else {
@@ -530,6 +530,8 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
                 continue;
             }
 
+            // NOTE: We're counting on the correct mode being set on the destination keybind
+            // in the hash table. At least for now
             bind := get_key_mapping(ev.code);
             if bind == dummy_bind {
                 continue;
@@ -652,6 +654,9 @@ get_key_name :: (key_scan_code: u32) -> string {
         case KEY_BACKSPACE;
             KEY_NAMES[KEY_BACKSPACE] = "Backspace";
             return "Backspace";
+        case KEY_DELETE;
+            KEY_NAMES[KEY_DELETE] = "Del";
+            return "Del";
         case KEY_PAGEUP;
             KEY_NAMES[KEY_PAGEUP] = "PgUp";
             return "PgUp";

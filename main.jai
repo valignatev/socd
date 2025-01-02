@@ -1,3 +1,20 @@
+/*
+~~TODOS~~
+FOR SHIPPING:
+- Implement NEUTRAL
+- Fix numpad bug on Windows
+- Better device grab on Linux that doesn't just wait for the first pressed key.
+- Better focused program recognition. Now it's just case-sensitive string contains.
+- Profile add and delete.
+- Better dropdown ui for mapping mode.
+
+FOR FUTURE:
+- Global Profile that is always active unless some other profile kicks in. Good for testing.
+- Debug UI. Showing stuff like currently pressed key, when mappings kick in, list of mappings.
+- Mouse bindings
+- Controller bindings
+*/
+
 #if OS == .WINDOWS {
     #load "windows.jai";
 } else #if OS == .LINUX {
@@ -417,6 +434,9 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         set_key_mapping_hook(window);
     }
 
+    //
+    // Mappings
+    //
     mappings_theme := profiles_theme;
     mappings_theme.scrollbar_size = 0.01;
     mappings_height := 400.0;
@@ -428,6 +448,13 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
     mappings_button_theme := my_theme.button_theme;
     mappings_button_theme.label_theme.alignment = .Center;
+
+    dropdown_theme := *my_theme.dropdown_theme;
+    dropdown_theme.theme_for_current_value = my_theme.button_theme;
+    dropdown_theme.theme_for_each_choice.rectangle_shape.rounding_flags = 0;
+    dropdown_theme.theme_for_current_choice.rectangle_shape.rounding_flags = 0;
+
+    type_info_mapping_mode := type_info(Mapping_Mode);
     for * mapping: active_profile.mappings_array {
         button_width := (s.w - 50)/3 - 1;
         source_rect := get_rect(s.x, s.y, button_width, 50);
@@ -441,9 +468,36 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         }
 
         mode_rect := get_rect(s.x + source_rect.w + 1, s.y, button_width, 50);
-        pressed_mode := button(mode_rect, tprint("%", mapping.mode), *my_theme.button_theme, identifier=it_index, disable_press = current_mapping_state == .SETTING_DESTINATION);
-        if pressed_mode {
-            print("Mode pressed\n");
+        changed, mode_state := dropdown(mode_rect, type_info_mapping_mode.names, xx *mapping.mode, dropdown_theme, identifier=it_index);
+        if changed {
+            print("mappings before:\n");
+            for active_profile.mappings {
+                dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
+                print("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
+            }
+            new_mode := cast(Mapping_Mode, mode_state.current_value_pointer.*);
+            destination_ptr := table_find_pointer(*active_profile.mappings, mapping.source.code);
+            old_mode := destination_ptr.mode;
+            destination_ptr.*.mode = new_mode;
+
+            if new_mode == .MAP {
+                if old_mode == .OVERRIDE || old_mode == .NEUTRAL {
+                    table_remove(*active_profile.mappings, destination_ptr.code);
+                }
+
+            } else if new_mode == .OVERRIDE || new_mode == .NEUTRAL {
+                if old_mode == .MAP {
+                    table_set(*active_profile.mappings, destination_ptr.code, .{mode=new_mode, code=mapping.source.code, kind=mapping.source.kind});
+                } else {
+                    dest_to_source_ptr := table_find_pointer(*active_profile.mappings, destination_ptr.code);
+                    if dest_to_source_ptr dest_to_source_ptr.mode = new_mode;
+                }
+            }
+            print("mappings after_last:\n");
+            for active_profile.mappings {
+                dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
+                print("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
+            }
         }
 
         dest_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1, s.y, button_width, 50);
@@ -473,6 +527,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
     end_scrollable_region(mappings_region, s.x + s.w, s.y, *scroll_value_mappings_region);
 
+    draw_popups();
     Simp.swap_buffers(window);
 }
 
