@@ -390,8 +390,6 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
     s := inside_profiles_region;
     s.h = 50;
-    // Offset the button a bit so that there are no borders visible.
-    // Maybe it's better to just straight up erase the border somehow
     s.y -= scroll_value_profiles_region;
 
     profile_button_theme := my_theme.button_theme;
