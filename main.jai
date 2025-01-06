@@ -69,6 +69,7 @@ Platform :: enum u32 {
     LINUX;
 }
 
+// TODO: OVERRIDE -> OPPOSITE and MAP -> REMAP is probably better naming
 Mapping_Mode :: enum u32 {
     MAP;
     OVERRIDE;
@@ -284,7 +285,6 @@ Ignoring the line and trying to continue parsing. Config line was `%`
                         mapping.destination = .{code=bind, mode=mapping_bind.mode};
                     }
 
-                    log("Mapping parsed: %\n", mapping);
                     table_set(*profile.mappings, source, mapping_bind);
                     array_add(*profile.mappings_array, mapping);
 
@@ -295,7 +295,6 @@ Ignoring the line and trying to continue parsing. Config line was `%`
                 case; tfh.error(*handler, "Unexpected profile configuration ignored: %\n", left);
             }
         }
-        log("Parsed profile: %\n", profile);
     }
 }
 
@@ -425,13 +424,24 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
     add_mapping_rect := get_rect(profile_start, 10, profile_width, 50);
     _, _, add_mapping_released := button(add_mapping_rect, "Add mapping", *my_theme.button_theme);
-    if add_mapping_released {
+    if add_mapping_released && current_mapping_state == .NOTHING {
         source := Mapping_Bind.{code=KEY_TEMP};
         dest := Mapping_Bind.{code=KEY_TEMP};
         array_insert_at(*active_profile.mappings_array, .{source=source, destination=dest}, 0);
         current_mapping_state = .SETTING_SOURCE;
         active_mapping_index = 0;
         set_key_mapping_hook(window);
+    }
+
+
+    //
+    // EMERGENCY QUIT BUTTON. TODO: only enable it in debug mode
+    //
+    close_start := add_mapping_rect.w + add_mapping_rect.x + 10;
+    close_rect := get_rect(close_start, 10, 50, 50);
+    _, _, close_released := button(close_rect, "X", *my_theme.button_theme);
+    if close_released {
+        exit(1);
     }
 
     //

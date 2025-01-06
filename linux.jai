@@ -1,6 +1,8 @@
 #load "./xcb.jai";
 #load "./uinput.jai";
 #load "./xkbcommon.jai";
+#load "./libinput.jai";
+#load "./libudev.jai";
 
 // This might backfire, because this is configurable on Linux
 // Might want to allocate it at runtime instead
@@ -169,8 +171,12 @@ Device :: struct {
     file_descriptor: s32;
 }
 
+
 // This is basically test_bit from linux kernel:
 // https://github.com/torvalds/linux/blob/master/tools/testing/selftests/iommu/iommufd_utils.h#L34
+// Every key code is encoded as a single positional bit in the key_bits returned by EVIOCGBIT,
+// This is why we need KEY_MAX amount of bits, or (KEY_MAX / 8) + 1 amount of bytes.
+// At least on desktop Linux this is 96.
 test_key :: (key: u32) -> u32 #expand {
     return `key_bits[key/8] & (xx 1 << (key % 8));
 }
@@ -186,7 +192,6 @@ close_descriptors :: (raw_descriptors: *void) -> *void #c_call {
     push_context {
         descriptors := cast(*File_Descriptors)raw_descriptors;
         for descriptors.array {
-            log("Closing file descriptor %\n", it);
             if !it break;
             error := close(it);
             if error {
@@ -236,9 +241,6 @@ keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Devic
         return;
     }
 
-    // Every key code is encoded as a single positional bit in the key_bits returned by EVIOCGBIT,
-    // This is why we need KEY_MAX amount of bits, or (KEY_MAX / 8) + 1 amount of bytes.
-    // At least on desktop Linux this is 96.
     key_bits_num :: (KEY_MAX / 8) + 1;
     key_bits: [key_bits_num]u8;
     keys_ioctl_result := ioctl(device_fd, EVIOCGBIT(EV_KEY, key_bits.count), *key_bits);
@@ -247,6 +249,7 @@ keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Devic
         return;
     }
 
+    // Remove this
     if !(test_key(KEY_W) && test_key(KEY_A) && test_key(KEY_S) && test_key(KEY_D)) {
         return;
     }
@@ -274,7 +277,7 @@ get_loggable_device :: () -> *Device {
         poll_event := array_add(*fds);
         poll_event.fd = it.file_descriptor;
         poll_event.events = POLLIN | POLLPRI;
-        log("%\n", it);
+        // log("%\n", it);
     }
 
     poll_result := poll(fds.data, cast(u64)fds.count, -1);
@@ -340,7 +343,73 @@ get_virtual_keyboard_path :: (info: *File_Visit_Info, user_data: $T) {
     }
 }
 
-start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
+get_virtual_keyboard_path :: (full_name: string) {
+    uevent_path : = tprint("%/uevent", full_name);
+    udevice_info, success := read_entire_file(uevent_path);
+    if !success {
+        log_error("Couldn't read device uevent info: %\n", uevent_path);
+        return;
+    }
+
+    has_our_product_string := begins_with(udevice_info, "PRODUCT=3/6666/6665");
+    if !has_our_product_string {
+        return;
+    }
+
+    dirs := dir_list(full_name);
+    for dirs {
+        if contains(it, "/event") {
+            path_chunks := split(it, "/");
+            event_name := path_chunks[path_chunks.count-1];
+            log("Found event: %\n", event_name);
+
+            return;
+        }
+    }
+}
+
+read_entire_proc_info :: () -> [..]u8 {
+    data: [..] u8;
+    buff: [4096] u8;
+    fd := open("/proc/bus/input/devices", O_RDONLY);
+    if fd < 0 {
+        log_error("Failed to open '/proc/bus/input/devices': %\n", errno());
+        return data;
+    }
+    defer close(fd);
+
+    while true {
+        rs := read(fd, buff.data, buff.count);
+        if rs < 0 {
+            log_error("Failed to read data from '/proc/bus/input/devices': %\n", errno());
+            return data;
+        }
+        if !rs break;
+        array_reserve(*data, data.count + rs);
+        memcpy(data.data + data.count, buff.data, rs);
+        data.count += rs;
+    }
+    return data;
+}
+
+is_virtual_device :: (path: string) -> bool {
+    devices_raw := read_entire_proc_info();
+    defer array_free(devices_raw);
+    devices_str : string = xx devices_raw;
+
+    devices := split(devices_str, "\n\n");
+    for devices {
+        device_props := split(it, "\n");
+        for prop: device_props {
+            if prop == "N: Name=\"SOCD keyboard\"" {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+_start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
     key_bits_num :: (KEY_MAX / 8) + 1;
     key_bits: [key_bits_num]u8;
     output_events: [2]input_event;
@@ -453,8 +522,6 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
 
 
             // Pass the real event into our virtual device.
-            // TODO: I guess we shouldn't write the original key if we want to remap it.
-            // For now, both original and the remapped key are passed further.
             defer if write_original {
                 written := write(uinput_fd, *ev, size_of(input_event));
                 if written < 0 {
@@ -616,6 +683,314 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
         }
     }
     return null;
+}
+
+start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
+    push_context {
+
+        uinput_fd := open("/dev/uinput", O_RDWR | O_NONBLOCK);
+
+        if uinput_fd < 0 {
+
+            System :: #import "System";
+
+            code, s := System.get_error_value_and_string();
+            log_error("Could not open \"/dev/uinput\" for creating a virtual keyboard, error: %\n", s);
+            log_error("Reopen the program with root privileges, or configure required udev rules\n");
+            return null;
+        }
+
+        result := ioctl(uinput_fd, UI_SET_EVBIT, EV_KEY);
+        if result == -1 {
+            System :: #import "System";
+
+            code, s := System.get_error_value_and_string();
+            log_error("Coulnd't initialize virtual keyboard: %, %\n", code, s);
+            return null;
+        }
+
+        // Here I'm just trying to create a virtual keyboard with enough keys to hopefully
+        // cover most usecases. It would be more reliable to first accumulate the union of all
+        // available keys in open_restricted, and then use those keys here. But this is ok for now.
+        // Inclusive intentionally
+        for KEY_ESC..cast(u32)KEY_MICMUTE {
+            result := ioctl(uinput_fd, UI_SET_KEYBIT, it);
+            if result == -1 {
+                log_error("Couldn't set keybit: %\n", it);
+            }
+        }
+        for KEY_FN..cast(u32)KEY_FN_RIGHT_SHIFT {
+            result := ioctl(uinput_fd, UI_SET_KEYBIT, it);
+            if result == -1 {
+                log_error("Couldn't set keybit: %\n", it);
+            }
+        }
+
+        usetup: uinput_setup;
+        usetup.id.bustype = BUS_USB;
+        usetup.id.vendor = 0x6666;
+        usetup.id.product = 0x6665;
+        usetup.name = xx "SOCD keyboard".data;
+
+        result = ioctl(uinput_fd, UI_DEV_SETUP, *usetup);
+        if result == -1 {
+            System :: #import "System";
+
+            code, s := System.get_error_value_and_string();
+            log_error("Couldn't setup a virtual keyboard: %, %\n", code, s);
+            return null;
+        }
+        // Should I really call destroy? Seems like Linux destroys my virtual keyboard anyway
+        // defer ioctl(uinput_fd, UI_DEV_DESTROY);
+        result = ioctl(uinput_fd, UI_DEV_CREATE);
+        if result == -1 {
+            System :: #import "System";
+
+            code, s := System.get_error_value_and_string();
+            log_error("Couldn't create a virtual keyboard: %, %\n", code, s);
+            return null;
+        }
+        
+        fd := libinput_get_fd(libinput_context);
+        // TODO: apparently, libinput doesn't handle gamepads. So I need to open and add them to
+        // this descriptor set myself. Sadge.
+        fds := pollfd.{
+            fd,
+            POLLIN,
+            0
+        };
+        while true {
+            poll_result := poll(*fds, 1, -1);
+            if poll_result <= 0 {
+                log_error("libinput is cooked: % (ERROR REASON HERE)\n", errno());
+            }
+
+            libinput_dispatch(libinput_context);
+            while event := libinput_get_event(libinput_context) {
+                handle_libinput_event(event, uinput_fd);
+                libinput_event_destroy(event);
+            }
+        }
+        // It's not necessary, OS should do that anyway
+        close(uinput_fd);
+    }
+
+    return null;
+}
+
+handle_libinput_event :: (event: *libinput_event, uinput_fd: s32) {
+
+    // NOTE: It doesn't look like libinput passes us SYN events from the queue, so we have to
+    // recreate it manually. it doesn't pass those HID events either. I wonder if it's fine to
+    // just ignore them anyway?
+
+    key_bits_num :: (KEY_MAX / 8) + 1;
+    key_bits: [key_bits_num]u8;
+    output_events: [2]input_event;
+    input_events: [2]input_event;
+    write_original := true;
+    event_type := libinput_event_get_type(event);
+    if event_type == .LIBINPUT_EVENT_POINTER_BUTTON {
+        pointer_event := libinput_event_get_pointer_event(event);
+        // printf ("pointer button event\n");
+    }
+    else if event_type == .LIBINPUT_EVENT_DEVICE_REMOVED {
+        device := libinput_event_get_device(event);
+        device_name := tprint("/dev/input/%", to_string(libinput_device_get_sysname(device)));
+        if device_name == virtual_device_path {
+            uinput_device_created = false;
+        }
+    }
+    else if event_type == .LIBINPUT_EVENT_KEYBOARD_KEY {
+        keyboard_event := libinput_event_get_keyboard_event(event);
+        key := libinput_event_keyboard_get_key(keyboard_event);
+        state := libinput_event_keyboard_get_key_state(keyboard_event);
+        device := libinput_event_get_device(event);
+        device_name := tprint("/dev/input/%", to_string(libinput_device_get_sysname(device)));
+        // print("device_name: %\n", device_name);
+
+        seconds := libinput_event_keyboard_get_time(keyboard_event);
+        useconds := libinput_event_keyboard_get_time_usec(keyboard_event);
+        
+        // Reconstruct input_event from libinput_event.
+        input_events[0] = input_event.{
+            // time=.{seconds, xx useconds},
+            time=.{},
+            type=EV_KEY,
+            code=cast(u16)key,
+            value=xx state,
+        };
+        input_events[1] = input_event.{
+            // time=.{seconds, xx useconds},
+            time=.{},
+            type=EV_SYN,
+            code=SYN_REPORT,
+            value=0,
+        };
+        ev := input_events[0];
+        if state == .LIBINPUT_KEY_STATE_PRESSED {
+            print("% pressed\n", get_key_name(key));
+        }
+
+        // Pass the real event into our virtual device.
+        defer if write_original {
+            written := write(uinput_fd, input_events.data, size_of(input_event) * output_events.count);
+            if written < 0 {
+                log_error("Could not pass the event on\n");
+            }
+        }
+
+        if current_mapping_state == .SETTING_SOURCE {
+            log("SETTING SOURCE\n");
+            if ev.value == IS_DOWN && ev.type == EV_KEY {
+                active_profile.mappings_array[active_mapping_index].source.code = ev.code;
+                current_mapping_state = .SETTING_DESTINATION;
+                log("Set source %\n", ev.code);
+            }
+            return;
+        } else if current_mapping_state == .SETTING_DESTINATION {
+            if ev.value == IS_DOWN && ev.type == EV_KEY {
+                active_profile.mappings_array[active_mapping_index].destination.code = ev.code;
+                mapping: = active_profile.mappings_array[active_mapping_index];
+                mapping.destination.code = ev.code;
+                table_set(*active_profile.mappings, mapping.source.code, mapping.destination);
+                current_mapping_state = .NOTHING;
+                active_mapping_index = -1;
+                log("Set destination %\n", ev.code);
+            }
+            return;
+        } else if current_mapping_state == .SETTING_JUST_SOURCE || current_mapping_state == .SETTING_JUST_DESTINATION {
+            if ev.value == IS_DOWN && ev.type == EV_KEY {
+                log("SETTING JUST ONE BIND\n");
+                if current_mapping_state == .SETTING_JUST_SOURCE {
+                    print("Before\n");
+                    for v, k: active_profile.mappings {
+                        print("%, %\n", v, k);
+                    }
+                    mapping := active_profile.mappings_array[active_mapping_index];
+                    active_profile.mappings_array[active_mapping_index].source.code = ev.code;
+
+                    table_set(*active_profile.mappings, active_profile.mappings_array[active_mapping_index].source.code, mapping.destination);
+                    old_source, found := table_find(*active_profile.mappings, mapping.destination.code);
+                    print("Old source is %\n", old_source);
+                    if mapping.mode == .OVERRIDE {
+                        table_set(*active_profile.mappings, mapping.destination.code, active_profile.mappings_array[active_mapping_index].source);
+                    }
+                    // I don't think it matters whether we found it.
+                    table_remove(*active_profile.mappings, old_source.code);
+                    print("After\n");
+                    for v, k: active_profile.mappings {
+                        print("%, %\n", v, k);
+                    }
+                } else if current_mapping_state == .SETTING_JUST_DESTINATION {
+                    active_profile.mappings_array[active_mapping_index].destination.code = ev.code;
+                    mapping := active_profile.mappings_array[active_mapping_index];
+
+                    table_set(*active_profile.mappings, mapping.source.code, mapping.destination);
+                    if mapping.mode == .OVERRIDE {
+                        table_set(*active_profile.mappings, mapping.destination.code, mapping.source);
+                        table_remove(*active_profile.mappings, mapping.source.code);
+                    }
+                }
+
+                current_mapping_state = .NOTHING;
+                active_mapping_index = -1;
+                log("Set source %\n", ev.code);
+            }
+            return;
+        }
+
+        if !KB_HOOK_SET {
+            return;
+        }
+
+        // NOTE: We're counting on the correct mode being set on the destination keybind
+        // in the hash table. At least for now
+        bind := get_key_mapping(ev.code);
+        if bind == dummy_bind {
+            return;
+        }
+
+        if bind.mode == .MAP {
+            write_original = false;
+            bind_name := get_key_name(bind.code);
+            log("Found mapping: %\n", bind_name);
+            output_events[0] = input_event.{
+                type=EV_KEY,
+                code=cast(u16)bind.code,
+                value=ev.value,
+            };
+            output_events[1] = input_event.{
+                type=EV_SYN,
+                code=SYN_REPORT,
+                value=0,
+            };
+
+            written := write(uinput_fd, output_events.data, size_of(input_event) * output_events.count);
+            if written < 0 {
+                log_error("Could not write one to one mapping for %\n", bind_name);
+            }
+            return;
+        }
+
+        if bind.mode == .OVERRIDE || bind.mode == .NEUTRAL {
+            opposing_code := bind.code;
+
+            device_fd, found := table_find(*libinput_opened_devices, device_name);
+            if !found {
+                log_error("Can't get an open file descriptor for %\n", device_name);
+                return;
+            }
+            key_bit_result := ioctl(device_fd, EVIOCGKEY(key_bits.count), *key_bits);
+            if key_bit_result < key_bits_num {
+                log_error("Can't read the device key state\n");
+                return;
+            }
+            if ev.value == 1 {
+                if test_key(opposing_code) {
+                    if bind.mode == .NEUTRAL {
+                        write_original = false;
+                    }
+                    output_events[0] = input_event.{
+                        type=EV_KEY,
+                        code=cast(u16)opposing_code,
+                        value=IS_UP,
+                    };
+                    output_events[1] = input_event.{
+                        type=EV_SYN,
+                        code=SYN_REPORT,
+                        value=0,
+                    };
+                    written := write(uinput_fd, output_events.data, size_of(input_event) * output_events.count);
+                    if written < 0 {
+                        log_error("Could not release the key\n");
+                    }
+                }
+            } else if ev.value == 0 {
+                if test_key(opposing_code) {
+                    output_events[0] = input_event.{
+                        time=.{},
+                        type=EV_KEY,
+                        code=cast(u16)opposing_code,
+                        value=IS_DOWN,
+                    };
+                    output_events[1] = input_event.{
+                        time=.{},
+                        type=EV_SYN,
+                        code=SYN_REPORT,
+                        value=0,
+                    };
+                    written := write(uinput_fd, output_events.data, size_of(input_event) * output_events.count);
+                    if written < 0 {
+                        log_error("Could not repress the key\n");
+                    }
+                }
+            }
+        }
+
+    }
+
+                
 }
 
 start_logging_keys :: () {
@@ -792,54 +1167,163 @@ create_window :: (window_x := 0, window_y := 0, parent: Window_Type = None, back
 }
 
 
+udev_context: *udev;
+libinput_context: *libinput;
+
+// Straight up copypaste of keyboard detector
+is_keyboard :: (device_fd: s32, device_path: string) -> bool {
+    if device_fd < 0 {
+        log_error("Couldn't open device % for checking out whether it's a keyboard\n", device_path);
+        return false;
+    }
+
+    name: [256]u8;
+    device_name: string;
+    evbit: u32;
+
+    name_length := ioctl(device_fd, EVIOCGNAME(name.count), *name);
+    if name_length < 0 {
+        log_error("Couldn't get device name: %\n", device_path);
+    } else {
+        device_name = alloc_string(name_length - 1);
+        copy(device_name.data, name.data, device_name.count);
+    }
+
+    evbit_result := ioctl(device_fd, EVIOCGBIT(0, size_of(type_of(evbit))), *evbit);
+
+    if !(evbit & (1 << EV_KEY)) {
+        return false;
+    }
+
+    key_bits_num :: (KEY_MAX / 8) + 1;
+    key_bits: [key_bits_num]u8;
+    keys_ioctl_result := ioctl(device_fd, EVIOCGBIT(EV_KEY, key_bits.count), *key_bits);
+    if keys_ioctl_result != key_bits_num {
+        log_error("Something is wrong with reading key bits from device %, ioctl result is %, skipping it...\n", device_name, keys_ioctl_result);
+        return false;
+    }
+
+    // Inclusive intentionally
+    // TODO: don't count gamepad buttons here. I think they start from BTN_JOYSTICK in input.jai
+    for KEY_ESC..cast(u32)KEY_MAX {
+        if test_key(it) return true;
+    }
+    return false;
+}
+
+libinput_opened_devices: Table(string, s32);
+uinput_device_created := false;
+virtual_device_path: string;
+
+open_restricted :: (path_raw: *u8, flags: s32, user_data: *void) -> s32 #c_call {
+    push_context {
+        path := to_string(path_raw);
+
+        if !uinput_device_created && is_virtual_device(path) {
+            uinput_device_created = true;
+            virtual_device_path = path;
+            return -1;
+        }
+
+        fd := open(path_raw, flags);
+
+        table_add(*libinput_opened_devices, path, fd);
+        if is_keyboard(fd, path) {
+            print("%\n", path);
+            if contains(path, "event6") {
+                grab_result := ioctl(fd, EVIOCGRAB, 1);
+                if grab_result < 0 {
+                    log_error("Could not grab % for controlling its inputs\n", path);
+                }
+            }
+            return fd;
+        }
+        // TODO: port device closing shenanigans that offload it into a separate thread.
+        // close(fd);
+        return -1;
+    }
+}
+
+close_restricted :: (fd: s32, user_data: *void) #c_call {
+    close(fd);
+}
+
+interface_: libinput_interface = .{open_restricted, close_restricted};
+
+
 platform_init :: () -> success: bool #must {
 
-    // init xcb X11 connection and libxkbcommon
-    global_xcb_connection = xcb_connect(null, null);
-    con_errors := xcb_connection_has_error(global_xcb_connection);
+    // x11 and xkbcommon
+    {
+        // init xcb X11 connection and libxkbcommon
+        global_xcb_connection = xcb_connect(null, null);
+        con_errors := xcb_connection_has_error(global_xcb_connection);
 
-    if con_errors {
-        log_error("Can't connect to X11 with xcb, error code is: %\n", con_errors);
-        return false;
+        if con_errors {
+            log_error("Can't connect to X11 with xcb, error code is: %\n", con_errors);
+            return false;
+        }
+
+        base_xkb_event: u8;
+
+        major: u16 = 1;
+        minor: u16 = 0;
+        ret := xkb_x11_setup_xkb_extension(
+            global_xcb_connection,
+            major,
+            minor,
+            0,
+            *major, *minor, *base_xkb_event, null,
+        );
+
+        if (!ret) {
+            log_error("Couldn't setup XKB extension\n");
+            return false;
+        }
+
+        global_xkb_context = xkb_context_new(.NO_FLAGS);
+
+        core_kbd_device_id := xkb_x11_get_core_keyboard_device_id(global_xcb_connection);
+        if (core_kbd_device_id == -1) {
+            log_error("Couldn't find core keyboard device\n");
+            return false;
+        } else {
+            log("Core keyboard device is %\n", core_kbd_device_id);
+        }
+
+        global_xkb_keymap = xkb_x11_keymap_new_from_device(global_xkb_context, global_xcb_connection, core_kbd_device_id, 0);
+
+        global_xkb_state = xkb_state_new(global_xkb_keymap);
+        if (!global_xkb_state) {
+            log_error("Couldn't create xkb state for device\n");
+            return false;
+        }
     }
 
-    base_xkb_event: u8;
+    // TODO: This should be in a separate thread, it affects startup times GREATLY!!!!
+    // udev and libinput
+    {
+        udev_context = udev_new();
+        if !udev_context {
+            log_error("Couldn't initialize udev context\n");
+            return false;
+        }
 
-    major: u16 = 1;
-    minor: u16 = 0;
-    ret := xkb_x11_setup_xkb_extension(
-        global_xcb_connection,
-        major,
-        minor,
-        0,
-        *major, *minor, *base_xkb_event, null,
-    );
+        libinput_context = libinput_udev_create_context(*interface_, null, udev_context);
+        if !libinput_context {
+            log_error("Couldn't initialize libinput context\n");
+            return false;
+        }
 
-    if (!ret) {
-        log_error("Couldn't setup XKB extension\n");
-        return false;
-    }
-
-    global_xkb_context = xkb_context_new(0);
-
-    core_kbd_device_id := xkb_x11_get_core_keyboard_device_id(global_xcb_connection);
-    if (core_kbd_device_id == -1) {
-        log_error("Couldn't find core keyboard device\n");
-        return false;
-    } else {
-        log("Core keyboard device is %\n", core_kbd_device_id);
-    }
-
-    global_xkb_keymap = xkb_x11_keymap_new_from_device(global_xkb_context, global_xcb_connection, core_kbd_device_id, 0);
-
-    global_xkb_state = xkb_state_new(global_xkb_keymap);
-    if (!global_xkb_state) {
-        log_error("Couldn't create xkb state for device\n");
-        return false;
+        // NOTE: Is there any issue with hardcoding a single seat here?
+        // Are setups where input devices are spread across multiple seats even exit?
+        if libinput_udev_assign_seat(libinput_context, "seat0") == -1 {
+            log_error("Libinput couldn't assign seat\n");
+            return false;
+        }
     }
 
     return true;
-
 }
 
 libc :: #system_library "libc";

@@ -75,15 +75,15 @@ xkb_keysym_to_upper :: (ks: xkb_keysym_t) -> xkb_keysym_t #foreign libxkbcommon;
 xkb_keysym_to_lower :: (ks: xkb_keysym_t) -> xkb_keysym_t #foreign libxkbcommon;
 
 xkb_context_flags :: enum u32 {
-    FLAGS             :: 0;
-    DEFAULT_INCLUDES  :: 1;
-    ENVIRONMENT_NAMES :: 2;
-    SECURE_GETENV     :: 4;
+    NO_FLAGS             :: 0;
+    NO_DEFAULT_INCLUDES  :: 1;
+    NO_ENVIRONMENT_NAMES :: 2;
+    NO_SECURE_GETENV     :: 4;
 
-    XKB_CONTEXT_NO_FLAGS             :: FLAGS;
-    XKB_CONTEXT_NO_DEFAULT_INCLUDES  :: DEFAULT_INCLUDES;
-    XKB_CONTEXT_NO_ENVIRONMENT_NAMES :: ENVIRONMENT_NAMES;
-    XKB_CONTEXT_NO_SECURE_GETENV     :: SECURE_GETENV;
+    XKB_CONTEXT_NO_FLAGS             :: NO_FLAGS;
+    XKB_CONTEXT_NO_DEFAULT_INCLUDES  :: NO_DEFAULT_INCLUDES;
+    XKB_CONTEXT_NO_ENVIRONMENT_NAMES :: NO_ENVIRONMENT_NAMES;
+    XKB_CONTEXT_NO_SECURE_GETENV     :: NO_SECURE_GETENV;
 }
 
 xkb_context_new :: (flags: xkb_context_flags) -> *xkb_context #foreign libxkbcommon;
