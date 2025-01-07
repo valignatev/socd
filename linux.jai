@@ -751,7 +751,7 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
             return null;
         }
         
-        fd := libinput_get_fd(libinput_context);
+        fd := libinput_get_fd(libinput);
         // TODO: apparently, libinput doesn't handle gamepads. So I need to open and add them to
         // this descriptor set myself. Sadge.
         fds := pollfd.{
@@ -765,8 +765,8 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
                 log_error("libinput is cooked: % (ERROR REASON HERE)\n", errno());
             }
 
-            libinput_dispatch(libinput_context);
-            while event := libinput_get_event(libinput_context) {
+            libinput_dispatch(libinput);
+            while event := libinput_get_event(libinput) {
                 handle_libinput_event(event, uinput_fd);
                 libinput_event_destroy(event);
             }
@@ -1167,8 +1167,8 @@ create_window :: (window_x := 0, window_y := 0, parent: Window_Type = None, back
 }
 
 
-udev_context: *udev;
-libinput_context: *libinput;
+udev: *udev_context;
+libinput: *libinput_context;
 
 // Straight up copypaste of keyboard detector
 is_keyboard :: (device_fd: s32, device_path: string) -> bool {
@@ -1303,21 +1303,21 @@ platform_init :: () -> success: bool #must {
     // TODO: This should be in a separate thread, it affects startup times GREATLY!!!!
     // udev and libinput
     {
-        udev_context = udev_new();
+        udev = udev_new();
         if !udev_context {
             log_error("Couldn't initialize udev context\n");
             return false;
         }
 
-        libinput_context = libinput_udev_create_context(*interface_, null, udev_context);
-        if !libinput_context {
+        libinput = libinput_udev_create_context(*interface_, null, udev);
+        if !libinput {
             log_error("Couldn't initialize libinput context\n");
             return false;
         }
 
         // NOTE: Is there any issue with hardcoding a single seat here?
         // Are setups where input devices are spread across multiple seats even exit?
-        if libinput_udev_assign_seat(libinput_context, "seat0") == -1 {
+        if libinput_udev_assign_seat(libinput, "seat0") == -1 {
             log_error("Libinput couldn't assign seat\n");
             return false;
         }

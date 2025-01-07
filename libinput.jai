@@ -13,7 +13,7 @@
 * A handle for accessing libinput. This struct is refcounted, use
 * libinput_ref() and libinput_unref().
 */
-libinput :: struct {}
+libinput_context :: struct {}
 
 /**
 * @ingroup device
@@ -425,7 +425,7 @@ libinput_tablet_pad_mode_group :: struct {}
 *
 * @since 1.4
 */
-libinput_device_tablet_pad_get_num_mode_groups :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_tablet_pad_get_num_mode_groups :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup tablet_pad_modes
@@ -449,7 +449,7 @@ libinput_device_tablet_pad_get_num_mode_groups :: (device: *libinput_device) -> 
 *
 * @since 1.4
 */
-libinput_device_tablet_pad_get_mode_group :: (device: *libinput_device, index: u32) -> *libinput_tablet_pad_mode_group #foreign libinput_lib;
+libinput_device_tablet_pad_get_mode_group :: (device: *libinput_device, index: u32) -> *libinput_tablet_pad_mode_group #foreign libinput;
 
 /**
 * @ingroup tablet_pad_modes
@@ -463,7 +463,7 @@ libinput_device_tablet_pad_get_mode_group :: (device: *libinput_device, index: u
 *
 * @since 1.4
 */
-libinput_tablet_pad_mode_group_get_index :: (group: *libinput_tablet_pad_mode_group) -> u32 #foreign libinput_lib;
+libinput_tablet_pad_mode_group_get_index :: (group: *libinput_tablet_pad_mode_group) -> u32 #foreign libinput;
 
 /**
 * @ingroup tablet_pad_modes
@@ -482,7 +482,7 @@ libinput_tablet_pad_mode_group_get_index :: (group: *libinput_tablet_pad_mode_gr
 *
 * @since 1.4
 */
-libinput_tablet_pad_mode_group_get_num_modes :: (group: *libinput_tablet_pad_mode_group) -> u32 #foreign libinput_lib;
+libinput_tablet_pad_mode_group_get_num_modes :: (group: *libinput_tablet_pad_mode_group) -> u32 #foreign libinput;
 
 /**
 * @ingroup tablet_pad_modes
@@ -503,7 +503,7 @@ libinput_tablet_pad_mode_group_get_num_modes :: (group: *libinput_tablet_pad_mod
 *
 * @since 1.4
 */
-libinput_tablet_pad_mode_group_get_mode :: (group: *libinput_tablet_pad_mode_group) -> u32 #foreign libinput_lib;
+libinput_tablet_pad_mode_group_get_mode :: (group: *libinput_tablet_pad_mode_group) -> u32 #foreign libinput;
 
 /**
 * @ingroup tablet_pad_modes
@@ -517,7 +517,7 @@ libinput_tablet_pad_mode_group_get_mode :: (group: *libinput_tablet_pad_mode_gro
 *
 * @since 1.4
 */
-libinput_tablet_pad_mode_group_has_button :: (group: *libinput_tablet_pad_mode_group, button: u32) -> s32 #foreign libinput_lib;
+libinput_tablet_pad_mode_group_has_button :: (group: *libinput_tablet_pad_mode_group, button: u32) -> s32 #foreign libinput;
 
 /**
 * @ingroup tablet_pad_modes
@@ -531,7 +531,7 @@ libinput_tablet_pad_mode_group_has_button :: (group: *libinput_tablet_pad_mode_g
 *
 * @since 1.26
 */
-libinput_tablet_pad_mode_group_has_dial :: (group: *libinput_tablet_pad_mode_group, dial: u32) -> s32 #foreign libinput_lib;
+libinput_tablet_pad_mode_group_has_dial :: (group: *libinput_tablet_pad_mode_group, dial: u32) -> s32 #foreign libinput;
 
 /**
 * @ingroup tablet_pad_modes
@@ -545,7 +545,7 @@ libinput_tablet_pad_mode_group_has_dial :: (group: *libinput_tablet_pad_mode_gro
 *
 * @since 1.4
 */
-libinput_tablet_pad_mode_group_has_ring :: (group: *libinput_tablet_pad_mode_group, ring: u32) -> s32 #foreign libinput_lib;
+libinput_tablet_pad_mode_group_has_ring :: (group: *libinput_tablet_pad_mode_group, ring: u32) -> s32 #foreign libinput;
 
 /**
 * @ingroup tablet_pad_modes
@@ -559,7 +559,7 @@ libinput_tablet_pad_mode_group_has_ring :: (group: *libinput_tablet_pad_mode_gro
 *
 * @since 1.4
 */
-libinput_tablet_pad_mode_group_has_strip :: (group: *libinput_tablet_pad_mode_group, strip: u32) -> s32 #foreign libinput_lib;
+libinput_tablet_pad_mode_group_has_strip :: (group: *libinput_tablet_pad_mode_group, strip: u32) -> s32 #foreign libinput;
 
 /**
 * @ingroup tablet_pad_modes
@@ -579,7 +579,7 @@ libinput_tablet_pad_mode_group_has_strip :: (group: *libinput_tablet_pad_mode_gr
 *
 * @since 1.4
 */
-libinput_tablet_pad_mode_group_button_is_toggle :: (group: *libinput_tablet_pad_mode_group, button: u32) -> s32 #foreign libinput_lib;
+libinput_tablet_pad_mode_group_button_is_toggle :: (group: *libinput_tablet_pad_mode_group, button: u32) -> s32 #foreign libinput;
 
 /**
 * @ingroup tablet_pad_modes
@@ -592,7 +592,7 @@ libinput_tablet_pad_mode_group_button_is_toggle :: (group: *libinput_tablet_pad_
 *
 * @since 1.4
 */
-libinput_tablet_pad_mode_group_ref :: (group: *libinput_tablet_pad_mode_group) -> *libinput_tablet_pad_mode_group #foreign libinput_lib;
+libinput_tablet_pad_mode_group_ref :: (group: *libinput_tablet_pad_mode_group) -> *libinput_tablet_pad_mode_group #foreign libinput;
 
 /**
 * @ingroup tablet_pad_modes
@@ -605,7 +605,7 @@ libinput_tablet_pad_mode_group_ref :: (group: *libinput_tablet_pad_mode_group) -
 *
 * @since 1.4
 */
-libinput_tablet_pad_mode_group_unref :: (group: *libinput_tablet_pad_mode_group) -> *libinput_tablet_pad_mode_group #foreign libinput_lib;
+libinput_tablet_pad_mode_group_unref :: (group: *libinput_tablet_pad_mode_group) -> *libinput_tablet_pad_mode_group #foreign libinput;
 
 /**
 * @ingroup tablet_pad_modes
@@ -620,7 +620,7 @@ libinput_tablet_pad_mode_group_unref :: (group: *libinput_tablet_pad_mode_group)
 *
 * @since 1.4
 */
-libinput_tablet_pad_mode_group_set_user_data :: (group: *libinput_tablet_pad_mode_group, user_data: *void) -> void #foreign libinput_lib;
+libinput_tablet_pad_mode_group_set_user_data :: (group: *libinput_tablet_pad_mode_group, user_data: *void) -> void #foreign libinput;
 
 /**
 * @ingroup tablet_pad_modes
@@ -633,7 +633,7 @@ libinput_tablet_pad_mode_group_set_user_data :: (group: *libinput_tablet_pad_mod
 *
 * @since 1.4
 */
-libinput_tablet_pad_mode_group_get_user_data :: (group: *libinput_tablet_pad_mode_group) -> *void #foreign libinput_lib;
+libinput_tablet_pad_mode_group_get_user_data :: (group: *libinput_tablet_pad_mode_group) -> *void #foreign libinput;
 
 /**
 * @ingroup device
@@ -768,7 +768,7 @@ libinput_event_type :: enum u32 {
 *
 * @param event An event retrieved by libinput_get_event().
 */
-libinput_event_destroy :: (event: *libinput_event) -> void #foreign libinput_lib;
+libinput_event_destroy :: (event: *libinput_event) -> void #foreign libinput;
 
 /**
 * @ingroup event
@@ -777,7 +777,7 @@ libinput_event_destroy :: (event: *libinput_event) -> void #foreign libinput_lib
 *
 * @param event An event retrieved by libinput_get_event().
 */
-libinput_event_get_type :: (event: *libinput_event) -> libinput_event_type #foreign libinput_lib;
+libinput_event_get_type :: (event: *libinput_event) -> libinput_event_type #foreign libinput;
 
 /**
 * @ingroup event
@@ -787,7 +787,7 @@ libinput_event_get_type :: (event: *libinput_event) -> libinput_event_type #fore
 * @param event The libinput event
 * @return The libinput context for this event.
 */
-libinput_event_get_context :: (event: *libinput_event) -> *libinput #foreign libinput_lib;
+libinput_event_get_context :: (event: *libinput_event) -> *libinput_context #foreign libinput;
 
 /**
 * @ingroup event
@@ -801,7 +801,7 @@ libinput_event_get_context :: (event: *libinput_event) -> *libinput #foreign lib
 *
 * @return The device associated with this event
 */
-libinput_event_get_device :: (event: *libinput_event) -> *libinput_device #foreign libinput_lib;
+libinput_event_get_device :: (event: *libinput_event) -> *libinput_device #foreign libinput;
 
 /**
 * @ingroup event
@@ -813,7 +813,7 @@ libinput_event_get_device :: (event: *libinput_event) -> *libinput_device #forei
 *
 * @return A pointer event, or NULL for other events
 */
-libinput_event_get_pointer_event :: (event: *libinput_event) -> *libinput_event_pointer #foreign libinput_lib;
+libinput_event_get_pointer_event :: (event: *libinput_event) -> *libinput_event_pointer #foreign libinput;
 
 /**
 * @ingroup event
@@ -825,7 +825,7 @@ libinput_event_get_pointer_event :: (event: *libinput_event) -> *libinput_event_
 *
 * @return A keyboard event, or NULL for other events
 */
-libinput_event_get_keyboard_event :: (event: *libinput_event) -> *libinput_event_keyboard #foreign libinput_lib;
+libinput_event_get_keyboard_event :: (event: *libinput_event) -> *libinput_event_keyboard #foreign libinput;
 
 /**
 * @ingroup event
@@ -837,7 +837,7 @@ libinput_event_get_keyboard_event :: (event: *libinput_event) -> *libinput_event
 *
 * @return A touch event, or NULL for other events
 */
-libinput_event_get_touch_event :: (event: *libinput_event) -> *libinput_event_touch #foreign libinput_lib;
+libinput_event_get_touch_event :: (event: *libinput_event) -> *libinput_event_touch #foreign libinput;
 
 libinput_event_gesture :: struct {}
 /**
@@ -857,7 +857,7 @@ libinput_event_gesture :: struct {}
 *
 * @return A gesture event, or NULL for other events
 */
-libinput_event_get_gesture_event :: (event: *libinput_event) -> *libinput_event_gesture #foreign libinput_lib;
+libinput_event_get_gesture_event :: (event: *libinput_event) -> *libinput_event_gesture #foreign libinput;
 
 /**
 * @ingroup event
@@ -871,7 +871,7 @@ libinput_event_get_gesture_event :: (event: *libinput_event) -> *libinput_event_
 *
 * @since 1.2
 */
-libinput_event_get_tablet_tool_event :: (event: *libinput_event) -> *libinput_event_tablet_tool #foreign libinput_lib;
+libinput_event_get_tablet_tool_event :: (event: *libinput_event) -> *libinput_event_tablet_tool #foreign libinput;
 
 /**
 * @ingroup event
@@ -883,7 +883,7 @@ libinput_event_get_tablet_tool_event :: (event: *libinput_event) -> *libinput_ev
 *
 * @return A tablet pad event, or NULL for other events
 */
-libinput_event_get_tablet_pad_event :: (event: *libinput_event) -> *libinput_event_tablet_pad #foreign libinput_lib;
+libinput_event_get_tablet_pad_event :: (event: *libinput_event) -> *libinput_event_tablet_pad #foreign libinput;
 
 /**
 * @ingroup event
@@ -897,7 +897,7 @@ libinput_event_get_tablet_pad_event :: (event: *libinput_event) -> *libinput_eve
 *
 * @since 1.7
 */
-libinput_event_get_switch_event :: (event: *libinput_event) -> *libinput_event_switch #foreign libinput_lib;
+libinput_event_get_switch_event :: (event: *libinput_event) -> *libinput_event_switch #foreign libinput;
 
 /**
 * @ingroup event
@@ -910,14 +910,14 @@ libinput_event_get_switch_event :: (event: *libinput_event) -> *libinput_event_s
 *
 * @return A device event, or NULL for other events
 */
-libinput_event_get_device_notify_event :: (event: *libinput_event) -> *libinput_event_device_notify #foreign libinput_lib;
+libinput_event_get_device_notify_event :: (event: *libinput_event) -> *libinput_event_device_notify #foreign libinput;
 
 /**
 * @ingroup event
 *
 * @return The generic libinput_event of this event
 */
-libinput_event_device_notify_get_base_event :: (event: *libinput_event_device_notify) -> *libinput_event #foreign libinput_lib;
+libinput_event_device_notify_get_base_event :: (event: *libinput_event_device_notify) -> *libinput_event #foreign libinput;
 
 /**
 * @ingroup event_keyboard
@@ -927,7 +927,7 @@ libinput_event_device_notify_get_base_event :: (event: *libinput_event_device_no
 *
 * @return The event time for this event
 */
-libinput_event_keyboard_get_time :: (event: *libinput_event_keyboard) -> u32 #foreign libinput_lib;
+libinput_event_keyboard_get_time :: (event: *libinput_event_keyboard) -> u32 #foreign libinput;
 
 /**
 * @ingroup event_keyboard
@@ -937,28 +937,28 @@ libinput_event_keyboard_get_time :: (event: *libinput_event_keyboard) -> u32 #fo
 *
 * @return The event time for this event in microseconds
 */
-libinput_event_keyboard_get_time_usec :: (event: *libinput_event_keyboard) -> u64 #foreign libinput_lib;
+libinput_event_keyboard_get_time_usec :: (event: *libinput_event_keyboard) -> u64 #foreign libinput;
 
 /**
 * @ingroup event_keyboard
 *
 * @return The keycode that triggered this key event
 */
-libinput_event_keyboard_get_key :: (event: *libinput_event_keyboard) -> u32 #foreign libinput_lib;
+libinput_event_keyboard_get_key :: (event: *libinput_event_keyboard) -> u32 #foreign libinput;
 
 /**
 * @ingroup event_keyboard
 *
 * @return The state change of the key
 */
-libinput_event_keyboard_get_key_state :: (event: *libinput_event_keyboard) -> libinput_key_state #foreign libinput_lib;
+libinput_event_keyboard_get_key_state :: (event: *libinput_event_keyboard) -> libinput_key_state #foreign libinput;
 
 /**
 * @ingroup event_keyboard
 *
 * @return The generic libinput_event of this event
 */
-libinput_event_keyboard_get_base_event :: (event: *libinput_event_keyboard) -> *libinput_event #foreign libinput_lib;
+libinput_event_keyboard_get_base_event :: (event: *libinput_event_keyboard) -> *libinput_event #foreign libinput;
 
 /**
 * @ingroup event_keyboard
@@ -972,7 +972,7 @@ libinput_event_keyboard_get_base_event :: (event: *libinput_event_keyboard) -> *
 *
 * @return The seat wide pressed key count for the key of this event
 */
-libinput_event_keyboard_get_seat_key_count :: (event: *libinput_event_keyboard) -> u32 #foreign libinput_lib;
+libinput_event_keyboard_get_seat_key_count :: (event: *libinput_event_keyboard) -> u32 #foreign libinput;
 
 /**
 * @ingroup event_pointer
@@ -982,7 +982,7 @@ libinput_event_keyboard_get_seat_key_count :: (event: *libinput_event_keyboard) 
 *
 * @return The event time for this event
 */
-libinput_event_pointer_get_time :: (event: *libinput_event_pointer) -> u32 #foreign libinput_lib;
+libinput_event_pointer_get_time :: (event: *libinput_event_pointer) -> u32 #foreign libinput;
 
 /**
 * @ingroup event_pointer
@@ -992,7 +992,7 @@ libinput_event_pointer_get_time :: (event: *libinput_event_pointer) -> u32 #fore
 *
 * @return The event time for this event in microseconds
 */
-libinput_event_pointer_get_time_usec :: (event: *libinput_event_pointer) -> u64 #foreign libinput_lib;
+libinput_event_pointer_get_time_usec :: (event: *libinput_event_pointer) -> u64 #foreign libinput;
 
 /**
 * @ingroup event_pointer
@@ -1012,7 +1012,7 @@ libinput_event_pointer_get_time_usec :: (event: *libinput_event_pointer) -> u64 
 *
 * @return The relative x movement since the last event
 */
-libinput_event_pointer_get_dx :: (event: *libinput_event_pointer) -> float64 #foreign libinput_lib;
+libinput_event_pointer_get_dx :: (event: *libinput_event_pointer) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_pointer
@@ -1032,7 +1032,7 @@ libinput_event_pointer_get_dx :: (event: *libinput_event_pointer) -> float64 #fo
 *
 * @return The relative y movement since the last event
 */
-libinput_event_pointer_get_dy :: (event: *libinput_event_pointer) -> float64 #foreign libinput_lib;
+libinput_event_pointer_get_dy :: (event: *libinput_event_pointer) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_pointer
@@ -1055,7 +1055,7 @@ libinput_event_pointer_get_dy :: (event: *libinput_event_pointer) -> float64 #fo
 *
 * @return The unaccelerated relative x movement since the last event
 */
-libinput_event_pointer_get_dx_unaccelerated :: (event: *libinput_event_pointer) -> float64 #foreign libinput_lib;
+libinput_event_pointer_get_dx_unaccelerated :: (event: *libinput_event_pointer) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_pointer
@@ -1078,7 +1078,7 @@ libinput_event_pointer_get_dx_unaccelerated :: (event: *libinput_event_pointer) 
 *
 * @return The unaccelerated relative y movement since the last event
 */
-libinput_event_pointer_get_dy_unaccelerated :: (event: *libinput_event_pointer) -> float64 #foreign libinput_lib;
+libinput_event_pointer_get_dy_unaccelerated :: (event: *libinput_event_pointer) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_pointer
@@ -1095,7 +1095,7 @@ libinput_event_pointer_get_dy_unaccelerated :: (event: *libinput_event_pointer) 
 *
 * @return The current absolute x coordinate
 */
-libinput_event_pointer_get_absolute_x :: (event: *libinput_event_pointer) -> float64 #foreign libinput_lib;
+libinput_event_pointer_get_absolute_x :: (event: *libinput_event_pointer) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_pointer
@@ -1112,7 +1112,7 @@ libinput_event_pointer_get_absolute_x :: (event: *libinput_event_pointer) -> flo
 *
 * @return The current absolute y coordinate
 */
-libinput_event_pointer_get_absolute_y :: (event: *libinput_event_pointer) -> float64 #foreign libinput_lib;
+libinput_event_pointer_get_absolute_y :: (event: *libinput_event_pointer) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_pointer
@@ -1131,7 +1131,7 @@ libinput_event_pointer_get_absolute_y :: (event: *libinput_event_pointer) -> flo
 * @param width The current output screen width
 * @return The current absolute x coordinate transformed to a screen coordinate
 */
-libinput_event_pointer_get_absolute_x_transformed :: (event: *libinput_event_pointer, width: u32) -> float64 #foreign libinput_lib;
+libinput_event_pointer_get_absolute_x_transformed :: (event: *libinput_event_pointer, width: u32) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_pointer
@@ -1150,7 +1150,7 @@ libinput_event_pointer_get_absolute_x_transformed :: (event: *libinput_event_poi
 * @param height The current output screen height
 * @return The current absolute y coordinate transformed to a screen coordinate
 */
-libinput_event_pointer_get_absolute_y_transformed :: (event: *libinput_event_pointer, height: u32) -> float64 #foreign libinput_lib;
+libinput_event_pointer_get_absolute_y_transformed :: (event: *libinput_event_pointer, height: u32) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_pointer
@@ -1164,7 +1164,7 @@ libinput_event_pointer_get_absolute_y_transformed :: (event: *libinput_event_poi
 *
 * @return The button triggering this event
 */
-libinput_event_pointer_get_button :: (event: *libinput_event_pointer) -> u32 #foreign libinput_lib;
+libinput_event_pointer_get_button :: (event: *libinput_event_pointer) -> u32 #foreign libinput;
 
 /**
 * @ingroup event_pointer
@@ -1178,7 +1178,7 @@ libinput_event_pointer_get_button :: (event: *libinput_event_pointer) -> u32 #fo
 *
 * @return The button state triggering this event
 */
-libinput_event_pointer_get_button_state :: (event: *libinput_event_pointer) -> libinput_button_state #foreign libinput_lib;
+libinput_event_pointer_get_button_state :: (event: *libinput_event_pointer) -> libinput_button_state #foreign libinput;
 
 /**
 * @ingroup event_pointer
@@ -1193,7 +1193,7 @@ libinput_event_pointer_get_button_state :: (event: *libinput_event_pointer) -> l
 *
 * @return The seat wide pressed button count for the key of this event
 */
-libinput_event_pointer_get_seat_button_count :: (event: *libinput_event_pointer) -> u32 #foreign libinput_lib;
+libinput_event_pointer_get_seat_button_count :: (event: *libinput_event_pointer) -> u32 #foreign libinput;
 
 /**
 * @ingroup event_pointer
@@ -1217,7 +1217,7 @@ libinput_event_pointer_get_seat_button_count :: (event: *libinput_event_pointer)
 *
 * @return Non-zero if this event contains a value for this axis
 */
-libinput_event_pointer_has_axis :: (event: *libinput_event_pointer, axis: libinput_pointer_axis) -> s32 #foreign libinput_lib;
+libinput_event_pointer_has_axis :: (event: *libinput_event_pointer, axis: libinput_pointer_axis) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_pointer
@@ -1243,7 +1243,7 @@ libinput_event_pointer_has_axis :: (event: *libinput_event_pointer, axis: libinp
 *
 * @see libinput_event_pointer_get_axis_value_discrete
 */
-libinput_event_pointer_get_axis_value :: (event: *libinput_event_pointer, axis: libinput_pointer_axis) -> float64 #foreign libinput_lib;
+libinput_event_pointer_get_axis_value :: (event: *libinput_event_pointer, axis: libinput_pointer_axis) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_pointer
@@ -1291,7 +1291,7 @@ libinput_event_pointer_get_axis_value :: (event: *libinput_event_pointer, axis: 
 *
 * @return The source for this axis event
 */
-libinput_event_pointer_get_axis_source :: (event: *libinput_event_pointer) -> libinput_pointer_axis_source #foreign libinput_lib;
+libinput_event_pointer_get_axis_source :: (event: *libinput_event_pointer) -> libinput_pointer_axis_source #foreign libinput;
 
 /**
 * @ingroup event_pointer
@@ -1318,7 +1318,7 @@ libinput_event_pointer_get_axis_source :: (event: *libinput_event_pointer) -> li
 * @see libinput_event_pointer_get_axis_value
 * @see libinput_event_pointer_get_scroll_value_v120
 */
-libinput_event_pointer_get_axis_value_discrete :: (event: *libinput_event_pointer, axis: libinput_pointer_axis) -> float64 #foreign libinput_lib;
+libinput_event_pointer_get_axis_value_discrete :: (event: *libinput_event_pointer, axis: libinput_pointer_axis) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_pointer
@@ -1368,7 +1368,7 @@ libinput_event_pointer_get_axis_value_discrete :: (event: *libinput_event_pointe
 *
 * @since 1.19
 */
-libinput_event_pointer_get_scroll_value :: (event: *libinput_event_pointer, axis: libinput_pointer_axis) -> float64 #foreign libinput_lib;
+libinput_event_pointer_get_scroll_value :: (event: *libinput_event_pointer, axis: libinput_pointer_axis) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_pointer
@@ -1406,14 +1406,14 @@ libinput_event_pointer_get_scroll_value :: (event: *libinput_event_pointer, axis
 *
 * @since 1.19
 */
-libinput_event_pointer_get_scroll_value_v120 :: (event: *libinput_event_pointer, axis: libinput_pointer_axis) -> float64 #foreign libinput_lib;
+libinput_event_pointer_get_scroll_value_v120 :: (event: *libinput_event_pointer, axis: libinput_pointer_axis) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_pointer
 *
 * @return The generic libinput_event of this event
 */
-libinput_event_pointer_get_base_event :: (event: *libinput_event_pointer) -> *libinput_event #foreign libinput_lib;
+libinput_event_pointer_get_base_event :: (event: *libinput_event_pointer) -> *libinput_event #foreign libinput;
 
 /**
 * @ingroup event_touch
@@ -1423,7 +1423,7 @@ libinput_event_pointer_get_base_event :: (event: *libinput_event_pointer) -> *li
 *
 * @return The event time for this event
 */
-libinput_event_touch_get_time :: (event: *libinput_event_touch) -> u32 #foreign libinput_lib;
+libinput_event_touch_get_time :: (event: *libinput_event_touch) -> u32 #foreign libinput;
 
 /**
 * @ingroup event_touch
@@ -1433,7 +1433,7 @@ libinput_event_touch_get_time :: (event: *libinput_event_touch) -> u32 #foreign 
 *
 * @return The event time for this event in microseconds
 */
-libinput_event_touch_get_time_usec :: (event: *libinput_event_touch) -> u64 #foreign libinput_lib;
+libinput_event_touch_get_time_usec :: (event: *libinput_event_touch) -> u64 #foreign libinput;
 
 /**
 * @ingroup event_touch
@@ -1454,7 +1454,7 @@ libinput_event_touch_get_time_usec :: (event: *libinput_event_touch) -> u64 #for
 *
 * @return The slot of this touch event
 */
-libinput_event_touch_get_slot :: (event: *libinput_event_touch) -> s32 #foreign libinput_lib;
+libinput_event_touch_get_slot :: (event: *libinput_event_touch) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_touch
@@ -1475,7 +1475,7 @@ libinput_event_touch_get_slot :: (event: *libinput_event_touch) -> s32 #foreign 
 *
 * @return The seat slot of the touch event
 */
-libinput_event_touch_get_seat_slot :: (event: *libinput_event_touch) -> s32 #foreign libinput_lib;
+libinput_event_touch_get_seat_slot :: (event: *libinput_event_touch) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_touch
@@ -1494,7 +1494,7 @@ libinput_event_touch_get_seat_slot :: (event: *libinput_event_touch) -> s32 #for
 * @param event The libinput touch event
 * @return The current absolute x coordinate
 */
-libinput_event_touch_get_x :: (event: *libinput_event_touch) -> float64 #foreign libinput_lib;
+libinput_event_touch_get_x :: (event: *libinput_event_touch) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_touch
@@ -1513,7 +1513,7 @@ libinput_event_touch_get_x :: (event: *libinput_event_touch) -> float64 #foreign
 * @param event The libinput touch event
 * @return The current absolute y coordinate
 */
-libinput_event_touch_get_y :: (event: *libinput_event_touch) -> float64 #foreign libinput_lib;
+libinput_event_touch_get_y :: (event: *libinput_event_touch) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_touch
@@ -1532,7 +1532,7 @@ libinput_event_touch_get_y :: (event: *libinput_event_touch) -> float64 #foreign
 * @param width The current output screen width
 * @return The current absolute x coordinate transformed to a screen coordinate
 */
-libinput_event_touch_get_x_transformed :: (event: *libinput_event_touch, width: u32) -> float64 #foreign libinput_lib;
+libinput_event_touch_get_x_transformed :: (event: *libinput_event_touch, width: u32) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_touch
@@ -1551,14 +1551,14 @@ libinput_event_touch_get_x_transformed :: (event: *libinput_event_touch, width: 
 * @param height The current output screen height
 * @return The current absolute y coordinate transformed to a screen coordinate
 */
-libinput_event_touch_get_y_transformed :: (event: *libinput_event_touch, height: u32) -> float64 #foreign libinput_lib;
+libinput_event_touch_get_y_transformed :: (event: *libinput_event_touch, height: u32) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_touch
 *
 * @return The generic libinput_event of this event
 */
-libinput_event_touch_get_base_event :: (event: *libinput_event_touch) -> *libinput_event #foreign libinput_lib;
+libinput_event_touch_get_base_event :: (event: *libinput_event_touch) -> *libinput_event #foreign libinput;
 
 /**
 * @ingroup event_gesture
@@ -1568,7 +1568,7 @@ libinput_event_touch_get_base_event :: (event: *libinput_event_touch) -> *libinp
 *
 * @return The event time for this event
 */
-libinput_event_gesture_get_time :: (event: *libinput_event_gesture) -> u32 #foreign libinput_lib;
+libinput_event_gesture_get_time :: (event: *libinput_event_gesture) -> u32 #foreign libinput;
 
 /**
 * @ingroup event_gesture
@@ -1578,14 +1578,14 @@ libinput_event_gesture_get_time :: (event: *libinput_event_gesture) -> u32 #fore
 *
 * @return The event time for this event in microseconds
 */
-libinput_event_gesture_get_time_usec :: (event: *libinput_event_gesture) -> u64 #foreign libinput_lib;
+libinput_event_gesture_get_time_usec :: (event: *libinput_event_gesture) -> u64 #foreign libinput;
 
 /**
 * @ingroup event_gesture
 *
 * @return The generic libinput_event of this event
 */
-libinput_event_gesture_get_base_event :: (event: *libinput_event_gesture) -> *libinput_event #foreign libinput_lib;
+libinput_event_gesture_get_base_event :: (event: *libinput_event_gesture) -> *libinput_event #foreign libinput;
 
 /**
 * @ingroup event_gesture
@@ -1602,7 +1602,7 @@ libinput_event_gesture_get_base_event :: (event: *libinput_event_gesture) -> *li
 *
 * @return the number of fingers used for a gesture
 */
-libinput_event_gesture_get_finger_count :: (event: *libinput_event_gesture) -> s32 #foreign libinput_lib;
+libinput_event_gesture_get_finger_count :: (event: *libinput_event_gesture) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_gesture
@@ -1618,7 +1618,7 @@ libinput_event_gesture_get_finger_count :: (event: *libinput_event_gesture) -> s
 *
 * @return 0 or 1, with 1 indicating that the gesture was cancelled.
 */
-libinput_event_gesture_get_cancelled :: (event: *libinput_event_gesture) -> s32 #foreign libinput_lib;
+libinput_event_gesture_get_cancelled :: (event: *libinput_event_gesture) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_gesture
@@ -1635,7 +1635,7 @@ libinput_event_gesture_get_cancelled :: (event: *libinput_event_gesture) -> s32 
 *
 * @return the relative x movement since the last event
 */
-libinput_event_gesture_get_dx :: (event: *libinput_event_gesture) -> float64 #foreign libinput_lib;
+libinput_event_gesture_get_dx :: (event: *libinput_event_gesture) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_gesture
@@ -1652,7 +1652,7 @@ libinput_event_gesture_get_dx :: (event: *libinput_event_gesture) -> float64 #fo
 *
 * @return the relative y movement since the last event
 */
-libinput_event_gesture_get_dy :: (event: *libinput_event_gesture) -> float64 #foreign libinput_lib;
+libinput_event_gesture_get_dy :: (event: *libinput_event_gesture) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_gesture
@@ -1672,7 +1672,7 @@ libinput_event_gesture_get_dy :: (event: *libinput_event_gesture) -> float64 #fo
 *
 * @return the unaccelerated relative x movement since the last event
 */
-libinput_event_gesture_get_dx_unaccelerated :: (event: *libinput_event_gesture) -> float64 #foreign libinput_lib;
+libinput_event_gesture_get_dx_unaccelerated :: (event: *libinput_event_gesture) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_gesture
@@ -1692,7 +1692,7 @@ libinput_event_gesture_get_dx_unaccelerated :: (event: *libinput_event_gesture) 
 *
 * @return the unaccelerated relative y movement since the last event
 */
-libinput_event_gesture_get_dy_unaccelerated :: (event: *libinput_event_gesture) -> float64 #foreign libinput_lib;
+libinput_event_gesture_get_dy_unaccelerated :: (event: *libinput_event_gesture) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_gesture
@@ -1720,7 +1720,7 @@ libinput_event_gesture_get_dy_unaccelerated :: (event: *libinput_event_gesture) 
 *
 * @return the absolute scale of a pinch gesture
 */
-libinput_event_gesture_get_scale :: (event: *libinput_event_gesture) -> float64 #foreign libinput_lib;
+libinput_event_gesture_get_scale :: (event: *libinput_event_gesture) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_gesture
@@ -1743,7 +1743,7 @@ libinput_event_gesture_get_scale :: (event: *libinput_event_gesture) -> float64 
 *
 * @return the angle delta since the last event
 */
-libinput_event_gesture_get_angle_delta :: (event: *libinput_event_gesture) -> float64 #foreign libinput_lib;
+libinput_event_gesture_get_angle_delta :: (event: *libinput_event_gesture) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -1752,7 +1752,7 @@ libinput_event_gesture_get_angle_delta :: (event: *libinput_event_gesture) -> fl
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_base_event :: (event: *libinput_event_tablet_tool) -> *libinput_event #foreign libinput_lib;
+libinput_event_tablet_tool_get_base_event :: (event: *libinput_event_tablet_tool) -> *libinput_event #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -1773,7 +1773,7 @@ libinput_event_tablet_tool_get_base_event :: (event: *libinput_event_tablet_tool
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_x_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_event_tablet_tool_x_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -1794,7 +1794,7 @@ libinput_event_tablet_tool_x_has_changed :: (event: *libinput_event_tablet_tool)
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_y_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_event_tablet_tool_y_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -1815,7 +1815,7 @@ libinput_event_tablet_tool_y_has_changed :: (event: *libinput_event_tablet_tool)
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_pressure_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_event_tablet_tool_pressure_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -1838,7 +1838,7 @@ libinput_event_tablet_tool_pressure_has_changed :: (event: *libinput_event_table
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_distance_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_event_tablet_tool_distance_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -1859,7 +1859,7 @@ libinput_event_tablet_tool_distance_has_changed :: (event: *libinput_event_table
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_tilt_x_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_event_tablet_tool_tilt_x_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -1880,7 +1880,7 @@ libinput_event_tablet_tool_tilt_x_has_changed :: (event: *libinput_event_tablet_
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_tilt_y_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_event_tablet_tool_tilt_y_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -1901,7 +1901,7 @@ libinput_event_tablet_tool_tilt_y_has_changed :: (event: *libinput_event_tablet_
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_rotation_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_event_tablet_tool_rotation_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -1922,7 +1922,7 @@ libinput_event_tablet_tool_rotation_has_changed :: (event: *libinput_event_table
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_slider_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_event_tablet_tool_slider_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -1941,7 +1941,7 @@ libinput_event_tablet_tool_slider_has_changed :: (event: *libinput_event_tablet_
 * @param event The libinput tablet tool event
 * @return 1 if the axis was updated or 0 otherwise
 */
-libinput_event_tablet_tool_size_major_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_event_tablet_tool_size_major_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -1960,7 +1960,7 @@ libinput_event_tablet_tool_size_major_has_changed :: (event: *libinput_event_tab
 * @param event The libinput tablet tool event
 * @return 1 if the axis was updated or 0 otherwise
 */
-libinput_event_tablet_tool_size_minor_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_event_tablet_tool_size_minor_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -1981,7 +1981,7 @@ libinput_event_tablet_tool_size_minor_has_changed :: (event: *libinput_event_tab
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_wheel_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_event_tablet_tool_wheel_has_changed :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2003,7 +2003,7 @@ libinput_event_tablet_tool_wheel_has_changed :: (event: *libinput_event_tablet_t
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_x :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput_lib;
+libinput_event_tablet_tool_get_x :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2025,7 +2025,7 @@ libinput_event_tablet_tool_get_x :: (event: *libinput_event_tablet_tool) -> floa
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_y :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput_lib;
+libinput_event_tablet_tool_get_y :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2043,7 +2043,7 @@ libinput_event_tablet_tool_get_y :: (event: *libinput_event_tablet_tool) -> floa
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_dx :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput_lib;
+libinput_event_tablet_tool_get_dx :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2061,7 +2061,7 @@ libinput_event_tablet_tool_get_dx :: (event: *libinput_event_tablet_tool) -> flo
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_dy :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput_lib;
+libinput_event_tablet_tool_get_dy :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2076,7 +2076,7 @@ libinput_event_tablet_tool_get_dy :: (event: *libinput_event_tablet_tool) -> flo
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_pressure :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput_lib;
+libinput_event_tablet_tool_get_pressure :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2091,7 +2091,7 @@ libinput_event_tablet_tool_get_pressure :: (event: *libinput_event_tablet_tool) 
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_distance :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput_lib;
+libinput_event_tablet_tool_get_distance :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2110,7 +2110,7 @@ libinput_event_tablet_tool_get_distance :: (event: *libinput_event_tablet_tool) 
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_tilt_x :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput_lib;
+libinput_event_tablet_tool_get_tilt_x :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2129,7 +2129,7 @@ libinput_event_tablet_tool_get_tilt_x :: (event: *libinput_event_tablet_tool) ->
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_tilt_y :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput_lib;
+libinput_event_tablet_tool_get_tilt_y :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2150,7 +2150,7 @@ libinput_event_tablet_tool_get_tilt_y :: (event: *libinput_event_tablet_tool) ->
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_rotation :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput_lib;
+libinput_event_tablet_tool_get_rotation :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2167,7 +2167,7 @@ libinput_event_tablet_tool_get_rotation :: (event: *libinput_event_tablet_tool) 
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_slider_position :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput_lib;
+libinput_event_tablet_tool_get_slider_position :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2184,7 +2184,7 @@ libinput_event_tablet_tool_get_slider_position :: (event: *libinput_event_tablet
 * @param event The libinput tablet tool event
 * @return The current value of the axis major in mm
 */
-libinput_event_tablet_tool_get_size_major :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput_lib;
+libinput_event_tablet_tool_get_size_major :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2201,7 +2201,7 @@ libinput_event_tablet_tool_get_size_major :: (event: *libinput_event_tablet_tool
 * @param event The libinput tablet tool event
 * @return The current value of the axis minor in mm
 */
-libinput_event_tablet_tool_get_size_minor :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput_lib;
+libinput_event_tablet_tool_get_size_minor :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2213,7 +2213,7 @@ libinput_event_tablet_tool_get_size_minor :: (event: *libinput_event_tablet_tool
 *
 * @see libinput_event_tablet_tool_get_wheel_delta_discrete
 */
-libinput_event_tablet_tool_get_wheel_delta :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput_lib;
+libinput_event_tablet_tool_get_wheel_delta :: (event: *libinput_event_tablet_tool) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2227,7 +2227,7 @@ libinput_event_tablet_tool_get_wheel_delta :: (event: *libinput_event_tablet_too
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_wheel_delta_discrete :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_event_tablet_tool_get_wheel_delta_discrete :: (event: *libinput_event_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2248,7 +2248,7 @@ libinput_event_tablet_tool_get_wheel_delta_discrete :: (event: *libinput_event_t
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_x_transformed :: (event: *libinput_event_tablet_tool, width: u32) -> float64 #foreign libinput_lib;
+libinput_event_tablet_tool_get_x_transformed :: (event: *libinput_event_tablet_tool, width: u32) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2269,7 +2269,7 @@ libinput_event_tablet_tool_get_x_transformed :: (event: *libinput_event_tablet_t
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_y_transformed :: (event: *libinput_event_tablet_tool, height: u32) -> float64 #foreign libinput_lib;
+libinput_event_tablet_tool_get_y_transformed :: (event: *libinput_event_tablet_tool, height: u32) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2293,7 +2293,7 @@ libinput_event_tablet_tool_get_y_transformed :: (event: *libinput_event_tablet_t
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_tool :: (event: *libinput_event_tablet_tool) -> *libinput_tablet_tool #foreign libinput_lib;
+libinput_event_tablet_tool_get_tool :: (event: *libinput_event_tablet_tool) -> *libinput_tablet_tool #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2321,7 +2321,7 @@ libinput_event_tablet_tool_get_tool :: (event: *libinput_event_tablet_tool) -> *
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_proximity_state :: (event: *libinput_event_tablet_tool) -> libinput_tablet_tool_proximity_state #foreign libinput_lib;
+libinput_event_tablet_tool_get_proximity_state :: (event: *libinput_event_tablet_tool) -> libinput_tablet_tool_proximity_state #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2336,7 +2336,7 @@ libinput_event_tablet_tool_get_proximity_state :: (event: *libinput_event_tablet
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_tip_state :: (event: *libinput_event_tablet_tool) -> libinput_tablet_tool_tip_state #foreign libinput_lib;
+libinput_event_tablet_tool_get_tip_state :: (event: *libinput_event_tablet_tool) -> libinput_tablet_tool_tip_state #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2352,7 +2352,7 @@ libinput_event_tablet_tool_get_tip_state :: (event: *libinput_event_tablet_tool)
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_button :: (event: *libinput_event_tablet_tool) -> u32 #foreign libinput_lib;
+libinput_event_tablet_tool_get_button :: (event: *libinput_event_tablet_tool) -> u32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2367,7 +2367,7 @@ libinput_event_tablet_tool_get_button :: (event: *libinput_event_tablet_tool) ->
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_button_state :: (event: *libinput_event_tablet_tool) -> libinput_button_state #foreign libinput_lib;
+libinput_event_tablet_tool_get_button_state :: (event: *libinput_event_tablet_tool) -> libinput_button_state #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2384,7 +2384,7 @@ libinput_event_tablet_tool_get_button_state :: (event: *libinput_event_tablet_to
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_seat_button_count :: (event: *libinput_event_tablet_tool) -> u32 #foreign libinput_lib;
+libinput_event_tablet_tool_get_seat_button_count :: (event: *libinput_event_tablet_tool) -> u32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2397,7 +2397,7 @@ libinput_event_tablet_tool_get_seat_button_count :: (event: *libinput_event_tabl
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_time :: (event: *libinput_event_tablet_tool) -> u32 #foreign libinput_lib;
+libinput_event_tablet_tool_get_time :: (event: *libinput_event_tablet_tool) -> u32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2410,7 +2410,7 @@ libinput_event_tablet_tool_get_time :: (event: *libinput_event_tablet_tool) -> u
 *
 * @since 1.2
 */
-libinput_event_tablet_tool_get_time_usec :: (event: *libinput_event_tablet_tool) -> u64 #foreign libinput_lib;
+libinput_event_tablet_tool_get_time_usec :: (event: *libinput_event_tablet_tool) -> u64 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2435,7 +2435,7 @@ libinput_event_tablet_tool_get_time_usec :: (event: *libinput_event_tablet_tool)
 *
 * @since 1.2
 */
-libinput_tablet_tool_get_type :: (tool: *libinput_tablet_tool) -> libinput_tablet_tool_type #foreign libinput_lib;
+libinput_tablet_tool_get_type :: (tool: *libinput_tablet_tool) -> libinput_tablet_tool_type #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2456,7 +2456,7 @@ libinput_tablet_tool_get_type :: (tool: *libinput_tablet_tool) -> libinput_table
 *
 * @since 1.2
 */
-libinput_tablet_tool_get_tool_id :: (tool: *libinput_tablet_tool) -> u64 #foreign libinput_lib;
+libinput_tablet_tool_get_tool_id :: (tool: *libinput_tablet_tool) -> u64 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2471,7 +2471,7 @@ libinput_tablet_tool_get_tool_id :: (tool: *libinput_tablet_tool) -> u64 #foreig
 *
 * @since 1.2
 */
-libinput_tablet_tool_ref :: (tool: *libinput_tablet_tool) -> *libinput_tablet_tool #foreign libinput_lib;
+libinput_tablet_tool_ref :: (tool: *libinput_tablet_tool) -> *libinput_tablet_tool #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2487,7 +2487,7 @@ libinput_tablet_tool_ref :: (tool: *libinput_tablet_tool) -> *libinput_tablet_to
 *
 * @since 1.2
 */
-libinput_tablet_tool_unref :: (tool: *libinput_tablet_tool) -> *libinput_tablet_tool #foreign libinput_lib;
+libinput_tablet_tool_unref :: (tool: *libinput_tablet_tool) -> *libinput_tablet_tool #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2499,7 +2499,7 @@ libinput_tablet_tool_unref :: (tool: *libinput_tablet_tool) -> *libinput_tablet_
 *
 * @since 1.2
 */
-libinput_tablet_tool_has_pressure :: (tool: *libinput_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_tablet_tool_has_pressure :: (tool: *libinput_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2511,7 +2511,7 @@ libinput_tablet_tool_has_pressure :: (tool: *libinput_tablet_tool) -> s32 #forei
 *
 * @since 1.2
 */
-libinput_tablet_tool_has_distance :: (tool: *libinput_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_tablet_tool_has_distance :: (tool: *libinput_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2523,7 +2523,7 @@ libinput_tablet_tool_has_distance :: (tool: *libinput_tablet_tool) -> s32 #forei
 *
 * @since 1.2
 */
-libinput_tablet_tool_has_tilt :: (tool: *libinput_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_tablet_tool_has_tilt :: (tool: *libinput_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2535,7 +2535,7 @@ libinput_tablet_tool_has_tilt :: (tool: *libinput_tablet_tool) -> s32 #foreign l
 *
 * @since 1.2
 */
-libinput_tablet_tool_has_rotation :: (tool: *libinput_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_tablet_tool_has_rotation :: (tool: *libinput_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2547,7 +2547,7 @@ libinput_tablet_tool_has_rotation :: (tool: *libinput_tablet_tool) -> s32 #forei
 *
 * @since 1.2
 */
-libinput_tablet_tool_has_slider :: (tool: *libinput_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_tablet_tool_has_slider :: (tool: *libinput_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2560,7 +2560,7 @@ libinput_tablet_tool_has_slider :: (tool: *libinput_tablet_tool) -> s32 #foreign
 * @param tool The tool to check the axis capabilities of
 * @return Nonzero if the axis is available, zero otherwise.
 */
-libinput_tablet_tool_has_size :: (tool: *libinput_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_tablet_tool_has_size :: (tool: *libinput_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2572,7 +2572,7 @@ libinput_tablet_tool_has_size :: (tool: *libinput_tablet_tool) -> s32 #foreign l
 *
 * @since 1.2
 */
-libinput_tablet_tool_has_wheel :: (tool: *libinput_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_tablet_tool_has_wheel :: (tool: *libinput_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2587,7 +2587,7 @@ libinput_tablet_tool_has_wheel :: (tool: *libinput_tablet_tool) -> s32 #foreign 
 *
 * @since 1.2
 */
-libinput_tablet_tool_has_button :: (tool: *libinput_tablet_tool, code: u32) -> s32 #foreign libinput_lib;
+libinput_tablet_tool_has_button :: (tool: *libinput_tablet_tool, code: u32) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2605,7 +2605,7 @@ libinput_tablet_tool_has_button :: (tool: *libinput_tablet_tool, code: u32) -> s
 *
 * @since 1.2
 */
-libinput_tablet_tool_is_unique :: (tool: *libinput_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_tablet_tool_is_unique :: (tool: *libinput_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2643,7 +2643,7 @@ libinput_tablet_tool_is_unique :: (tool: *libinput_tablet_tool) -> s32 #foreign 
 *
 * @since 1.2
 */
-libinput_tablet_tool_get_serial :: (tool: *libinput_tablet_tool) -> u64 #foreign libinput_lib;
+libinput_tablet_tool_get_serial :: (tool: *libinput_tablet_tool) -> u64 #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2657,7 +2657,7 @@ libinput_tablet_tool_get_serial :: (tool: *libinput_tablet_tool) -> u64 #foreign
 *
 * @since 1.2
 */
-libinput_tablet_tool_get_user_data :: (tool: *libinput_tablet_tool) -> *void #foreign libinput_lib;
+libinput_tablet_tool_get_user_data :: (tool: *libinput_tablet_tool) -> *void #foreign libinput;
 
 /**
 * @ingroup event_tablet
@@ -2669,7 +2669,7 @@ libinput_tablet_tool_get_user_data :: (tool: *libinput_tablet_tool) -> *void #fo
 *
 * @since 1.2
 */
-libinput_tablet_tool_set_user_data :: (tool: *libinput_tablet_tool, user_data: *void) -> void #foreign libinput_lib;
+libinput_tablet_tool_set_user_data :: (tool: *libinput_tablet_tool, user_data: *void) -> void #foreign libinput;
 
 /**
 * @ingroup event_tablet_pad
@@ -2678,7 +2678,7 @@ libinput_tablet_tool_set_user_data :: (tool: *libinput_tablet_tool, user_data: *
 *
 * @since 1.3
 */
-libinput_event_tablet_pad_get_base_event :: (event: *libinput_event_tablet_pad) -> *libinput_event #foreign libinput_lib;
+libinput_event_tablet_pad_get_base_event :: (event: *libinput_event_tablet_pad) -> *libinput_event #foreign libinput;
 
 /**
 * @ingroup event_tablet_pad
@@ -2702,7 +2702,7 @@ libinput_event_tablet_pad_get_base_event :: (event: *libinput_event_tablet_pad) 
 *
 * @since 1.3
 */
-libinput_event_tablet_pad_get_ring_position :: (event: *libinput_event_tablet_pad) -> float64 #foreign libinput_lib;
+libinput_event_tablet_pad_get_ring_position :: (event: *libinput_event_tablet_pad) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_tablet_pad
@@ -2720,7 +2720,7 @@ libinput_event_tablet_pad_get_ring_position :: (event: *libinput_event_tablet_pa
 *
 * @since 1.3
 */
-libinput_event_tablet_pad_get_ring_number :: (event: *libinput_event_tablet_pad) -> u32 #foreign libinput_lib;
+libinput_event_tablet_pad_get_ring_number :: (event: *libinput_event_tablet_pad) -> u32 #foreign libinput;
 
 /**
 * @ingroup event_tablet_pad
@@ -2738,7 +2738,7 @@ libinput_event_tablet_pad_get_ring_number :: (event: *libinput_event_tablet_pad)
 *
 * @since 1.3
 */
-libinput_event_tablet_pad_get_ring_source :: (event: *libinput_event_tablet_pad) -> libinput_tablet_pad_ring_axis_source #foreign libinput_lib;
+libinput_event_tablet_pad_get_ring_source :: (event: *libinput_event_tablet_pad) -> libinput_tablet_pad_ring_axis_source #foreign libinput;
 
 /**
 * @ingroup event_tablet_pad
@@ -2762,7 +2762,7 @@ libinput_event_tablet_pad_get_ring_source :: (event: *libinput_event_tablet_pad)
 *
 * @since 1.3
 */
-libinput_event_tablet_pad_get_strip_position :: (event: *libinput_event_tablet_pad) -> float64 #foreign libinput_lib;
+libinput_event_tablet_pad_get_strip_position :: (event: *libinput_event_tablet_pad) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_tablet_pad
@@ -2780,7 +2780,7 @@ libinput_event_tablet_pad_get_strip_position :: (event: *libinput_event_tablet_p
 *
 * @since 1.3
 */
-libinput_event_tablet_pad_get_strip_number :: (event: *libinput_event_tablet_pad) -> u32 #foreign libinput_lib;
+libinput_event_tablet_pad_get_strip_number :: (event: *libinput_event_tablet_pad) -> u32 #foreign libinput;
 
 /**
 * @ingroup event_tablet_pad
@@ -2798,7 +2798,7 @@ libinput_event_tablet_pad_get_strip_number :: (event: *libinput_event_tablet_pad
 *
 * @since 1.3
 */
-libinput_event_tablet_pad_get_strip_source :: (event: *libinput_event_tablet_pad) -> libinput_tablet_pad_strip_axis_source #foreign libinput_lib;
+libinput_event_tablet_pad_get_strip_source :: (event: *libinput_event_tablet_pad) -> libinput_tablet_pad_strip_axis_source #foreign libinput;
 
 /**
 * @ingroup event_tablet_pad
@@ -2820,7 +2820,7 @@ libinput_event_tablet_pad_get_strip_source :: (event: *libinput_event_tablet_pad
 *
 * @since 1.3
 */
-libinput_event_tablet_pad_get_button_number :: (event: *libinput_event_tablet_pad) -> u32 #foreign libinput_lib;
+libinput_event_tablet_pad_get_button_number :: (event: *libinput_event_tablet_pad) -> u32 #foreign libinput;
 
 /**
 * @ingroup event_tablet_pad
@@ -2836,7 +2836,7 @@ libinput_event_tablet_pad_get_button_number :: (event: *libinput_event_tablet_pa
 *
 * @since 1.3
 */
-libinput_event_tablet_pad_get_button_state :: (event: *libinput_event_tablet_pad) -> libinput_button_state #foreign libinput_lib;
+libinput_event_tablet_pad_get_button_state :: (event: *libinput_event_tablet_pad) -> libinput_button_state #foreign libinput;
 
 /**
 * @ingroup event_tablet_pad
@@ -2856,7 +2856,7 @@ libinput_event_tablet_pad_get_button_state :: (event: *libinput_event_tablet_pad
 *
 * @since 1.15
 */
-libinput_event_tablet_pad_get_key :: (event: *libinput_event_tablet_pad) -> u32 #foreign libinput_lib;
+libinput_event_tablet_pad_get_key :: (event: *libinput_event_tablet_pad) -> u32 #foreign libinput;
 
 /**
 * @ingroup event_tablet_pad
@@ -2872,7 +2872,7 @@ libinput_event_tablet_pad_get_key :: (event: *libinput_event_tablet_pad) -> u32 
 *
 * @since 1.15
 */
-libinput_event_tablet_pad_get_key_state :: (event: *libinput_event_tablet_pad) -> libinput_key_state #foreign libinput_lib;
+libinput_event_tablet_pad_get_key_state :: (event: *libinput_event_tablet_pad) -> libinput_key_state #foreign libinput;
 
 /**
 * @ingroup event_tablet_pad
@@ -2890,7 +2890,7 @@ libinput_event_tablet_pad_get_key_state :: (event: *libinput_event_tablet_pad) -
 *
 * @since 1.26
 */
-libinput_event_tablet_pad_get_dial_delta_v120 :: (event: *libinput_event_tablet_pad) -> float64 #foreign libinput_lib;
+libinput_event_tablet_pad_get_dial_delta_v120 :: (event: *libinput_event_tablet_pad) -> float64 #foreign libinput;
 
 /**
 * @ingroup event_tablet_pad
@@ -2908,7 +2908,7 @@ libinput_event_tablet_pad_get_dial_delta_v120 :: (event: *libinput_event_tablet_
 *
 * @since 1.26
 */
-libinput_event_tablet_pad_get_dial_number :: (event: *libinput_event_tablet_pad) -> u32 #foreign libinput_lib;
+libinput_event_tablet_pad_get_dial_number :: (event: *libinput_event_tablet_pad) -> u32 #foreign libinput;
 
 /**
 * @ingroup event_tablet_pad
@@ -2942,7 +2942,7 @@ libinput_event_tablet_pad_get_dial_number :: (event: *libinput_event_tablet_pad)
 *
 * @since 1.4
 */
-libinput_event_tablet_pad_get_mode :: (event: *libinput_event_tablet_pad) -> u32 #foreign libinput_lib;
+libinput_event_tablet_pad_get_mode :: (event: *libinput_event_tablet_pad) -> u32 #foreign libinput;
 
 /**
 * @ingroup event_tablet_pad
@@ -2967,7 +2967,7 @@ libinput_event_tablet_pad_get_mode :: (event: *libinput_event_tablet_pad) -> u32
 *
 * @since 1.4
 */
-libinput_event_tablet_pad_get_mode_group :: (event: *libinput_event_tablet_pad) -> *libinput_tablet_pad_mode_group #foreign libinput_lib;
+libinput_event_tablet_pad_get_mode_group :: (event: *libinput_event_tablet_pad) -> *libinput_tablet_pad_mode_group #foreign libinput;
 
 /**
 * @ingroup event_tablet_pad
@@ -2980,7 +2980,7 @@ libinput_event_tablet_pad_get_mode_group :: (event: *libinput_event_tablet_pad) 
 *
 * @since 1.3
 */
-libinput_event_tablet_pad_get_time :: (event: *libinput_event_tablet_pad) -> u32 #foreign libinput_lib;
+libinput_event_tablet_pad_get_time :: (event: *libinput_event_tablet_pad) -> u32 #foreign libinput;
 
 /**
 * @ingroup event_tablet_pad
@@ -2993,7 +2993,7 @@ libinput_event_tablet_pad_get_time :: (event: *libinput_event_tablet_pad) -> u32
 *
 * @since 1.3
 */
-libinput_event_tablet_pad_get_time_usec :: (event: *libinput_event_tablet_pad) -> u64 #foreign libinput_lib;
+libinput_event_tablet_pad_get_time_usec :: (event: *libinput_event_tablet_pad) -> u64 #foreign libinput;
 
 /**
 * @ingroup event_switch
@@ -3010,7 +3010,7 @@ libinput_event_tablet_pad_get_time_usec :: (event: *libinput_event_tablet_pad) -
 *
 * @since 1.7
 */
-libinput_event_switch_get_switch :: (event: *libinput_event_switch) -> libinput_switch #foreign libinput_lib;
+libinput_event_switch_get_switch :: (event: *libinput_event_switch) -> libinput_switch #foreign libinput;
 
 /**
 * @ingroup event_switch
@@ -3027,7 +3027,7 @@ libinput_event_switch_get_switch :: (event: *libinput_event_switch) -> libinput_
 *
 * @since 1.7
 */
-libinput_event_switch_get_switch_state :: (event: *libinput_event_switch) -> libinput_switch_state #foreign libinput_lib;
+libinput_event_switch_get_switch_state :: (event: *libinput_event_switch) -> libinput_switch_state #foreign libinput;
 
 /**
 * @ingroup event_switch
@@ -3036,7 +3036,7 @@ libinput_event_switch_get_switch_state :: (event: *libinput_event_switch) -> lib
 *
 * @since 1.7
 */
-libinput_event_switch_get_base_event :: (event: *libinput_event_switch) -> *libinput_event #foreign libinput_lib;
+libinput_event_switch_get_base_event :: (event: *libinput_event_switch) -> *libinput_event #foreign libinput;
 
 /**
 * @ingroup event_switch
@@ -3049,7 +3049,7 @@ libinput_event_switch_get_base_event :: (event: *libinput_event_switch) -> *libi
 *
 * @since 1.7
 */
-libinput_event_switch_get_time :: (event: *libinput_event_switch) -> u32 #foreign libinput_lib;
+libinput_event_switch_get_time :: (event: *libinput_event_switch) -> u32 #foreign libinput;
 
 /**
 * @ingroup event_switch
@@ -3062,7 +3062,7 @@ libinput_event_switch_get_time :: (event: *libinput_event_switch) -> u32 #foreig
 *
 * @since 1.7
 */
-libinput_event_switch_get_time_usec :: (event: *libinput_event_switch) -> u64 #foreign libinput_lib;
+libinput_event_switch_get_time_usec :: (event: *libinput_event_switch) -> u64 #foreign libinput;
 
 /**
 * @ingroup base
@@ -3112,7 +3112,7 @@ libinput_interface :: struct {
 *
 * @return An initialized, but inactive libinput context or NULL on error
 */
-libinput_udev_create_context :: (interface_: *libinput_interface, user_data: *void, udev_: *udev) -> *libinput #foreign libinput_lib;
+libinput_udev_create_context :: (interface_: *libinput_interface, user_data: *void, udev: *udev_context) -> *libinput_context #foreign libinput;
 
 /**
 * @ingroup base
@@ -3135,7 +3135,7 @@ libinput_udev_create_context :: (interface_: *libinput_interface, user_data: *vo
 *
 * @return 0 on success or -1 on failure.
 */
-libinput_udev_assign_seat :: (libinput_: *libinput, seat_id: *u8) -> s32 #foreign libinput_lib;
+libinput_udev_assign_seat :: (libinput: *libinput_context, seat_id: *u8) -> s32 #foreign libinput;
 
 /**
 * @ingroup base
@@ -3156,7 +3156,7 @@ libinput_udev_assign_seat :: (libinput_: *libinput, seat_id: *u8) -> s32 #foreig
 *
 * @return An initialized, empty libinput context.
 */
-libinput_path_create_context :: (interface_: *libinput_interface, user_data: *void) -> *libinput #foreign libinput_lib;
+libinput_path_create_context :: (interface_: *libinput_interface, user_data: *void) -> *libinput_context #foreign libinput;
 
 /**
 * @ingroup base
@@ -3178,7 +3178,7 @@ libinput_path_create_context :: (interface_: *libinput_interface, user_data: *vo
 * @note It is an application bug to call this function on a libinput
 * context initialized with libinput_udev_create_context().
 */
-libinput_path_add_device :: (libinput_: *libinput, path: *u8) -> *libinput_device #foreign libinput_lib;
+libinput_path_add_device :: (libinput: *libinput_context, path: *u8) -> *libinput_device #foreign libinput;
 
 /**
 * @ingroup base
@@ -3198,7 +3198,7 @@ libinput_path_add_device :: (libinput_: *libinput, path: *u8) -> *libinput_devic
 * @note It is an application bug to call this function on a libinput
 * context initialized with libinput_udev_create_context().
 */
-libinput_path_remove_device :: (device: *libinput_device) -> void #foreign libinput_lib;
+libinput_path_remove_device :: (device: *libinput_device) -> void #foreign libinput;
 
 /**
 * @ingroup base
@@ -3208,7 +3208,7 @@ libinput_path_remove_device :: (device: *libinput_device) -> void #foreign libin
 *
 * @return The file descriptor used to notify of pending events.
 */
-libinput_get_fd :: (libinput_: *libinput) -> s32 #foreign libinput_lib;
+libinput_get_fd :: (libinput: *libinput_context) -> s32 #foreign libinput;
 
 /**
 * @ingroup base
@@ -3227,7 +3227,7 @@ libinput_get_fd :: (libinput_: *libinput) -> s32 #foreign libinput_lib;
 *
 * @return 0 on success, or a negative errno on failure
 */
-libinput_dispatch :: (libinput_: *libinput) -> s32 #foreign libinput_lib;
+libinput_dispatch :: (libinput: *libinput_context) -> s32 #foreign libinput;
 
 /**
 * @ingroup base
@@ -3240,7 +3240,7 @@ libinput_dispatch :: (libinput_: *libinput) -> s32 #foreign libinput_lib;
 * @param libinput A previously initialized libinput context
 * @return The next available event, or NULL if no event is available.
 */
-libinput_get_event :: (libinput_: *libinput) -> *libinput_event #foreign libinput_lib;
+libinput_get_event :: (libinput: *libinput_context) -> *libinput_event #foreign libinput;
 
 /**
 * @ingroup base
@@ -3253,7 +3253,7 @@ libinput_get_event :: (libinput_: *libinput) -> *libinput_event #foreign libinpu
 * @return The event type of the next available event or @ref
 * LIBINPUT_EVENT_NONE if no event is available.
 */
-libinput_next_event_type :: (libinput_: *libinput) -> libinput_event_type #foreign libinput_lib;
+libinput_next_event_type :: (libinput: *libinput_context) -> libinput_event_type #foreign libinput;
 
 /**
 * @ingroup base
@@ -3266,7 +3266,7 @@ libinput_next_event_type :: (libinput_: *libinput) -> libinput_event_type #forei
 * @param user_data Caller-specific data passed to the various callback
 * interfaces.
 */
-libinput_set_user_data :: (libinput_: *libinput, user_data: *void) -> void #foreign libinput_lib;
+libinput_set_user_data :: (libinput: *libinput_context, user_data: *void) -> void #foreign libinput;
 
 /**
 * @ingroup base
@@ -3278,7 +3278,7 @@ libinput_set_user_data :: (libinput_: *libinput, user_data: *void) -> void #fore
 * libinput_set_user_data(), libinput_path_create_context() or
 * libinput_udev_create_context().
 */
-libinput_get_user_data :: (libinput_: *libinput) -> *void #foreign libinput_lib;
+libinput_get_user_data :: (libinput: *libinput_context) -> *void #foreign libinput;
 
 /**
 * @ingroup base
@@ -3291,7 +3291,7 @@ libinput_get_user_data :: (libinput_: *libinput) -> *void #foreign libinput_lib;
 *
 * @return 0 on success or -1 on failure
 */
-libinput_resume :: (libinput_: *libinput) -> s32 #foreign libinput_lib;
+libinput_resume :: (libinput: *libinput_context) -> s32 #foreign libinput;
 
 /**
 * @ingroup base
@@ -3302,7 +3302,7 @@ libinput_resume :: (libinput_: *libinput) -> s32 #foreign libinput_lib;
 *
 * @param libinput A previously initialized libinput context
 */
-libinput_suspend :: (libinput_: *libinput) -> void #foreign libinput_lib;
+libinput_suspend :: (libinput: *libinput_context) -> void #foreign libinput;
 
 /**
 * @ingroup base
@@ -3313,7 +3313,7 @@ libinput_suspend :: (libinput_: *libinput) -> void #foreign libinput_lib;
 * @param libinput A previously initialized valid libinput context
 * @return The passed libinput context
 */
-libinput_ref :: (libinput_: *libinput) -> *libinput #foreign libinput_lib;
+libinput_ref :: (libinput: *libinput_context) -> *libinput_context #foreign libinput;
 
 /**
 * @ingroup base
@@ -3346,7 +3346,7 @@ libinput_ref :: (libinput_: *libinput) -> *libinput #foreign libinput_lib;
 * @param libinput A previously initialized libinput context
 * @return NULL if context was destroyed otherwise the passed context
 */
-libinput_unref :: (libinput_: *libinput) -> *libinput #foreign libinput_lib;
+libinput_unref :: (libinput: *libinput_context) -> *libinput_context #foreign libinput;
 
 /**
 * @ingroup base
@@ -3363,7 +3363,7 @@ libinput_unref :: (libinput_: *libinput) -> *libinput #foreign libinput_lib;
 * @see libinput_log_set_handler
 * @see libinput_log_get_priority
 */
-libinput_log_set_priority :: (libinput_: *libinput, priority: libinput_log_priority) -> void #foreign libinput_lib;
+libinput_log_set_priority :: (libinput: *libinput_context, priority: libinput_log_priority) -> void #foreign libinput;
 
 /**
 * @ingroup base
@@ -3379,7 +3379,7 @@ libinput_log_set_priority :: (libinput_: *libinput, priority: libinput_log_prior
 * @see libinput_log_set_handler
 * @see libinput_log_set_priority
 */
-libinput_log_get_priority :: (libinput_: *libinput) -> libinput_log_priority #foreign libinput_lib;
+libinput_log_get_priority :: (libinput: *libinput_context) -> libinput_log_priority #foreign libinput;
 
 /**
 * @ingroup base
@@ -3412,7 +3412,7 @@ libinput_log_handler :: *void /* function type contained C va_list argument */;
 * @see libinput_log_set_priority
 * @see libinput_log_get_priority
 */
-libinput_log_set_handler :: (libinput_: *libinput, log_handler: libinput_log_handler) -> void #foreign libinput_lib;
+libinput_log_set_handler :: (libinput: *libinput_context, log_handler: libinput_log_handler) -> void #foreign libinput;
 
 /**
 * @ingroup seat
@@ -3425,7 +3425,7 @@ libinput_log_set_handler :: (libinput_: *libinput, log_handler: libinput_log_han
 * @param seat A previously obtained seat
 * @return The passed seat
 */
-libinput_seat_ref :: (seat: *libinput_seat) -> *libinput_seat #foreign libinput_lib;
+libinput_seat_ref :: (seat: *libinput_seat) -> *libinput_seat #foreign libinput;
 
 /**
 * @ingroup seat
@@ -3438,7 +3438,7 @@ libinput_seat_ref :: (seat: *libinput_seat) -> *libinput_seat #foreign libinput_
 * @param seat A previously obtained seat
 * @return NULL if seat was destroyed, otherwise the passed seat
 */
-libinput_seat_unref :: (seat: *libinput_seat) -> *libinput_seat #foreign libinput_lib;
+libinput_seat_unref :: (seat: *libinput_seat) -> *libinput_seat #foreign libinput;
 
 /**
 * @ingroup seat
@@ -3451,7 +3451,7 @@ libinput_seat_unref :: (seat: *libinput_seat) -> *libinput_seat #foreign libinpu
 * @param user_data Caller-specific data pointer
 * @see libinput_seat_get_user_data
 */
-libinput_seat_set_user_data :: (seat: *libinput_seat, user_data: *void) -> void #foreign libinput_lib;
+libinput_seat_set_user_data :: (seat: *libinput_seat, user_data: *void) -> void #foreign libinput;
 
 /**
 * @ingroup seat
@@ -3462,7 +3462,7 @@ libinput_seat_set_user_data :: (seat: *libinput_seat, user_data: *void) -> void 
 * @return Caller-specific data pointer or NULL if none was set
 * @see libinput_seat_set_user_data
 */
-libinput_seat_get_user_data :: (seat: *libinput_seat) -> *void #foreign libinput_lib;
+libinput_seat_get_user_data :: (seat: *libinput_seat) -> *void #foreign libinput;
 
 /**
 * @ingroup seat
@@ -3472,7 +3472,7 @@ libinput_seat_get_user_data :: (seat: *libinput_seat) -> *void #foreign libinput
 * @param seat A previously obtained seat
 * @return The libinput context for this seat.
 */
-libinput_seat_get_context :: (seat: *libinput_seat) -> *libinput #foreign libinput_lib;
+libinput_seat_get_context :: (seat: *libinput_seat) -> *libinput_context #foreign libinput;
 
 /**
 * @ingroup seat
@@ -3490,7 +3490,7 @@ libinput_seat_get_context :: (seat: *libinput_seat) -> *libinput #foreign libinp
 * @param seat A previously obtained seat
 * @return The physical name of this seat
 */
-libinput_seat_get_physical_name :: (seat: *libinput_seat) -> *u8 #foreign libinput_lib;
+libinput_seat_get_physical_name :: (seat: *libinput_seat) -> *u8 #foreign libinput;
 
 /**
 * @ingroup seat
@@ -3501,7 +3501,7 @@ libinput_seat_get_physical_name :: (seat: *libinput_seat) -> *u8 #foreign libinp
 * @param seat A previously obtained seat
 * @return The logical name of this seat
 */
-libinput_seat_get_logical_name :: (seat: *libinput_seat) -> *u8 #foreign libinput_lib;
+libinput_seat_get_logical_name :: (seat: *libinput_seat) -> *u8 #foreign libinput;
 
 /**
 * @ingroup device
@@ -3514,7 +3514,7 @@ libinput_seat_get_logical_name :: (seat: *libinput_seat) -> *u8 #foreign libinpu
 * @param device A previously obtained device
 * @return The passed device
 */
-libinput_device_ref :: (device: *libinput_device) -> *libinput_device #foreign libinput_lib;
+libinput_device_ref :: (device: *libinput_device) -> *libinput_device #foreign libinput;
 
 /**
 * @ingroup device
@@ -3527,7 +3527,7 @@ libinput_device_ref :: (device: *libinput_device) -> *libinput_device #foreign l
 * @param device A previously obtained device
 * @return NULL if the device was destroyed, otherwise the passed device
 */
-libinput_device_unref :: (device: *libinput_device) -> *libinput_device #foreign libinput_lib;
+libinput_device_unref :: (device: *libinput_device) -> *libinput_device #foreign libinput;
 
 /**
 * @ingroup device
@@ -3540,7 +3540,7 @@ libinput_device_unref :: (device: *libinput_device) -> *libinput_device #foreign
 * @param user_data Caller-specific data pointer
 * @see libinput_device_get_user_data
 */
-libinput_device_set_user_data :: (device: *libinput_device, user_data: *void) -> void #foreign libinput_lib;
+libinput_device_set_user_data :: (device: *libinput_device, user_data: *void) -> void #foreign libinput;
 
 /**
 * @ingroup device
@@ -3551,7 +3551,7 @@ libinput_device_set_user_data :: (device: *libinput_device, user_data: *void) ->
 * @return Caller-specific data pointer or NULL if none was set
 * @see libinput_device_set_user_data
 */
-libinput_device_get_user_data :: (device: *libinput_device) -> *void #foreign libinput_lib;
+libinput_device_get_user_data :: (device: *libinput_device) -> *void #foreign libinput;
 
 /**
 * @ingroup device
@@ -3561,7 +3561,7 @@ libinput_device_get_user_data :: (device: *libinput_device) -> *void #foreign li
 * @param device A previously obtained device
 * @return The libinput context for this device.
 */
-libinput_device_get_context :: (device: *libinput_device) -> *libinput #foreign libinput_lib;
+libinput_device_get_context :: (device: *libinput_device) -> *libinput_context #foreign libinput;
 
 /**
 * @ingroup device
@@ -3623,7 +3623,7 @@ libinput_device_get_context :: (device: *libinput_device) -> *libinput #foreign 
 *
 * @return The device group this device belongs to
 */
-libinput_device_get_device_group :: (device: *libinput_device) -> *libinput_device_group #foreign libinput_lib;
+libinput_device_get_device_group :: (device: *libinput_device) -> *libinput_device_group #foreign libinput;
 
 /**
 * @ingroup device
@@ -3636,7 +3636,7 @@ libinput_device_get_device_group :: (device: *libinput_device) -> *libinput_devi
 * @return System name of the device
 *
 */
-libinput_device_get_sysname :: (device: *libinput_device) -> *u8 #foreign libinput_lib;
+libinput_device_get_sysname :: (device: *libinput_device) -> *u8 #foreign libinput;
 
 /**
 * @ingroup device
@@ -3651,7 +3651,7 @@ libinput_device_get_sysname :: (device: *libinput_device) -> *u8 #foreign libinp
 * @param device A previously obtained device
 * @return The device name
 */
-libinput_device_get_name :: (device: *libinput_device) -> *u8 #foreign libinput_lib;
+libinput_device_get_name :: (device: *libinput_device) -> *u8 #foreign libinput;
 
 /**
 * @ingroup device
@@ -3663,7 +3663,7 @@ libinput_device_get_name :: (device: *libinput_device) -> *u8 #foreign libinput_
 *
 * @since 1.26
 */
-libinput_device_get_id_bustype :: (device: *libinput_device) -> u32 #foreign libinput_lib;
+libinput_device_get_id_bustype :: (device: *libinput_device) -> u32 #foreign libinput;
 
 /**
 * @ingroup device
@@ -3673,7 +3673,7 @@ libinput_device_get_id_bustype :: (device: *libinput_device) -> u32 #foreign lib
 * @param device A previously obtained device
 * @return The product ID of this device
 */
-libinput_device_get_id_product :: (device: *libinput_device) -> u32 #foreign libinput_lib;
+libinput_device_get_id_product :: (device: *libinput_device) -> u32 #foreign libinput;
 
 /**
 * @ingroup device
@@ -3683,7 +3683,7 @@ libinput_device_get_id_product :: (device: *libinput_device) -> u32 #foreign lib
 * @param device A previously obtained device
 * @return The vendor ID of this device
 */
-libinput_device_get_id_vendor :: (device: *libinput_device) -> u32 #foreign libinput_lib;
+libinput_device_get_id_vendor :: (device: *libinput_device) -> u32 #foreign libinput;
 
 /**
 * @ingroup device
@@ -3704,7 +3704,7 @@ libinput_device_get_id_vendor :: (device: *libinput_device) -> u32 #foreign libi
 * @return The name of the output this device is mapped to, or NULL if no
 * output is set
 */
-libinput_device_get_output_name :: (device: *libinput_device) -> *u8 #foreign libinput_lib;
+libinput_device_get_output_name :: (device: *libinput_device) -> *u8 #foreign libinput;
 
 /**
 * @ingroup device
@@ -3726,7 +3726,7 @@ libinput_device_get_output_name :: (device: *libinput_device) -> *u8 #foreign li
 * @param device A previously obtained device
 * @return The seat this input device belongs to
 */
-libinput_device_get_seat :: (device: *libinput_device) -> *libinput_seat #foreign libinput_lib;
+libinput_device_get_seat :: (device: *libinput_device) -> *libinput_seat #foreign libinput;
 
 /**
 * @ingroup device
@@ -3753,7 +3753,7 @@ libinput_device_get_seat :: (device: *libinput_device) -> *libinput_seat #foreig
 * @param name The new logical seat name
 * @return 0 on success, non-zero on error
 */
-libinput_device_set_seat_logical_name :: (device: *libinput_device, name: *u8) -> s32 #foreign libinput_lib;
+libinput_device_set_seat_logical_name :: (device: *libinput_device, name: *u8) -> s32 #foreign libinput;
 
 /**
 * @ingroup device
@@ -3774,7 +3774,7 @@ libinput_device_set_seat_logical_name :: (device: *libinput_device, name: *u8) -
 * @return A udev handle to the device with a refcount of >= 1 or NULL.
 * @retval NULL This device is not represented by a udev device
 */
-libinput_device_get_udev_device :: (device: *libinput_device) -> *udev_device #foreign libinput_lib;
+libinput_device_get_udev_device :: (device: *libinput_device) -> *udev_device #foreign libinput;
 
 /**
 * @ingroup device
@@ -3786,7 +3786,7 @@ libinput_device_get_udev_device :: (device: *libinput_device) -> *udev_device #f
 * @param device A previously obtained device
 * @param leds A mask of the LEDs to set, or unset.
 */
-libinput_device_led_update :: (device: *libinput_device, leds: libinput_led) -> void #foreign libinput_lib;
+libinput_device_led_update :: (device: *libinput_device, leds: libinput_led) -> void #foreign libinput;
 
 /**
 * @ingroup device
@@ -3795,7 +3795,7 @@ libinput_device_led_update :: (device: *libinput_device, leds: libinput_led) -> 
 *
 * @return Non-zero if the given device has the capability or zero otherwise
 */
-libinput_device_has_capability :: (device: *libinput_device, capability: libinput_device_capability) -> s32 #foreign libinput_lib;
+libinput_device_has_capability :: (device: *libinput_device, capability: libinput_device_capability) -> s32 #foreign libinput;
 
 /**
 * @ingroup device
@@ -3811,7 +3811,7 @@ libinput_device_has_capability :: (device: *libinput_device, capability: libinpu
 * @param height Set to the height of the device
 * @return 0 on success, or nonzero otherwise
 */
-libinput_device_get_size :: (device: *libinput_device, width: *float64, height: *float64) -> s32 #foreign libinput_lib;
+libinput_device_get_size :: (device: *libinput_device, width: *float64, height: *float64) -> s32 #foreign libinput;
 
 /**
 * @ingroup device
@@ -3825,7 +3825,7 @@ libinput_device_get_size :: (device: *libinput_device, width: *float64, height: 
 * @return 1 if the device supports this button code, 0 if it does not, -1
 * on error.
 */
-libinput_device_pointer_has_button :: (device: *libinput_device, code: u32) -> s32 #foreign libinput_lib;
+libinput_device_pointer_has_button :: (device: *libinput_device, code: u32) -> s32 #foreign libinput;
 
 /**
 * @ingroup device
@@ -3839,7 +3839,7 @@ libinput_device_pointer_has_button :: (device: *libinput_device, code: u32) -> s
 * @return 1 if the device supports this key code, 0 if it does not, -1
 * on error.
 */
-libinput_device_keyboard_has_key :: (device: *libinput_device, code: u32) -> s32 #foreign libinput_lib;
+libinput_device_keyboard_has_key :: (device: *libinput_device, code: u32) -> s32 #foreign libinput;
 
 /**
 * @ingroup device
@@ -3854,7 +3854,7 @@ libinput_device_keyboard_has_key :: (device: *libinput_device, code: u32) -> s32
 *
 * @since 1.11
 */
-libinput_device_touch_get_touch_count :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_touch_get_touch_count :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup device
@@ -3870,7 +3870,7 @@ libinput_device_touch_get_touch_count :: (device: *libinput_device) -> s32 #fore
 *
 * @since 1.9
 */
-libinput_device_switch_has_switch :: (device: *libinput_device, sw: libinput_switch) -> s32 #foreign libinput_lib;
+libinput_device_switch_has_switch :: (device: *libinput_device, sw: libinput_switch) -> s32 #foreign libinput;
 
 /**
 * @ingroup device
@@ -3886,7 +3886,7 @@ libinput_device_switch_has_switch :: (device: *libinput_device, sw: libinput_swi
 *
 * @since 1.3
 */
-libinput_device_tablet_pad_get_num_buttons :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_tablet_pad_get_num_buttons :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup device
@@ -3902,7 +3902,7 @@ libinput_device_tablet_pad_get_num_buttons :: (device: *libinput_device) -> s32 
 *
 * @since 1.26
 */
-libinput_device_tablet_pad_get_num_dials :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_tablet_pad_get_num_dials :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup device
@@ -3918,7 +3918,7 @@ libinput_device_tablet_pad_get_num_dials :: (device: *libinput_device) -> s32 #f
 *
 * @since 1.3
 */
-libinput_device_tablet_pad_get_num_rings :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_tablet_pad_get_num_rings :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup device
@@ -3934,7 +3934,7 @@ libinput_device_tablet_pad_get_num_rings :: (device: *libinput_device) -> s32 #f
 *
 * @since 1.3
 */
-libinput_device_tablet_pad_get_num_strips :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_tablet_pad_get_num_strips :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup device
@@ -3950,7 +3950,7 @@ libinput_device_tablet_pad_get_num_strips :: (device: *libinput_device) -> s32 #
 *
 * @since 1.15
 */
-libinput_device_tablet_pad_has_key :: (device: *libinput_device, code: u32) -> s32 #foreign libinput_lib;
+libinput_device_tablet_pad_has_key :: (device: *libinput_device, code: u32) -> s32 #foreign libinput;
 
 /**
 * @ingroup device
@@ -3964,7 +3964,7 @@ libinput_device_tablet_pad_has_key :: (device: *libinput_device, code: u32) -> s
 * @param group A previously obtained device group
 * @return The passed device group
 */
-libinput_device_group_ref :: (group: *libinput_device_group) -> *libinput_device_group #foreign libinput_lib;
+libinput_device_group_ref :: (group: *libinput_device_group) -> *libinput_device_group #foreign libinput;
 
 /**
 * @ingroup device
@@ -3979,7 +3979,7 @@ libinput_device_group_ref :: (group: *libinput_device_group) -> *libinput_device
 * @return NULL if the device group was destroyed, otherwise the passed
 * device group
 */
-libinput_device_group_unref :: (group: *libinput_device_group) -> *libinput_device_group #foreign libinput_lib;
+libinput_device_group_unref :: (group: *libinput_device_group) -> *libinput_device_group #foreign libinput;
 
 /**
 * @ingroup device
@@ -3992,7 +3992,7 @@ libinput_device_group_unref :: (group: *libinput_device_group) -> *libinput_devi
 * @param user_data Caller-specific data pointer
 * @see libinput_device_group_get_user_data
 */
-libinput_device_group_set_user_data :: (group: *libinput_device_group, user_data: *void) -> void #foreign libinput_lib;
+libinput_device_group_set_user_data :: (group: *libinput_device_group, user_data: *void) -> void #foreign libinput;
 
 /**
 * @ingroup device
@@ -4004,7 +4004,7 @@ libinput_device_group_set_user_data :: (group: *libinput_device_group, user_data
 * @return Caller-specific data pointer or NULL if none was set
 * @see libinput_device_group_set_user_data
 */
-libinput_device_group_get_user_data :: (group: *libinput_device_group) -> *void #foreign libinput_lib;
+libinput_device_group_get_user_data :: (group: *libinput_device_group) -> *void #foreign libinput;
 
 /**
 * @ingroup config
@@ -4030,7 +4030,7 @@ libinput_config_status :: enum u32 {
 * @return A human-readable string representing the error or NULL for an
 * invalid status.
 */
-libinput_config_status_to_str :: (status: libinput_config_status) -> *u8 #foreign libinput_lib;
+libinput_config_status_to_str :: (status: libinput_config_status) -> *u8 #foreign libinput;
 
 /**
 * @ingroup config
@@ -4058,7 +4058,7 @@ libinput_config_tap_state :: enum u32 {
 * @see libinput_device_config_tap_get_enabled
 * @see libinput_device_config_tap_get_default_enabled
 */
-libinput_device_config_tap_get_finger_count :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_config_tap_get_finger_count :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -4080,7 +4080,7 @@ libinput_device_config_tap_get_finger_count :: (device: *libinput_device) -> s32
 * @see libinput_device_config_tap_get_enabled
 * @see libinput_device_config_tap_get_default_enabled
 */
-libinput_device_config_tap_set_enabled :: (device: *libinput_device, enable: libinput_config_tap_state) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_tap_set_enabled :: (device: *libinput_device, enable: libinput_config_tap_state) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -4098,7 +4098,7 @@ libinput_device_config_tap_set_enabled :: (device: *libinput_device, enable: lib
 * @see libinput_device_config_tap_set_enabled
 * @see libinput_device_config_tap_get_default_enabled
 */
-libinput_device_config_tap_get_enabled :: (device: *libinput_device) -> libinput_config_tap_state #foreign libinput_lib;
+libinput_device_config_tap_get_enabled :: (device: *libinput_device) -> libinput_config_tap_state #foreign libinput;
 
 /**
 * @ingroup config
@@ -4114,7 +4114,7 @@ libinput_device_config_tap_get_enabled :: (device: *libinput_device) -> libinput
 * @see libinput_device_config_tap_set_enabled
 * @see libinput_device_config_tap_get_enabled
 */
-libinput_device_config_tap_get_default_enabled :: (device: *libinput_device) -> libinput_config_tap_state #foreign libinput_lib;
+libinput_device_config_tap_get_default_enabled :: (device: *libinput_device) -> libinput_config_tap_state #foreign libinput;
 
 /**
 * @ingroup config
@@ -4170,7 +4170,7 @@ libinput_config_clickfinger_button_map :: enum u32 {
 *
 * @since 1.5
 */
-libinput_device_config_tap_set_button_map :: (device: *libinput_device, map: libinput_config_tap_button_map) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_tap_set_button_map :: (device: *libinput_device, map: libinput_config_tap_button_map) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -4191,7 +4191,7 @@ libinput_device_config_tap_set_button_map :: (device: *libinput_device, map: lib
 *
 * @since 1.5
 */
-libinput_device_config_tap_get_button_map :: (device: *libinput_device) -> libinput_config_tap_button_map #foreign libinput_lib;
+libinput_device_config_tap_get_button_map :: (device: *libinput_device) -> libinput_config_tap_button_map #foreign libinput;
 
 /**
 * @ingroup config
@@ -4212,7 +4212,7 @@ libinput_device_config_tap_get_button_map :: (device: *libinput_device) -> libin
 *
 * @since 1.5
 */
-libinput_device_config_tap_get_default_button_map :: (device: *libinput_device) -> libinput_config_tap_button_map #foreign libinput_lib;
+libinput_device_config_tap_get_default_button_map :: (device: *libinput_device) -> libinput_config_tap_button_map #foreign libinput;
 
 /**
 * @ingroup config
@@ -4248,7 +4248,7 @@ libinput_config_drag_state :: enum u32 {
 *
 * @since 1.2
 */
-libinput_device_config_tap_set_drag_enabled :: (device: *libinput_device, enable: libinput_config_drag_state) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_tap_set_drag_enabled :: (device: *libinput_device, enable: libinput_config_drag_state) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -4265,7 +4265,7 @@ libinput_device_config_tap_set_drag_enabled :: (device: *libinput_device, enable
 *
 * @since 1.2
 */
-libinput_device_config_tap_get_drag_enabled :: (device: *libinput_device) -> libinput_config_drag_state #foreign libinput_lib;
+libinput_device_config_tap_get_drag_enabled :: (device: *libinput_device) -> libinput_config_drag_state #foreign libinput;
 
 /**
 * @ingroup config
@@ -4284,7 +4284,7 @@ libinput_device_config_tap_get_drag_enabled :: (device: *libinput_device) -> lib
 *
 * @since 1.2
 */
-libinput_device_config_tap_get_default_drag_enabled :: (device: *libinput_device) -> libinput_config_drag_state #foreign libinput_lib;
+libinput_device_config_tap_get_default_drag_enabled :: (device: *libinput_device) -> libinput_config_drag_state #foreign libinput;
 
 /**
 * @ingroup config
@@ -4326,7 +4326,7 @@ libinput_config_drag_lock_state :: enum u32 {
 * @see libinput_device_config_tap_get_drag_lock_enabled
 * @see libinput_device_config_tap_get_default_drag_lock_enabled
 */
-libinput_device_config_tap_set_drag_lock_enabled :: (device: *libinput_device, enable: libinput_config_drag_lock_state) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_tap_set_drag_lock_enabled :: (device: *libinput_device, enable: libinput_config_drag_lock_state) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -4348,7 +4348,7 @@ libinput_device_config_tap_set_drag_lock_enabled :: (device: *libinput_device, e
 * @see libinput_device_config_tap_set_drag_lock_enabled
 * @see libinput_device_config_tap_get_default_drag_lock_enabled
 */
-libinput_device_config_tap_get_drag_lock_enabled :: (device: *libinput_device) -> libinput_config_drag_lock_state #foreign libinput_lib;
+libinput_device_config_tap_get_drag_lock_enabled :: (device: *libinput_device) -> libinput_config_drag_lock_state #foreign libinput;
 
 /**
 * @ingroup config
@@ -4372,7 +4372,7 @@ libinput_device_config_tap_get_drag_lock_enabled :: (device: *libinput_device) -
 * @see libinput_device_config_tap_set_drag_lock_enabled
 * @see libinput_device_config_tap_get_drag_lock_enabled
 */
-libinput_device_config_tap_get_default_drag_lock_enabled :: (device: *libinput_device) -> libinput_config_drag_lock_state #foreign libinput_lib;
+libinput_device_config_tap_get_default_drag_lock_enabled :: (device: *libinput_device) -> libinput_config_drag_lock_state #foreign libinput;
 
 /**
 * @ingroup config
@@ -4386,7 +4386,7 @@ libinput_device_config_tap_get_default_drag_lock_enabled :: (device: *libinput_d
 * @see libinput_device_config_calibration_get_matrix
 * @see libinput_device_config_calibration_get_default_matrix
 */
-libinput_device_config_calibration_has_matrix :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_config_calibration_has_matrix :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -4437,7 +4437,7 @@ libinput_device_config_calibration_has_matrix :: (device: *libinput_device) -> s
 * @see libinput_device_config_calibration_get_matrix
 * @see libinput_device_config_calibration_get_default_matrix
 */
-libinput_device_config_calibration_set_matrix :: (device: *libinput_device, matrix: *[6] float) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_calibration_set_matrix :: (device: *libinput_device, matrix: *[6] float) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -4455,7 +4455,7 @@ libinput_device_config_calibration_set_matrix :: (device: *libinput_device, matr
 * @see libinput_device_config_calibration_set_matrix
 * @see libinput_device_config_calibration_get_default_matrix
 */
-libinput_device_config_calibration_get_matrix :: (device: *libinput_device, matrix: *[6] float) -> s32 #foreign libinput_lib;
+libinput_device_config_calibration_get_matrix :: (device: *libinput_device, matrix: *[6] float) -> s32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -4477,7 +4477,7 @@ libinput_device_config_calibration_get_matrix :: (device: *libinput_device, matr
 * @see libinput_device_config_calibration_set_matrix
 * @see libinput_device_config_calibration_get_matrix
 */
-libinput_device_config_calibration_get_default_matrix :: (device: *libinput_device, matrix: *[6] float) -> s32 #foreign libinput_lib;
+libinput_device_config_calibration_get_default_matrix :: (device: *libinput_device, matrix: *[6] float) -> s32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -4514,7 +4514,7 @@ libinput_config_area_rectangle :: struct {
 * @see libinput_device_config_area_get_rectangle
 * @see libinput_device_config_area_get_default_rectangle
 */
-libinput_device_config_area_has_rectangle :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_config_area_has_rectangle :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -4569,7 +4569,7 @@ libinput_device_config_area_has_rectangle :: (device: *libinput_device) -> s32 #
 * @see libinput_device_config_area_get_rectangle
 * @see libinput_device_config_area_get_default_rectangle
 */
-libinput_device_config_area_set_rectangle :: (device: *libinput_device, rect: *libinput_config_area_rectangle) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_area_set_rectangle :: (device: *libinput_device, rect: *libinput_config_area_rectangle) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -4589,7 +4589,7 @@ libinput_device_config_area_set_rectangle :: (device: *libinput_device, rect: *l
 * @see libinput_device_config_area_set_rectangle
 * @see libinput_device_config_area_get_default_rectangle
 */
-libinput_device_config_area_get_rectangle :: (device: *libinput_device) -> libinput_config_area_rectangle #foreign libinput_lib;
+libinput_device_config_area_get_rectangle :: (device: *libinput_device) -> libinput_config_area_rectangle #foreign libinput;
 
 /**
 * @ingroup config
@@ -4609,7 +4609,7 @@ libinput_device_config_area_get_rectangle :: (device: *libinput_device) -> libin
 * @see libinput_device_config_area_set_rectangle
 * @see libinput_device_config_area_get_rectangle
 */
-libinput_device_config_area_get_default_rectangle :: (device: *libinput_device) -> libinput_config_area_rectangle #foreign libinput_lib;
+libinput_device_config_area_get_default_rectangle :: (device: *libinput_device) -> libinput_config_area_rectangle #foreign libinput;
 
 /**
 * @ingroup config
@@ -4641,7 +4641,7 @@ libinput_config_send_events_mode :: enum u32 {
 * @see libinput_device_config_send_events_get_mode
 * @see libinput_device_config_send_events_get_default_mode
 */
-libinput_device_config_send_events_get_modes :: (device: *libinput_device) -> u32 #foreign libinput_lib;
+libinput_device_config_send_events_get_modes :: (device: *libinput_device) -> u32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -4671,7 +4671,7 @@ libinput_device_config_send_events_get_modes :: (device: *libinput_device) -> u3
 * @see libinput_device_config_send_events_get_mode
 * @see libinput_device_config_send_events_get_default_mode
 */
-libinput_device_config_send_events_set_mode :: (device: *libinput_device, mode: u32) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_send_events_set_mode :: (device: *libinput_device, mode: u32) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -4692,7 +4692,7 @@ libinput_device_config_send_events_set_mode :: (device: *libinput_device, mode: 
 * @see libinput_device_config_send_events_set_mode
 * @see libinput_device_config_send_events_get_default_mode
 */
-libinput_device_config_send_events_get_mode :: (device: *libinput_device) -> u32 #foreign libinput_lib;
+libinput_device_config_send_events_get_mode :: (device: *libinput_device) -> u32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -4707,7 +4707,7 @@ libinput_device_config_send_events_get_mode :: (device: *libinput_device) -> u32
 * @see libinput_device_config_send_events_set_mode
 * @see libinput_device_config_send_events_get_mode
 */
-libinput_device_config_send_events_get_default_mode :: (device: *libinput_device) -> u32 #foreign libinput_lib;
+libinput_device_config_send_events_get_default_mode :: (device: *libinput_device) -> u32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -4722,7 +4722,7 @@ libinput_device_config_send_events_get_default_mode :: (device: *libinput_device
 * @see libinput_device_config_accel_get_speed
 * @see libinput_device_config_accel_get_default_speed
 */
-libinput_device_config_accel_is_available :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_config_accel_is_available :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -4744,7 +4744,7 @@ libinput_device_config_accel_is_available :: (device: *libinput_device) -> s32 #
 * @see libinput_device_config_accel_get_speed
 * @see libinput_device_config_accel_get_default_speed
 */
-libinput_device_config_accel_set_speed :: (device: *libinput_device, speed: float64) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_accel_set_speed :: (device: *libinput_device, speed: float64) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -4767,7 +4767,7 @@ libinput_device_config_accel_set_speed :: (device: *libinput_device, speed: floa
 * @see libinput_device_config_accel_set_speed
 * @see libinput_device_config_accel_get_default_speed
 */
-libinput_device_config_accel_get_speed :: (device: *libinput_device) -> float64 #foreign libinput_lib;
+libinput_device_config_accel_get_speed :: (device: *libinput_device) -> float64 #foreign libinput;
 
 /**
 * @ingroup config
@@ -4783,7 +4783,7 @@ libinput_device_config_accel_get_speed :: (device: *libinput_device) -> float64 
 * @see libinput_device_config_accel_set_speed
 * @see libinput_device_config_accel_get_speed
 */
-libinput_device_config_accel_get_default_speed :: (device: *libinput_device) -> float64 #foreign libinput_lib;
+libinput_device_config_accel_get_default_speed :: (device: *libinput_device) -> float64 #foreign libinput;
 
 /**
 * @ingroup config
@@ -4850,7 +4850,7 @@ libinput_config_accel :: struct {}
 * @see libinput_config_accel
 * @since 1.23
 */
-libinput_config_accel_create :: (profile: libinput_config_accel_profile) -> *libinput_config_accel #foreign libinput_lib;
+libinput_config_accel_create :: (profile: libinput_config_accel_profile) -> *libinput_config_accel #foreign libinput;
 
 /**
 * @ingroup config
@@ -4866,7 +4866,7 @@ libinput_config_accel_create :: (profile: libinput_config_accel_profile) -> *lib
 * @see libinput_config_accel
 * @since 1.23
 */
-libinput_config_accel_destroy :: (accel_config: *libinput_config_accel) -> void #foreign libinput_lib;
+libinput_config_accel_destroy :: (accel_config: *libinput_config_accel) -> void #foreign libinput;
 
 /**
 * @ingroup config
@@ -4886,7 +4886,7 @@ libinput_config_accel_destroy :: (accel_config: *libinput_config_accel) -> void 
 * @see libinput_config_accel
 * @since 1.23
 */
-libinput_device_config_accel_apply :: (device: *libinput_device, accel_config: *libinput_config_accel) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_accel_apply :: (device: *libinput_device, accel_config: *libinput_config_accel) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -4949,7 +4949,7 @@ libinput_config_accel_type :: enum u32 {
 * @see libinput_config_accel
 * @since 1.23
 */
-libinput_config_accel_set_points :: (accel_config: *libinput_config_accel, accel_type: libinput_config_accel_type, step: float64, npoints: u64, points: *float64) -> libinput_config_status #foreign libinput_lib;
+libinput_config_accel_set_points :: (accel_config: *libinput_config_accel, accel_type: libinput_config_accel_type, step: float64, npoints: u64, points: *float64) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -4963,7 +4963,7 @@ libinput_config_accel_set_points :: (accel_config: *libinput_config_accel, accel
 *
 * @since 1.1
 */
-libinput_device_config_accel_get_profiles :: (device: *libinput_device) -> u32 #foreign libinput_lib;
+libinput_device_config_accel_get_profiles :: (device: *libinput_device) -> u32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -4978,7 +4978,7 @@ libinput_device_config_accel_get_profiles :: (device: *libinput_device) -> u32 #
 *
 * @since 1.1
 */
-libinput_device_config_accel_set_profile :: (device: *libinput_device, profile: libinput_config_accel_profile) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_accel_set_profile :: (device: *libinput_device, profile: libinput_config_accel_profile) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -4991,7 +4991,7 @@ libinput_device_config_accel_set_profile :: (device: *libinput_device, profile: 
 *
 * @since 1.1
 */
-libinput_device_config_accel_get_profile :: (device: *libinput_device) -> libinput_config_accel_profile #foreign libinput_lib;
+libinput_device_config_accel_get_profile :: (device: *libinput_device) -> libinput_config_accel_profile #foreign libinput;
 
 /**
 * @ingroup config
@@ -5004,7 +5004,7 @@ libinput_device_config_accel_get_profile :: (device: *libinput_device) -> libinp
 *
 * @since 1.1
 */
-libinput_device_config_accel_get_default_profile :: (device: *libinput_device) -> libinput_config_accel_profile #foreign libinput_lib;
+libinput_device_config_accel_get_default_profile :: (device: *libinput_device) -> libinput_config_accel_profile #foreign libinput;
 
 /**
 * @ingroup config
@@ -5035,7 +5035,7 @@ libinput_device_config_accel_get_default_profile :: (device: *libinput_device) -
 * @see libinput_device_config_scroll_get_natural_scroll_enabled
 * @see libinput_device_config_scroll_get_default_natural_scroll_enabled
 */
-libinput_device_config_scroll_has_natural_scroll :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_config_scroll_has_natural_scroll :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -5051,7 +5051,7 @@ libinput_device_config_scroll_has_natural_scroll :: (device: *libinput_device) -
 * @see libinput_device_config_scroll_get_natural_scroll_enabled
 * @see libinput_device_config_scroll_get_default_natural_scroll_enabled
 */
-libinput_device_config_scroll_set_natural_scroll_enabled :: (device: *libinput_device, enable: s32) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_scroll_set_natural_scroll_enabled :: (device: *libinput_device, enable: s32) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -5066,7 +5066,7 @@ libinput_device_config_scroll_set_natural_scroll_enabled :: (device: *libinput_d
 * @see libinput_device_config_scroll_set_natural_scroll_enabled
 * @see libinput_device_config_scroll_get_default_natural_scroll_enabled
 */
-libinput_device_config_scroll_get_natural_scroll_enabled :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_config_scroll_get_natural_scroll_enabled :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -5081,7 +5081,7 @@ libinput_device_config_scroll_get_natural_scroll_enabled :: (device: *libinput_d
 * @see libinput_device_config_scroll_set_natural_scroll_enabled
 * @see libinput_device_config_scroll_get_natural_scroll_enabled
 */
-libinput_device_config_scroll_get_default_natural_scroll_enabled :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_config_scroll_get_default_natural_scroll_enabled :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -5096,7 +5096,7 @@ libinput_device_config_scroll_get_default_natural_scroll_enabled :: (device: *li
 * @see libinput_device_config_left_handed_get
 * @see libinput_device_config_left_handed_get_default
 */
-libinput_device_config_left_handed_is_available :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_config_left_handed_is_available :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -5121,7 +5121,7 @@ libinput_device_config_left_handed_is_available :: (device: *libinput_device) ->
 * @see libinput_device_config_left_handed_get
 * @see libinput_device_config_left_handed_get_default
 */
-libinput_device_config_left_handed_set :: (device: *libinput_device, left_handed: s32) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_left_handed_set :: (device: *libinput_device, left_handed: s32) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -5136,7 +5136,7 @@ libinput_device_config_left_handed_set :: (device: *libinput_device, left_handed
 * @see libinput_device_config_left_handed_set
 * @see libinput_device_config_left_handed_get_default
 */
-libinput_device_config_left_handed_get :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_config_left_handed_get :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -5151,7 +5151,7 @@ libinput_device_config_left_handed_get :: (device: *libinput_device) -> s32 #for
 * @see libinput_device_config_left_handed_set
 * @see libinput_device_config_left_handed_get
 */
-libinput_device_config_left_handed_get_default :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_config_left_handed_get_default :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -5185,7 +5185,7 @@ libinput_config_click_method :: enum u32 {
 * @see libinput_device_config_click_set_method
 * @see libinput_device_config_click_get_method
 */
-libinput_device_config_click_get_methods :: (device: *libinput_device) -> u32 #foreign libinput_lib;
+libinput_device_config_click_get_methods :: (device: *libinput_device) -> u32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -5207,7 +5207,7 @@ libinput_device_config_click_get_methods :: (device: *libinput_device) -> u32 #f
 * @see libinput_device_config_click_get_method
 * @see libinput_device_config_click_get_default_method
 */
-libinput_device_config_click_set_method :: (device: *libinput_device, method: libinput_config_click_method) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_click_set_method :: (device: *libinput_device, method: libinput_config_click_method) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -5224,7 +5224,7 @@ libinput_device_config_click_set_method :: (device: *libinput_device, method: li
 * @see libinput_device_config_click_set_method
 * @see libinput_device_config_click_get_default_method
 */
-libinput_device_config_click_get_method :: (device: *libinput_device) -> libinput_config_click_method #foreign libinput_lib;
+libinput_device_config_click_get_method :: (device: *libinput_device) -> libinput_config_click_method #foreign libinput;
 
 /**
 * @ingroup config
@@ -5241,7 +5241,7 @@ libinput_device_config_click_get_method :: (device: *libinput_device) -> libinpu
 * @see libinput_device_config_click_set_method
 * @see libinput_device_config_click_get_method
 */
-libinput_device_config_click_get_default_method :: (device: *libinput_device) -> libinput_config_click_method #foreign libinput_lib;
+libinput_device_config_click_get_default_method :: (device: *libinput_device) -> libinput_config_click_method #foreign libinput;
 
 /**
 * @ingroup config
@@ -5267,7 +5267,7 @@ libinput_device_config_click_get_default_method :: (device: *libinput_device) ->
 * @see libinput_device_config_click_get_clickfinger_button_map
 * @see libinput_device_config_click_get_default_clickfinger_button_map
 */
-libinput_device_config_click_set_clickfinger_button_map :: (device: *libinput_device, map: libinput_config_clickfinger_button_map) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_click_set_clickfinger_button_map :: (device: *libinput_device, map: libinput_config_clickfinger_button_map) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -5283,7 +5283,7 @@ libinput_device_config_click_set_clickfinger_button_map :: (device: *libinput_de
 * @see libinput_device_config_click_set_clickfinger_button_map
 * @see libinput_device_config_click_get_default_clickfinger_button_map
 */
-libinput_device_config_click_get_clickfinger_button_map :: (device: *libinput_device) -> libinput_config_clickfinger_button_map #foreign libinput_lib;
+libinput_device_config_click_get_clickfinger_button_map :: (device: *libinput_device) -> libinput_config_clickfinger_button_map #foreign libinput;
 
 /**
 * @ingroup config
@@ -5299,7 +5299,7 @@ libinput_device_config_click_get_clickfinger_button_map :: (device: *libinput_de
 * @see libinput_device_config_click_set_clickfinger_button_map
 * @see libinput_device_config_click_get_clickfinger_button_map
 */
-libinput_device_config_click_get_default_clickfinger_button_map :: (device: *libinput_device) -> libinput_config_clickfinger_button_map #foreign libinput_lib;
+libinput_device_config_click_get_default_clickfinger_button_map :: (device: *libinput_device) -> libinput_config_clickfinger_button_map #foreign libinput;
 
 /**
 * @ingroup config
@@ -5332,7 +5332,7 @@ libinput_config_middle_emulation_state :: enum u32 {
 * @see libinput_device_config_middle_emulation_get_enabled
 * @see libinput_device_config_middle_emulation_get_default_enabled
 */
-libinput_device_config_middle_emulation_is_available :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_config_middle_emulation_is_available :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -5356,7 +5356,7 @@ libinput_device_config_middle_emulation_is_available :: (device: *libinput_devic
 * @see libinput_device_config_middle_emulation_get_enabled
 * @see libinput_device_config_middle_emulation_get_default_enabled
 */
-libinput_device_config_middle_emulation_set_enabled :: (device: *libinput_device, enable: libinput_config_middle_emulation_state) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_middle_emulation_set_enabled :: (device: *libinput_device, enable: libinput_config_middle_emulation_state) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -5381,7 +5381,7 @@ libinput_device_config_middle_emulation_set_enabled :: (device: *libinput_device
 * @see libinput_device_config_middle_emulation_set_enabled
 * @see libinput_device_config_middle_emulation_get_default_enabled
 */
-libinput_device_config_middle_emulation_get_enabled :: (device: *libinput_device) -> libinput_config_middle_emulation_state #foreign libinput_lib;
+libinput_device_config_middle_emulation_get_enabled :: (device: *libinput_device) -> libinput_config_middle_emulation_state #foreign libinput;
 
 /**
 * @ingroup config
@@ -5407,7 +5407,7 @@ libinput_device_config_middle_emulation_get_enabled :: (device: *libinput_device
 * @see libinput_device_config_middle_emulation_set_enabled
 * @see libinput_device_config_middle_emulation_get_enabled
 */
-libinput_device_config_middle_emulation_get_default_enabled :: (device: *libinput_device) -> libinput_config_middle_emulation_state #foreign libinput_lib;
+libinput_device_config_middle_emulation_get_default_enabled :: (device: *libinput_device) -> libinput_config_middle_emulation_state #foreign libinput;
 
 /**
 * @ingroup config
@@ -5444,7 +5444,7 @@ libinput_config_scroll_method :: enum u32 {
 * @see libinput_device_config_scroll_get_button
 * @see libinput_device_config_scroll_get_default_button
 */
-libinput_device_config_scroll_get_methods :: (device: *libinput_device) -> u32 #foreign libinput_lib;
+libinput_device_config_scroll_get_methods :: (device: *libinput_device) -> u32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -5470,7 +5470,7 @@ libinput_device_config_scroll_get_methods :: (device: *libinput_device) -> u32 #
 * @see libinput_device_config_scroll_get_button
 * @see libinput_device_config_scroll_get_default_button
 */
-libinput_device_config_scroll_set_method :: (device: *libinput_device, method: libinput_config_scroll_method) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_scroll_set_method :: (device: *libinput_device, method: libinput_config_scroll_method) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -5488,7 +5488,7 @@ libinput_device_config_scroll_set_method :: (device: *libinput_device, method: l
 * @see libinput_device_config_scroll_get_button
 * @see libinput_device_config_scroll_get_default_button
 */
-libinput_device_config_scroll_get_method :: (device: *libinput_device) -> libinput_config_scroll_method #foreign libinput_lib;
+libinput_device_config_scroll_get_method :: (device: *libinput_device) -> libinput_config_scroll_method #foreign libinput;
 
 /**
 * @ingroup config
@@ -5506,7 +5506,7 @@ libinput_device_config_scroll_get_method :: (device: *libinput_device) -> libinp
 * @see libinput_device_config_scroll_get_button
 * @see libinput_device_config_scroll_get_default_button
 */
-libinput_device_config_scroll_get_default_method :: (device: *libinput_device) -> libinput_config_scroll_method #foreign libinput_lib;
+libinput_device_config_scroll_get_default_method :: (device: *libinput_device) -> libinput_config_scroll_method #foreign libinput;
 
 /**
 * @ingroup config
@@ -5543,7 +5543,7 @@ libinput_device_config_scroll_get_default_method :: (device: *libinput_device) -
 * @see libinput_device_config_scroll_get_button
 * @see libinput_device_config_scroll_get_default_button
 */
-libinput_device_config_scroll_set_button :: (device: *libinput_device, button: u32) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_scroll_set_button :: (device: *libinput_device, button: u32) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -5569,7 +5569,7 @@ libinput_device_config_scroll_set_button :: (device: *libinput_device, button: u
 * @see libinput_device_config_scroll_set_button
 * @see libinput_device_config_scroll_get_default_button
 */
-libinput_device_config_scroll_get_button :: (device: *libinput_device) -> u32 #foreign libinput_lib;
+libinput_device_config_scroll_get_button :: (device: *libinput_device) -> u32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -5591,7 +5591,7 @@ libinput_device_config_scroll_get_button :: (device: *libinput_device) -> u32 #f
 * @see libinput_device_config_scroll_set_button
 * @see libinput_device_config_scroll_get_button
 */
-libinput_device_config_scroll_get_default_button :: (device: *libinput_device) -> u32 #foreign libinput_lib;
+libinput_device_config_scroll_get_default_button :: (device: *libinput_device) -> u32 #foreign libinput;
 
 libinput_config_scroll_button_lock_state :: enum u32 {
     DISABLED :: 0;
@@ -5622,7 +5622,7 @@ libinput_config_scroll_button_lock_state :: enum u32 {
 * @see libinput_device_config_scroll_get_button
 * @see libinput_device_config_scroll_get_default_button
 */
-libinput_device_config_scroll_set_button_lock :: (device: *libinput_device, state: libinput_config_scroll_button_lock_state) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_scroll_set_button_lock :: (device: *libinput_device, state: libinput_config_scroll_button_lock_state) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -5646,7 +5646,7 @@ libinput_device_config_scroll_set_button_lock :: (device: *libinput_device, stat
 * @see libinput_device_config_scroll_get_button_lock
 * @see libinput_device_config_scroll_get_default_button_lock
 */
-libinput_device_config_scroll_get_button_lock :: (device: *libinput_device) -> libinput_config_scroll_button_lock_state #foreign libinput_lib;
+libinput_device_config_scroll_get_button_lock :: (device: *libinput_device) -> libinput_config_scroll_button_lock_state #foreign libinput;
 
 /**
 * @ingroup config
@@ -5665,7 +5665,7 @@ libinput_device_config_scroll_get_button_lock :: (device: *libinput_device) -> l
 * @see libinput_device_config_scroll_get_button_lock
 * @see libinput_device_config_scroll_get_default_button_lock
 */
-libinput_device_config_scroll_get_default_button_lock :: (device: *libinput_device) -> libinput_config_scroll_button_lock_state #foreign libinput_lib;
+libinput_device_config_scroll_get_default_button_lock :: (device: *libinput_device) -> libinput_config_scroll_button_lock_state #foreign libinput;
 
 /**
 * @ingroup config
@@ -5695,7 +5695,7 @@ libinput_config_dwt_state :: enum u32 {
 * @see libinput_device_config_dwt_get_enabled
 * @see libinput_device_config_dwt_get_default_enabled
 */
-libinput_device_config_dwt_is_available :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_config_dwt_is_available :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -5718,7 +5718,7 @@ libinput_device_config_dwt_is_available :: (device: *libinput_device) -> s32 #fo
 * @see libinput_device_config_dwt_get_enabled
 * @see libinput_device_config_dwt_get_default_enabled
 */
-libinput_device_config_dwt_set_enabled :: (device: *libinput_device, enable: libinput_config_dwt_state) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_dwt_set_enabled :: (device: *libinput_device, enable: libinput_config_dwt_state) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -5735,7 +5735,7 @@ libinput_device_config_dwt_set_enabled :: (device: *libinput_device, enable: lib
 * @see libinput_device_config_dwt_set_enabled
 * @see libinput_device_config_dwt_get_default_enabled
 */
-libinput_device_config_dwt_get_enabled :: (device: *libinput_device) -> libinput_config_dwt_state #foreign libinput_lib;
+libinput_device_config_dwt_get_enabled :: (device: *libinput_device) -> libinput_config_dwt_state #foreign libinput;
 
 /**
 * @ingroup config
@@ -5752,7 +5752,7 @@ libinput_device_config_dwt_get_enabled :: (device: *libinput_device) -> libinput
 * @see libinput_device_config_dwt_set_enabled
 * @see libinput_device_config_dwt_get_enabled
 */
-libinput_device_config_dwt_get_default_enabled :: (device: *libinput_device) -> libinput_config_dwt_state #foreign libinput_lib;
+libinput_device_config_dwt_get_default_enabled :: (device: *libinput_device) -> libinput_config_dwt_state #foreign libinput;
 
 /**
 * @ingroup config
@@ -5787,7 +5787,7 @@ libinput_config_dwtp_state :: enum u32 {
 *
 * @since 1.21
 */
-libinput_device_config_dwtp_is_available :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_config_dwtp_is_available :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -5812,7 +5812,7 @@ libinput_device_config_dwtp_is_available :: (device: *libinput_device) -> s32 #f
 *
 * @since 1.21
 */
-libinput_device_config_dwtp_set_enabled :: (device: *libinput_device, enable: libinput_config_dwtp_state) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_dwtp_set_enabled :: (device: *libinput_device, enable: libinput_config_dwtp_state) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -5831,7 +5831,7 @@ libinput_device_config_dwtp_set_enabled :: (device: *libinput_device, enable: li
 *
 * @since 1.21
 */
-libinput_device_config_dwtp_get_enabled :: (device: *libinput_device) -> libinput_config_dwtp_state #foreign libinput_lib;
+libinput_device_config_dwtp_get_enabled :: (device: *libinput_device) -> libinput_config_dwtp_state #foreign libinput;
 
 /**
 * @ingroup config
@@ -5850,7 +5850,7 @@ libinput_device_config_dwtp_get_enabled :: (device: *libinput_device) -> libinpu
 *
 * @since 1.21
 */
-libinput_device_config_dwtp_get_default_enabled :: (device: *libinput_device) -> libinput_config_dwtp_state #foreign libinput_lib;
+libinput_device_config_dwtp_get_default_enabled :: (device: *libinput_device) -> libinput_config_dwtp_state #foreign libinput;
 
 /**
 * @ingroup config
@@ -5866,7 +5866,7 @@ libinput_device_config_dwtp_get_default_enabled :: (device: *libinput_device) ->
 *
 * @since 1.4
 */
-libinput_device_config_rotation_is_available :: (device: *libinput_device) -> s32 #foreign libinput_lib;
+libinput_device_config_rotation_is_available :: (device: *libinput_device) -> s32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -5895,7 +5895,7 @@ libinput_device_config_rotation_is_available :: (device: *libinput_device) -> s3
 *
 * @since 1.4
 */
-libinput_device_config_rotation_set_angle :: (device: *libinput_device, degrees_cw: u32) -> libinput_config_status #foreign libinput_lib;
+libinput_device_config_rotation_set_angle :: (device: *libinput_device, degrees_cw: u32) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -5913,7 +5913,7 @@ libinput_device_config_rotation_set_angle :: (device: *libinput_device, degrees_
 *
 * @since 1.4
 */
-libinput_device_config_rotation_get_angle :: (device: *libinput_device) -> u32 #foreign libinput_lib;
+libinput_device_config_rotation_get_angle :: (device: *libinput_device) -> u32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -5931,7 +5931,7 @@ libinput_device_config_rotation_get_angle :: (device: *libinput_device) -> u32 #
 *
 * @since 1.4
 */
-libinput_device_config_rotation_get_default_angle :: (device: *libinput_device) -> u32 #foreign libinput_lib;
+libinput_device_config_rotation_get_default_angle :: (device: *libinput_device) -> u32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -5949,7 +5949,7 @@ libinput_device_config_rotation_get_default_angle :: (device: *libinput_device) 
 *
 * @since 1.26
 */
-libinput_tablet_tool_config_pressure_range_is_available :: (tool: *libinput_tablet_tool) -> s32 #foreign libinput_lib;
+libinput_tablet_tool_config_pressure_range_is_available :: (tool: *libinput_tablet_tool) -> s32 #foreign libinput;
 
 /**
 * @ingroup config
@@ -5979,7 +5979,7 @@ libinput_tablet_tool_config_pressure_range_is_available :: (tool: *libinput_tabl
 *
 * @since 1.26
 */
-libinput_tablet_tool_config_pressure_range_set :: (tool: *libinput_tablet_tool, minimum: float64, maximum: float64) -> libinput_config_status #foreign libinput_lib;
+libinput_tablet_tool_config_pressure_range_set :: (tool: *libinput_tablet_tool, minimum: float64, maximum: float64) -> libinput_config_status #foreign libinput;
 
 /**
 * @ingroup config
@@ -6000,7 +6000,7 @@ libinput_tablet_tool_config_pressure_range_set :: (tool: *libinput_tablet_tool, 
 *
 * @since 1.26
 */
-libinput_tablet_tool_config_pressure_range_get_minimum :: (tool: *libinput_tablet_tool) -> float64 #foreign libinput_lib;
+libinput_tablet_tool_config_pressure_range_get_minimum :: (tool: *libinput_tablet_tool) -> float64 #foreign libinput;
 
 /**
 * @ingroup config
@@ -6021,7 +6021,7 @@ libinput_tablet_tool_config_pressure_range_get_minimum :: (tool: *libinput_table
 *
 * @since 1.26
 */
-libinput_tablet_tool_config_pressure_range_get_maximum :: (tool: *libinput_tablet_tool) -> float64 #foreign libinput_lib;
+libinput_tablet_tool_config_pressure_range_get_maximum :: (tool: *libinput_tablet_tool) -> float64 #foreign libinput;
 
 /**
 * @ingroup config
@@ -6042,7 +6042,7 @@ libinput_tablet_tool_config_pressure_range_get_maximum :: (tool: *libinput_table
 *
 * @since 1.26
 */
-libinput_tablet_tool_config_pressure_range_get_default_minimum :: (tool: *libinput_tablet_tool) -> float64 #foreign libinput_lib;
+libinput_tablet_tool_config_pressure_range_get_default_minimum :: (tool: *libinput_tablet_tool) -> float64 #foreign libinput;
 
 /**
 * @ingroup config
@@ -6063,8 +6063,8 @@ libinput_tablet_tool_config_pressure_range_get_default_minimum :: (tool: *libinp
 *
 * @since 1.26
 */
-libinput_tablet_tool_config_pressure_range_get_default_maximum :: (tool: *libinput_tablet_tool) -> float64 #foreign libinput_lib;
+libinput_tablet_tool_config_pressure_range_get_default_maximum :: (tool: *libinput_tablet_tool) -> float64 #foreign libinput;
 
 #scope_file
 
-libinput_lib :: #library,system "libinput";
+libinput :: #library,system "libinput";

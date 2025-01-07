@@ -12,16 +12,16 @@
 * reads the udev config and system environment
 * allows custom logging
 */
-udev :: struct {}
-udev_ref :: (udev_: *udev) -> *udev #foreign libudev;
-udev_unref :: (udev_: *udev) -> *udev #foreign libudev;
-udev_new :: () -> *udev #foreign libudev;
-udev_set_log_fn :: (udev_: *udev, log_fn: *void /* function type contained C va_list argument */) -> void #foreign libudev;
+udev_context :: struct {}
+udev_ref :: (udev: *udev_context) -> *udev_context #foreign libudev;
+udev_unref :: (udev: *udev_context) -> *udev_context #foreign libudev;
+udev_new :: () -> *udev_context #foreign libudev;
+udev_set_log_fn :: (udev: *udev_context, log_fn: *void /* function type contained C va_list argument */) -> void #foreign libudev;
 
-udev_get_log_priority :: (udev_: *udev) -> s32 #foreign libudev;
-udev_set_log_priority :: (udev_: *udev, priority: s32) -> void #foreign libudev;
-udev_get_userdata :: (udev_: *udev) -> *void #foreign libudev;
-udev_set_userdata :: (udev_: *udev, userdata: *void) -> void #foreign libudev;
+udev_get_log_priority :: (udev: *udev_context) -> s32 #foreign libudev;
+udev_set_log_priority :: (udev: *udev_context, priority: s32) -> void #foreign libudev;
+udev_get_userdata :: (udev: *udev_context) -> *void #foreign libudev;
+udev_set_userdata :: (udev: *udev_context, userdata: *void) -> void #foreign libudev;
 
 /*
 * udev_list
@@ -42,12 +42,12 @@ udev_list_entry_get_value :: (list_entry: *udev_list_entry) -> *u8 #foreign libu
 udev_device :: struct {}
 udev_device_ref :: (udev_device_: *udev_device) -> *udev_device #foreign libudev;
 udev_device_unref :: (udev_device_: *udev_device) -> *udev_device #foreign libudev;
-udev_device_get_udev :: (udev_device_: *udev_device) -> *udev #foreign libudev;
-udev_device_new_from_syspath :: (udev_: *udev, syspath: *u8) -> *udev_device #foreign libudev;
-udev_device_new_from_devnum :: (udev_: *udev, type: u8, devnum: dev_t) -> *udev_device #foreign libudev;
-udev_device_new_from_subsystem_sysname :: (udev_: *udev, subsystem: *u8, sysname: *u8) -> *udev_device #foreign libudev;
-udev_device_new_from_device_id :: (udev_: *udev, id: *u8) -> *udev_device #foreign libudev;
-udev_device_new_from_environment :: (udev_: *udev) -> *udev_device #foreign libudev;
+udev_device_get_udev :: (udev_device_: *udev_device) -> *udev_context #foreign libudev;
+udev_device_new_from_syspath :: (udev: *udev_context, syspath: *u8) -> *udev_device #foreign libudev;
+udev_device_new_from_devnum :: (udev: *udev_context, type: u8, devnum: dev_t) -> *udev_device #foreign libudev;
+udev_device_new_from_subsystem_sysname :: (udev: *udev_context, subsystem: *u8, sysname: *u8) -> *udev_device #foreign libudev;
+udev_device_new_from_device_id :: (udev: *udev_context, id: *u8) -> *udev_device #foreign libudev;
+udev_device_new_from_environment :: (udev: *udev_context) -> *udev_device #foreign libudev;
 
 /* udev_device_get_parent_*() does not take a reference on the returned device, it is automatically unref'd with the parent */
 udev_device_get_parent :: (udev_device_: *udev_device) -> *udev_device #foreign libudev;
@@ -86,10 +86,10 @@ udev_device_has_current_tag :: (udev_device_: *udev_device, tag: *u8) -> s32 #fo
 udev_monitor :: struct {}
 udev_monitor_ref :: (udev_monitor_: *udev_monitor) -> *udev_monitor #foreign libudev;
 udev_monitor_unref :: (udev_monitor_: *udev_monitor) -> *udev_monitor #foreign libudev;
-udev_monitor_get_udev :: (udev_monitor_: *udev_monitor) -> *udev #foreign libudev;
+udev_monitor_get_udev :: (udev_monitor_: *udev_monitor) -> *udev_context #foreign libudev;
 
 /* kernel and udev generated events over netlink */
-udev_monitor_new_from_netlink :: (udev_: *udev, name: *u8) -> *udev_monitor #foreign libudev;
+udev_monitor_new_from_netlink :: (udev: *udev_context, name: *u8) -> *udev_monitor #foreign libudev;
 
 /* bind socket */
 udev_monitor_enable_receiving :: (udev_monitor_: *udev_monitor) -> s32 #foreign libudev;
@@ -112,8 +112,8 @@ udev_monitor_filter_remove :: (udev_monitor_: *udev_monitor) -> s32 #foreign lib
 udev_enumerate :: struct {}
 udev_enumerate_ref :: (udev_enumerate_: *udev_enumerate) -> *udev_enumerate #foreign libudev;
 udev_enumerate_unref :: (udev_enumerate_: *udev_enumerate) -> *udev_enumerate #foreign libudev;
-udev_enumerate_get_udev :: (udev_enumerate_: *udev_enumerate) -> *udev #foreign libudev;
-udev_enumerate_new :: (udev_: *udev) -> *udev_enumerate #foreign libudev;
+udev_enumerate_get_udev :: (udev_enumerate_: *udev_enumerate) -> *udev_context #foreign libudev;
+udev_enumerate_new :: (udev: *udev_context) -> *udev_enumerate #foreign libudev;
 
 /* device properties filter */
 udev_enumerate_add_match_subsystem :: (udev_enumerate_: *udev_enumerate, subsystem: *u8) -> s32 #foreign libudev;
@@ -142,8 +142,8 @@ udev_enumerate_get_list_entry :: (udev_enumerate_: *udev_enumerate) -> *udev_lis
 udev_queue :: struct {}
 udev_queue_ref :: (udev_queue_: *udev_queue) -> *udev_queue #foreign libudev;
 udev_queue_unref :: (udev_queue_: *udev_queue) -> *udev_queue #foreign libudev;
-udev_queue_get_udev :: (udev_queue_: *udev_queue) -> *udev #foreign libudev;
-udev_queue_new :: (udev_: *udev) -> *udev_queue #foreign libudev;
+udev_queue_get_udev :: (udev_queue_: *udev_queue) -> *udev_context #foreign libudev;
+udev_queue_new :: (udev: *udev_context) -> *udev_queue #foreign libudev;
 udev_queue_get_kernel_seqnum :: (udev_queue_: *udev_queue) -> u64 #foreign libudev;
 udev_queue_get_udev_seqnum :: (udev_queue_: *udev_queue) -> u64 #foreign libudev;
 udev_queue_get_udev_is_active :: (udev_queue_: *udev_queue) -> s32 #foreign libudev;
@@ -161,7 +161,7 @@ udev_queue_get_queued_list_entry :: (udev_queue_: *udev_queue) -> *udev_list_ent
 *  access to the static hardware properties database
 */
 udev_hwdb :: struct {}
-udev_hwdb_new :: (udev_: *udev) -> *udev_hwdb #foreign libudev;
+udev_hwdb_new :: (udev: *udev_context) -> *udev_hwdb #foreign libudev;
 udev_hwdb_ref :: (hwdb: *udev_hwdb) -> *udev_hwdb #foreign libudev;
 udev_hwdb_unref :: (hwdb: *udev_hwdb) -> *udev_hwdb #foreign libudev;
 udev_hwdb_get_properties_list_entry :: (hwdb: *udev_hwdb, modalias: *u8, flags: u32) -> *udev_list_entry #foreign libudev;

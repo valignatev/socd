@@ -337,8 +337,16 @@ main :: () {
             // TODO: check that it's the window we care for and that dimensions indeed changed (like when moved to a monitor with different DPI).
             //  We also get these events when the window was only moved around on the same monitor without any changes.
             Simp.update_window(it.window);
-            _, _, window_width, window_height = get_dimensions(the_window, true);
-            init_fonts(the_window);
+
+            if it.window == the_window {
+
+                should_reinit := (it.width != window_width) || (it.height != window_height);
+
+                window_width  = it.width;
+                window_height = it.height;
+
+                if should_reinit init_fonts(the_window);
+            }
         }
 
         for event: Input.events_this_frame {
@@ -562,10 +570,6 @@ init_fonts :: (window: Window_Type) {
     }
 
     dpi := get_dpi_scale(window);
-    if button_font {
-        free(button_font);
-        button_font = null;
-    }
 
     // Window height was here
     pixel_height := 600 / dpi / 24;
