@@ -3,12 +3,13 @@
 FOR SHIPPING:
 - Add currently active profile to settings file.
 - Implement saving to the profile.
-- Implement NEUTRAL
 - Fix numpad bug on Windows
-- Better device grab on Linux that doesn't just wait for the first pressed key.
+- [Works with libinput] Better device grab on Linux that doesn't just wait for the first pressed key.
 - Better focused program recognition. Now it's just case-sensitive string contains.
 - Profile add and delete.
 - Better dropdown ui for mapping mode.
+- Automatic scrol for when stuff doesn't fit into the scrollable region.
+- Search autocomplete when selecting a program for new profile.
 
 FOR FUTURE:
 - Global Profile that is always active unless some other profile kicks in. Good for testing.
@@ -38,12 +39,18 @@ last_time: float64;
 
 scroll_value_profiles_region: float;
 scroll_value_mappings_region: float;
+scroll_value_new_profile: float;
 
 window_width := 900;
 window_height := 600;
 
 current_theme: s32 = xx Default_Themes.Default;
 my_theme: Overall_Theme;  // This gets filled out by calling the Theme_Proc for current_theme.
+subwindows_initted := false;
+
+subwindow_info_new_profile: Subwindow_Info;
+subwindow_new_profile_just_got_closed := false;
+subwindow_opened_for_the_first_time := false;
 
 Mapping_State :: enum {
     NOTHING :: 0;
@@ -51,7 +58,9 @@ Mapping_State :: enum {
     SETTING_DESTINATION :: 2;
     SETTING_JUST_SOURCE :: 3;
     SETTING_JUST_DESTINATION :: 4;
-    DELETING :: 5;
+    DELETING_MAPPING :: 5;
+
+    ADDING_NEW_PROFILE :: 6;
 }
 
 current_mapping_state := Mapping_State.NOTHING;
@@ -119,6 +128,7 @@ Profile :: struct {
 }
 
 active_profile: Profile;
+active_profile_index := -1;
 active_mapping_index := -1;
 profiles: [..]Profile;
 
@@ -319,6 +329,8 @@ main :: () {
     init_fonts(the_window);
     ui_init();
 
+    subwindow_info_new_profile.open = false;
+
     should_parse_config, raw_settings, settings_filename := init_settings();
     if should_parse_config {
         parse_settings(raw_settings, settings_filename);
@@ -402,11 +414,14 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     profile_button_theme := my_theme.button_theme;
     profile_button_theme.frame_color = profile_button_theme.surface_color;
     for profiles {
-        pressed := button(s, it.program, *profile_button_theme);
+        pressed := button(s, it.program, *profile_button_theme, identifier=it_index);
         if pressed {
             log("Profile % pressed\n", it.program);
             active_profile = it;
+            active_profile_index = it_index;
         }
+
+        s.y += floor(50 * 1.1 + 1);
     }
 
     end_scrollable_region(profiles_region, s.x + s.w, s.y, *scroll_value_profiles_region);
@@ -414,14 +429,42 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     add_button_rect := get_rect(10, profiles_height + 10 + 5, profiles_width / 2 - 5, 50);
     del_button_rect := get_rect(10 + profiles_width / 2 + 5, profiles_height + 10 + 5, profiles_width / 2 - 5, 50);
 
-    _, _, add_profile_released := button(add_button_rect, "Add", *my_theme.button_theme);
+    _, _, add_profile_released := button(add_button_rect, "Add", *my_theme.button_theme, disable_press = (current_mapping_state != .NOTHING));
     if add_profile_released {
-        log("Add released\n");
+        current_mapping_state = .ADDING_NEW_PROFILE;
+        subwindow_info_new_profile.open = true;
+        new_profile := array_add(*profiles);
+        active_profile = new_profile;
     }
 
-    _, _, del_profile_released := button(del_button_rect, "Delete", *my_theme.button_theme);
+    _, _, del_profile_released := button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_index < 0));
     if del_profile_released {
-        log("Del released\n");
+        current_mapping_state = .NOTHING;
+        active_profile = .{};
+        array_ordered_remove_by_index(*profiles, active_profile_index);
+        active_profile_index = -1;
+    }
+
+    //
+    // New Profile subwindow
+    //
+
+    {
+        theme := my_theme.subwindow_theme;
+        // r := profiles_region;
+        if !subwindows_initted {
+            subwindow_info_new_profile.rect = r;
+            subwindow_info_new_profile.title_text = "Select Window";
+            subwindow_info_new_profile.draw = draw_new_profile_selector;
+            subwindows_initted = true;
+        }
+        if subwindow_info_new_profile.open {
+            subwindow_state := add_subwindow(*subwindow_info_new_profile, *theme);
+            
+        } else if profiles.count && profiles[profiles.count -1].program == "" {
+            array_ordered_remove_by_index(*profiles, profiles.count - 1);
+            current_mapping_state = .NOTHING;
+        }
     }
 
     //
@@ -560,6 +603,39 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
         index_to_remove = -1;
     }
+}
+
+draw_new_profile_selector :: (r: Rect, data: *void) {
+    //                    r = get_rect(10.5*k, 4*k, 1.8*k, 3*k);
+    region, inside := begin_scrollable_region(r);
+
+    NUM_BUTTONS :: 30;
+    // button_height = floor(inside.w * .22 + .5);
+
+    // @Incomplete: Add the scrolling offset when we have it.
+    // @Incomplete: Scroll value is in pixels, what happens if the screen changes resolution?
+    s := inside;
+    s.h = 50;
+    s.y -= scroll_value_new_profile;
+    // button_theme.label_theme.alignment = .Center;
+    // button_theme.font = null;
+
+    opened_windows := get_list_of_programs();
+    for opened_windows {
+        _, _, released := button(s, it, identifier=it_index);
+        if released {
+            print("Program % selected\n", it);
+            subwindow_info_new_profile.open = false;
+            profiles[profiles.count -1].program = copy_string(it);
+            current_mapping_state = .NOTHING;
+        }
+
+        if it_index != opened_windows.count  {
+            s.y += floor(50 * 1.1 + 0.5);  // Just so r.y is in the right place for end_scrollable_region().
+        }
+    }
+
+    end_scrollable_region(region, s.x + s.w, s.y + s.h, *scroll_value_new_profile);
 }
 
 init_fonts :: (window: Window_Type) {

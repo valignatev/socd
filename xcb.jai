@@ -670,7 +670,7 @@ xcb_depth_iterator_t :: struct {
     index: s32;
 }
 
-xcb_event_mask_t :: enum u32 {
+xcb_event_mask_t :: enum_flags u32 {
     NO_EVENT              :: 0;
     KEY_PRESS             :: 1;
     KEY_RELEASE           :: 2;
@@ -1734,7 +1734,7 @@ xcb_get_window_attributes_reply_t :: struct {
     map_state:             u8;
     override_redirect:     u8;
     colormap:              xcb_colormap_t;
-    all_event_masks:       u32;
+    all_event_masks:       xcb_event_mask_t;
     your_event_mask:       u32;
     do_not_propagate_mask: u16;
     pad0:                  [2] u8;

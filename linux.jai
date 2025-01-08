@@ -31,6 +31,9 @@ get_dpi_scale :: (window: Window_Type) -> float {
     return 1;
 }
 
+NET_NAME_ATOM: xcb_atom_t;
+NET_NAME := "_NET_WM_NAME";
+
 detect_focused_program :: () {
     // @TODO: Might be useful to detect currently focused program at the start.
     // Theoretically, it would always be us, but there's actually a possibility
@@ -41,30 +44,19 @@ detect_focused_program :: () {
     // to attach all needed hooks.
     con := global_xcb_connection;
     net_active_atom: xcb_atom_t;
-    net_name_atom: xcb_atom_t;
     net_name_old_atom: xcb_atom_t;
     active := "_NET_ACTIVE_WINDOW";
-    name := "_NET_WM_NAME";
     active_cookie := xcb_intern_atom(con, cast(u8)false, cast(u8)active.count, active.data);
-    name_cookie := xcb_intern_atom(con, cast(u8)false, cast(u8)name.count, name.data);
 
     active_error: *xcb_generic_error_t;
-    name_error: *xcb_generic_error_t;
     active_reply := xcb_intern_atom_reply(con, active_cookie, *active_error);
-    name_reply := xcb_intern_atom_reply(con, name_cookie, *name_error);
 
     if !active_reply {
         log_error("Can't get _NET_ACTIVE_WINDOW atom, error is: %\n", active_error.*);
         return;
     }
 
-    if !name_reply {
-        log_error("Can't get _NET_WM_NAME atom, error is: %\n", name_error.*);
-        return;
-    }
-
     net_active_atom = active_reply.atom;
-    net_name_atom = name_reply.atom;
 
     screen := xcb_setup_roots_iterator(xcb_get_setup(con)).data;
     root_window := screen.root;
@@ -104,42 +96,10 @@ detect_focused_program :: () {
                 input_focus_reply := xcb_get_input_focus_reply(con, xcb_get_input_focus(con), null);
                 focused_window := input_focus_reply.focus;
 
-                name_error: *xcb_generic_error_t;
-                name_old_error: *xcb_generic_error_t;
-
-                // Some programs don't comply with EWMH and set old WM_NAME instead, try to get it as well
-                name_cookie := xcb_get_property(con, 0, focused_window, net_name_atom, xx xcb_get_property_type_t.XCB_GET_PROPERTY_TYPE_ANY, 0, U32_MAX);
-                name_old_cookie := xcb_get_property(con, 0, focused_window, xx xcb_atom_enum_t.WM_NAME, xx xcb_atom_enum_t.STRING, 0, U32_MAX);
-
-                name_reply := xcb_get_property_reply(con, name_cookie, *name_error);
-                name_old_reply := xcb_get_property_reply(con, name_old_cookie, *name_old_error);
-
-                name: string;
-
-                // On Sway, I get no reply when the X11 window loses focus and it switches
-                // to a Wayland-native application. So I let it be...
-                if !name_reply && !name_old_reply {
-                    // Maybe socd unhook logic here
-                    xcb_ungrab_server(con);
-                    xcb_flush(con);
-                    continue;
-                }
-
-                name_len := xcb_get_property_value_length(name_reply);
-                name_old_len := xcb_get_property_value_length(name_old_reply);
-                if !name_len {
-                    name.count = name_old_len;
-                    name.data = xcb_get_property_value(name_old_reply);
-                } else {
-                    name.count = name_len;
-                    name.data = xcb_get_property_value(name_reply);
-                }
-
+                name := get_x11_window_name(focused_window);
                 log("Name: %\n", name);
                 xcb_ungrab_server(con);
                 xcb_flush(con);
-                c_free(name_reply);
-                c_free(name_old_reply);
                 // TODO: Better way to handle the title name, contains is probably not very
                 // robust. Also it's case-sensitive for now :(
                 if contains(active_profile.program, name) {
@@ -150,9 +110,94 @@ detect_focused_program :: () {
             }
         }
     }
-    c_free(name_reply);
     c_free(active_reply);
     return;
+}
+
+_opened_programs: [..]string;
+
+get_x11_window_name :: (window: u32) -> string {
+    result: string;
+
+    con := global_xcb_connection;
+    name_error: *xcb_generic_error_t;
+    name_old_error: *xcb_generic_error_t;
+
+    // Some programs don't comply with EWMH and set old WM_NAME instead, try to get it as well
+    name_cookie := xcb_get_property(con, 0, window, NET_NAME_ATOM, xx xcb_get_property_type_t.XCB_GET_PROPERTY_TYPE_ANY, 0, U32_MAX);
+    name_old_cookie := xcb_get_property(con, 0, window, xx xcb_atom_enum_t.WM_NAME, xx xcb_atom_enum_t.STRING, 0, U32_MAX);
+
+    name_reply := xcb_get_property_reply(con, name_cookie, *name_error);
+    name_old_reply := xcb_get_property_reply(con, name_old_cookie, *name_old_error);
+
+
+    // On Sway, I get no reply when the X11 window loses focus and it switches
+    // to a Wayland-native application. So I let it be...
+    if !name_reply && !name_old_reply {
+        // Maybe socd unhook logic here
+        xcb_ungrab_server(con);
+        xcb_flush(con);
+        return "";
+    }
+
+    name_len := xcb_get_property_value_length(name_reply);
+    name_old_len := xcb_get_property_value_length(name_old_reply);
+    if !name_len {
+        result.count = name_old_len;
+        result.data = xcb_get_property_value(name_old_reply);
+    } else {
+        result.count = name_len;
+        result.data = xcb_get_property_value(name_reply);
+    }
+
+    c_free(name_reply);
+    c_free(name_old_reply);
+
+    return result;
+}
+
+get_list_of_programs :: () -> []string {
+    con := global_xcb_connection;
+    result := _opened_programs;
+
+
+    screen := xcb_setup_roots_iterator(xcb_get_setup(con)).data;
+    root_window := screen.root;
+
+    tree_cookie := xcb_query_tree(con, root_window);
+    tree_reply := xcb_query_tree_reply(con, tree_cookie, null);
+
+    if (tree_reply) {
+        children_data := xcb_query_tree_children(tree_reply);
+        children_count := xcb_query_tree_children_length(tree_reply);
+
+        children: []u32;
+        children.data = children_data;
+        children.count = children_count;
+
+        for children {
+
+            attrs_error: *xcb_generic_error_t;
+            attrs_cookie := xcb_get_window_attributes(con, it);
+            attrs_reply := xcb_get_window_attributes_reply(con, attrs_cookie, *attrs_error);
+
+            registered_events := attrs_reply.all_event_masks;
+            if registered_events & (.KEY_PRESS | .KEY_RELEASE | .BUTTON_PRESS | .BUTTON_RELEASE) == 0 {
+                continue;
+            }
+            
+            defer c_free(attrs_reply);
+
+            name := get_x11_window_name(it);
+
+            if name.count > 0 {
+                // TODO: MEMORY_LEAK
+                array_add(*result, copy_string(name));
+            }
+        }
+    }
+
+    return result;
 }
 
 set_kb_hook :: () {
@@ -961,10 +1006,13 @@ handle_libinput_event :: (event: *libinput_event, uinput_fd: s32) {
                         code=SYN_REPORT,
                         value=0,
                     };
+
+                    print("WRITING: %\n", output_events);
                     written := write(uinput_fd, output_events.data, size_of(input_event) * output_events.count);
                     if written < 0 {
                         log_error("Could not release the key\n");
                     }
+                    print("WRITTEN: %\n", written);
                 }
             } else if ev.value == 0 {
                 if test_key(opposing_code) {
@@ -1222,6 +1270,8 @@ open_restricted :: (path_raw: *u8, flags: s32, user_data: *void) -> s32 #c_call 
         if !uinput_device_created && is_virtual_device(path) {
             uinput_device_created = true;
             virtual_device_path = path;
+
+            print("Bailed out of multiplexing a virtual keyboard %\n", path);
             return -1;
         }
 
@@ -1230,7 +1280,7 @@ open_restricted :: (path_raw: *u8, flags: s32, user_data: *void) -> s32 #c_call 
         table_add(*libinput_opened_devices, path, fd);
         if is_keyboard(fd, path) {
             print("%\n", path);
-            if contains(path, "event6") {
+            if contains(path, "event10") {
                 grab_result := ioctl(fd, EVIOCGRAB, 1);
                 if grab_result < 0 {
                     log_error("Could not grab % for controlling its inputs\n", path);
@@ -1253,9 +1303,9 @@ interface_: libinput_interface = .{open_restricted, close_restricted};
 
 platform_init :: () -> success: bool #must {
 
-    // x11 and xkbcommon
+    // x11 and libxkbcommon
     {
-        // init xcb X11 connection and libxkbcommon
+        // xcb X11 connection
         global_xcb_connection = xcb_connect(null, null);
         con_errors := xcb_connection_has_error(global_xcb_connection);
 
@@ -1264,6 +1314,19 @@ platform_init :: () -> success: bool #must {
             return false;
         }
 
+
+        // Atoms
+        name_error: *xcb_generic_error_t;
+        name_cookie := xcb_intern_atom(global_xcb_connection, cast(u8)false, cast(u8)NET_NAME.count, NET_NAME.data);
+        name_reply := xcb_intern_atom_reply(global_xcb_connection, name_cookie, *name_error);
+
+        if !name_reply {
+            log_error("Can't get _NET_WM_NAME atom, error is: %\n", name_error.*);
+            return false;
+        }
+        NET_NAME_ATOM = name_reply.atom;
+
+        // and libxkbcommon
         base_xkb_event: u8;
 
         major: u16 = 1;
