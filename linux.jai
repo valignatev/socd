@@ -185,7 +185,7 @@ get_list_of_programs :: () -> []string {
             if registered_events & (.KEY_PRESS | .KEY_RELEASE | .BUTTON_PRESS | .BUTTON_RELEASE) == 0 {
                 continue;
             }
-            
+
             defer c_free(attrs_reply);
 
             name := get_x11_window_name(it);
@@ -795,7 +795,7 @@ start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
             log_error("Couldn't create a virtual keyboard: %, %\n", code, s);
             return null;
         }
-        
+
         fd := libinput_get_fd(libinput);
         // TODO: apparently, libinput doesn't handle gamepads. So I need to open and add them to
         // this descriptor set myself. Sadge.
@@ -854,19 +854,14 @@ handle_libinput_event :: (event: *libinput_event, uinput_fd: s32) {
         device_name := tprint("/dev/input/%", to_string(libinput_device_get_sysname(device)));
         // print("device_name: %\n", device_name);
 
-        seconds := libinput_event_keyboard_get_time(keyboard_event);
-        useconds := libinput_event_keyboard_get_time_usec(keyboard_event);
-        
         // Reconstruct input_event from libinput_event.
         input_events[0] = input_event.{
-            // time=.{seconds, xx useconds},
             time=.{},
             type=EV_KEY,
             code=cast(u16)key,
             value=xx state,
         };
         input_events[1] = input_event.{
-            // time=.{seconds, xx useconds},
             time=.{},
             type=EV_SYN,
             code=SYN_REPORT,
@@ -879,11 +874,22 @@ handle_libinput_event :: (event: *libinput_event, uinput_fd: s32) {
 
         // Pass the real event into our virtual device.
         defer if write_original {
+
             written := write(uinput_fd, input_events.data, size_of(input_event) * output_events.count);
             if written < 0 {
                 log_error("Could not pass the event on\n");
             }
+
+            // We're updating xkb state here for handling Numlock correctly, but we don't
+            // even take advantage of that, because numpad keys are specialcased in get_key_name anyway
+            // So maybe we don't even need to update the state at all. At least until we have a proper
+            // keyboard layouts/localization support.
+            xkb_keycode: xkb_keycode_t = XKB_EVDEV_OFFSET + key;
+            xkb_state_update_key(global_xkb_state, xkb_keycode, xx state);
+
         }
+
+        if key == KEY_NUMLOCK return;
 
         if current_mapping_state == .SETTING_SOURCE {
             log("SETTING SOURCE\n");
@@ -1035,10 +1041,7 @@ handle_libinput_event :: (event: *libinput_event, uinput_fd: s32) {
                 }
             }
         }
-
     }
-
-                
 }
 
 start_logging_keys :: () {
@@ -1091,6 +1094,20 @@ get_key_name :: (key_scan_code: u32) -> string {
         case KEY_PAGEDOWN;
             KEY_NAMES[KEY_PAGEDOWN] = "PgDown";
             return "PgDown";
+        case KEY_KP0; return "Num 0";
+        case KEY_KP1; return "Num 1";
+        case KEY_KP2; return "Num 2";
+        case KEY_KP3; return "Num 3";
+        case KEY_KP4; return "Num 4";
+        case KEY_KP5; return "Num 5";
+        case KEY_KP6; return "Num 6";
+        case KEY_KP7; return "Num 7";
+        case KEY_KP8; return "Num 8";
+        case KEY_KP9; return "Num 9";
+        case KEY_KPMINUS; return "Num -";
+        case KEY_KPPLUS; return "Num +";
+        case KEY_KPDOT; return "NUM .";
+        case KEY_KPENTER; return "Num Ent";
     }
 
     key_name: string;
@@ -1251,9 +1268,12 @@ is_keyboard :: (device_fd: s32, device_path: string) -> bool {
         return false;
     }
 
-    // Inclusive intentionally
-    // TODO: don't count gamepad buttons here. I think they start from BTN_JOYSTICK in input.jai
-    for KEY_ESC..cast(u32)KEY_MAX {
+    // TODO: Maybe extract these two ranges as keyboard ranges so they're reused here and when
+    // creating a virtual keyboard.
+    for KEY_ESC..cast(u32)KEY_MICMUTE {
+        if test_key(it) return true;
+    }
+    for KEY_FN..cast(u32)KEY_FN_RIGHT_SHIFT {
         if test_key(it) return true;
     }
     return false;
@@ -1280,11 +1300,9 @@ open_restricted :: (path_raw: *u8, flags: s32, user_data: *void) -> s32 #c_call 
         table_add(*libinput_opened_devices, path, fd);
         if is_keyboard(fd, path) {
             print("%\n", path);
-            if contains(path, "event10") {
-                grab_result := ioctl(fd, EVIOCGRAB, 1);
-                if grab_result < 0 {
-                    log_error("Could not grab % for controlling its inputs\n", path);
-                }
+            grab_result := ioctl(fd, EVIOCGRAB, 1);
+            if grab_result < 0 {
+                log_error("Could not grab % for controlling its inputs\n", path);
             }
             return fd;
         }

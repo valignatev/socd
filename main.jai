@@ -16,6 +16,7 @@ FOR FUTURE:
 - Debug UI. Showing stuff like currently pressed key, when mappings kick in, list of mappings.
 - Mouse bindings
 - Controller bindings
+- Localiazation - maybe just a text file with user-submitted strings.
 */
 
 #if OS == .WINDOWS {
@@ -460,7 +461,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         }
         if subwindow_info_new_profile.open {
             subwindow_state := add_subwindow(*subwindow_info_new_profile, *theme);
-            
+
         } else if profiles.count && profiles[profiles.count -1].program == "" {
             array_ordered_remove_by_index(*profiles, profiles.count - 1);
             current_mapping_state = .NOTHING;
