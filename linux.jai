@@ -102,10 +102,12 @@ detect_focused_program :: () {
                 xcb_flush(con);
                 // TODO: Better way to handle the title name, contains is probably not very
                 // robust. Also it's case-sensitive for now :(
-                if contains(active_profile.program, name) {
-                    set_kb_hook();
-                } else {
-                    unset_kb_hook();
+                for profile: profiles {
+                    if contains(profile.program, name) {
+                        set_kb_hook();
+                    } else {
+                        unset_kb_hook();
+                    }
                 }
             }
         }
@@ -616,7 +618,7 @@ _start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
                         table_set(*active_profile.mappings, active_profile.mappings_array[active_mapping_index].source.code, mapping.destination);
                         old_source, found := table_find(*active_profile.mappings, mapping.destination.code);
                         print("Old source is %\n", old_source);
-                        if mapping.mode == .OVERRIDE {
+                        if mapping.mode == .OPPOSITE {
                             table_set(*active_profile.mappings, mapping.destination.code, active_profile.mappings_array[active_mapping_index].source);
                         }
                         // I don't think it matters whether we found it.
@@ -630,7 +632,7 @@ _start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
                         mapping := active_profile.mappings_array[active_mapping_index];
 
                         table_set(*active_profile.mappings, mapping.source.code, mapping.destination);
-                        if mapping.mode == .OVERRIDE {
+                        if mapping.mode == .OPPOSITE {
                             table_set(*active_profile.mappings, mapping.destination.code, mapping.source);
                             table_remove(*active_profile.mappings, mapping.source.code);
                         }
@@ -654,7 +656,7 @@ _start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
                 continue;
             }
 
-            if bind.mode == .MAP {
+            if bind.mode == .REMAP {
                 write_original = false;
                 bind_name := get_key_name(bind.code);
                 log("Found mapping: %\n", bind_name);
@@ -676,7 +678,7 @@ _start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
                 continue;
             }
 
-            if bind.mode == .OVERRIDE || bind.mode == .NEUTRAL {
+            if bind.mode == .OPPOSITE || bind.mode == .NEUTRAL {
                 opposing_code := bind.code;
 
                 key_bit_result := ioctl(device_fd, EVIOCGKEY(key_bits.count), *key_bits);
@@ -924,7 +926,7 @@ handle_libinput_event :: (event: *libinput_event, uinput_fd: s32) {
                     table_set(*active_profile.mappings, active_profile.mappings_array[active_mapping_index].source.code, mapping.destination);
                     old_source, found := table_find(*active_profile.mappings, mapping.destination.code);
                     print("Old source is %\n", old_source);
-                    if mapping.mode == .OVERRIDE {
+                    if mapping.mode == .OPPOSITE {
                         table_set(*active_profile.mappings, mapping.destination.code, active_profile.mappings_array[active_mapping_index].source);
                     }
                     // I don't think it matters whether we found it.
@@ -938,7 +940,7 @@ handle_libinput_event :: (event: *libinput_event, uinput_fd: s32) {
                     mapping := active_profile.mappings_array[active_mapping_index];
 
                     table_set(*active_profile.mappings, mapping.source.code, mapping.destination);
-                    if mapping.mode == .OVERRIDE {
+                    if mapping.mode == .OPPOSITE {
                         table_set(*active_profile.mappings, mapping.destination.code, mapping.source);
                         table_remove(*active_profile.mappings, mapping.source.code);
                     }
@@ -962,7 +964,7 @@ handle_libinput_event :: (event: *libinput_event, uinput_fd: s32) {
             return;
         }
 
-        if bind.mode == .MAP {
+        if bind.mode == .REMAP {
             write_original = false;
             bind_name := get_key_name(bind.code);
             log("Found mapping: %\n", bind_name);
@@ -984,7 +986,7 @@ handle_libinput_event :: (event: *libinput_event, uinput_fd: s32) {
             return;
         }
 
-        if bind.mode == .OVERRIDE || bind.mode == .NEUTRAL {
+        if bind.mode == .OPPOSITE || bind.mode == .NEUTRAL {
             opposing_code := bind.code;
 
             device_fd, found := table_find(*libinput_opened_devices, device_name);

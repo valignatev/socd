@@ -1,14 +1,12 @@
 /*
 ~~TODOS~~
 FOR SHIPPING:
-- Add currently active profile to settings file.
 - Implement saving to the profile.
 - Fix numpad bug on Windows
-- [Works with libinput] Better device grab on Linux that doesn't just wait for the first pressed key.
 - Better focused program recognition. Now it's just case-sensitive string contains.
 - Profile add and delete.
 - Better dropdown ui for mapping mode.
-- Automatic scrol for when stuff doesn't fit into the scrollable region.
+- Automatic scroll for when stuff doesn't fit into the scrollable region.
 - Search autocomplete when selecting a program for new profile.
 
 FOR FUTURE:
@@ -79,10 +77,9 @@ Platform :: enum u32 {
     LINUX;
 }
 
-// TODO: OVERRIDE -> OPPOSITE and MAP -> REMAP is probably better naming
 Mapping_Mode :: enum u32 {
-    MAP;
-    OVERRIDE;
+    REMAP;
+    OPPOSITE;
     NEUTRAL;
 }
 
@@ -190,6 +187,7 @@ parse_settings :: (raw_settings: string, settings_filename: string) {
         }
 
         profile: Profile;
+        active := false;
         profile_parsed := false;
         while !profile_parsed {
             line, line_found = tfh.consume_next_line(*handler);
@@ -205,6 +203,10 @@ parse_settings :: (raw_settings: string, settings_filename: string) {
                 if equal(left, "PROFILE_END") {
                     log("Profile parsed successfully\n");
                     array_add(*profiles, profile);
+                    if active {
+                        active_profile = profile;
+                        active_profile_index = profiles.count - 1;
+                    }
                     profile_parsed = true;
                 } else {
                     error_msg :: #string ERR
@@ -234,6 +236,12 @@ Ignoring the line and trying to continue parsing. Config line was `%`
                             continue;
                     }
 
+                case "active";
+                    result := trim(right);
+                    if right == "true" {
+                        active = true;
+                    }
+
                 case "mapping";
                     mapping: Mapping;
                     mapping_bind: Mapping_Bind;
@@ -248,20 +256,20 @@ Ignoring the line and trying to continue parsing. Config line was `%`
                         mapping_mode := trim(mapping_config[0]);
                         to_upper_in_place(mapping_mode);
                         if mapping_mode == {
-                            case "OVERRIDE"; {
-                                mapping.mode = .OVERRIDE;
-                                mapping_bind.mode = .OVERRIDE;
+                            case "OPPOSITE"; {
+                                mapping.mode = .OPPOSITE;
+                                mapping_bind.mode = .OPPOSITE;
                             }
                             case "NEUTRAL"; {
                                 mapping.mode = .NEUTRAL;
                                 mapping_bind.mode = .NEUTRAL;
                             }
-                            case "MAP"; {
-                                mapping.mode = .MAP;
-                                mapping_bind.mode = .MAP;
+                            case "REMAP"; {
+                                mapping.mode = .REMAP;
+                                mapping_bind.mode = .REMAP;
                             }
                             case;
-                                tfh.error(*handler, "Incorrect mapping mode, ignoring it. Expected one of OVERRIDE|NEUTRAL|MAP, got %\n", mapping_mode);
+                                tfh.error(*handler, "Incorrect mapping mode, ignoring it. Expected one of OPPOSITE|NEUTRAL|REMAP, got %\n", mapping_mode);
                                 continue;
                         }
                     }
@@ -299,7 +307,7 @@ Ignoring the line and trying to continue parsing. Config line was `%`
                     table_set(*profile.mappings, source, mapping_bind);
                     array_add(*profile.mappings_array, mapping);
 
-                    if mapping.mode == .OVERRIDE {
+                    if mapping.mode == .OPPOSITE {
                         table_set(*profile.mappings, mapping.destination.code, mapping.source);
                     }
 
@@ -546,13 +554,13 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             old_mode := destination_ptr.mode;
             destination_ptr.*.mode = new_mode;
 
-            if new_mode == .MAP {
-                if old_mode == .OVERRIDE || old_mode == .NEUTRAL {
+            if new_mode == .REMAP {
+                if old_mode == .OPPOSITE || old_mode == .NEUTRAL {
                     table_remove(*active_profile.mappings, destination_ptr.code);
                 }
 
-            } else if new_mode == .OVERRIDE || new_mode == .NEUTRAL {
-                if old_mode == .MAP {
+            } else if new_mode == .OPPOSITE || new_mode == .NEUTRAL {
+                if old_mode == .REMAP {
                     table_set(*active_profile.mappings, destination_ptr.code, .{mode=new_mode, code=mapping.source.code, kind=mapping.source.kind});
                 } else {
                     dest_to_source_ptr := table_find_pointer(*active_profile.mappings, destination_ptr.code);
@@ -596,7 +604,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     if index_to_remove >= 0 {
         mapping_to_remove := active_profile.mappings_array[index_to_remove];
         table_remove(*active_profile.mappings, mapping_to_remove.source.code);
-        if mapping_to_remove.mode == .OVERRIDE || mapping_to_remove.mode == .NEUTRAL {
+        if mapping_to_remove.mode == .OPPOSITE || mapping_to_remove.mode == .NEUTRAL {
             table_remove(*active_profile.mappings, mapping_to_remove.destination.code);
         }
         array_ordered_remove_by_index(*active_profile.mappings_array, index_to_remove);
