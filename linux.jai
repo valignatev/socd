@@ -1376,7 +1376,7 @@ platform_init :: () -> success: bool #must {
 
         global_xkb_keymap = xkb_x11_keymap_new_from_device(global_xkb_context, global_xcb_connection, core_kbd_device_id, 0);
 
-        global_xkb_state = xkb_state_new(global_xkb_keymap);
+        global_xkb_state = xkb_x11_state_new_from_device(global_xkb_keymap, global_xcb_connection, core_kbd_device_id);
         if (!global_xkb_state) {
             log_error("Couldn't create xkb state for device\n");
             return false;
