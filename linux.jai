@@ -260,161 +260,6 @@ free_candidates :: (candidates: *[..]Device) {
     pthread_create(*tid, null, close_descriptors, *opened_file_descriptors_for_candidates);
 }
 
-keyboard_detector :: (file_info: *File_Visit_Info, device_candidates: *[..]Device) {
-    device_fd := open(file_info.full_name.data, O_RDONLY);
-    if device_fd < 0 {
-        log_error("Couldn't open device % for checking out whether it's a keyboard\n", file_info.full_name);
-        return;
-    }
-
-    opened_file_descriptors_for_candidates.array[opened_file_descriptors_for_candidates.counter] = device_fd;
-    opened_file_descriptors_for_candidates.counter += 1;
-
-    name: [256]u8;
-    device_name: string;
-    evbit: u32;
-
-    name_length := ioctl(device_fd, EVIOCGNAME(name.count), *name);
-    if name_length < 0 {
-        log_error("Couldn't get device name: %\n", file_info.full_name);
-    } else {
-        device_name = alloc_string(name_length - 1);
-        copy(device_name.data, name.data, device_name.count);
-    }
-
-    evbit_result := ioctl(device_fd, EVIOCGBIT(0, size_of(type_of(evbit))), *evbit);
-
-    if !(evbit & (1 << EV_KEY)) {
-        return;
-    }
-
-    key_bits_num :: (KEY_MAX / 8) + 1;
-    key_bits: [key_bits_num]u8;
-    keys_ioctl_result := ioctl(device_fd, EVIOCGBIT(EV_KEY, key_bits.count), *key_bits);
-    if keys_ioctl_result != key_bits_num {
-        log_error("Something is wrong with reading key bits from device %, ioctl result is %, skipping it...\n", device_name, keys_ioctl_result);
-        return;
-    }
-
-    // Remove this
-    if !(test_key(KEY_W) && test_key(KEY_A) && test_key(KEY_S) && test_key(KEY_D)) {
-        return;
-    }
-
-    candidate := array_add(device_candidates);
-    candidate.event_file = file_info.full_name;
-    candidate.file_descriptor = device_fd;
-    candidate.name = device_name;
-}
-
-get_loggable_device :: () -> *Device {
-    candidates: [..]Device;
-    device := New(Device);
-
-    result := visit_files("/dev/input", recursive=false, user_data=*candidates, proc=keyboard_detector, visit_symlinks=false, follow_directory_symlinks=false,, temp);
-
-    if !result {
-        log_error("Couldn't collect info about keyboard devices!\n");
-    }
-
-    fds: [..]pollfd;
-    array_reserve(*fds, candidates.count);
-
-    for candidates {
-        poll_event := array_add(*fds);
-        poll_event.fd = it.file_descriptor;
-        poll_event.events = POLLIN | POLLPRI;
-        // log("%\n", it);
-    }
-
-    poll_result := poll(fds.data, cast(u64)fds.count, -1);
-    if poll_result <= 0 {
-        log_error("Can't detect a keyboard: % (ERROR REASON HERE)\n", errno());
-    }
-
-    for fds {
-        if (it.revents & POLLIN) {
-            device.event_file = copy_string(candidates[it_index].event_file);
-            device.name = copy_string(candidates[it_index].name);
-            break;
-        }
-    }
-
-    free_candidates(*candidates);
-    reset_temporary_storage();
-    log("Final device: %\n", device.*);
-
-    return device;
-}
-
-// Fork of file_list that only returns directories under a path
-dir_list :: (path: string, recursive := false, follow_directory_symlinks := true) -> [] string #must {
-    files : [..] string;
-
-    visitor :: (info: *File_Visit_Info, user_data: *[..] string) {
-        array_add(user_data, copy_string(info.full_name));
-    }
-
-    visit_files(path, recursive, *files, visitor, follow_directory_symlinks=follow_directory_symlinks, visit_files=false, visit_directories=true);
-
-    return files;
-}
-
-// Unused but might be useful
-get_virtual_keyboard_path :: (info: *File_Visit_Info, user_data: $T) {
-    if !info.is_directory {
-        return;
-    }
-
-    uevent_path : = tprint("%/uevent", info.full_name);
-    udevice_info, success := read_entire_file(uevent_path);
-    if !success {
-        log_error("Couldn't read device uevent info: %\n", uevent_path);
-        return;
-    }
-
-    has_our_product_string := begins_with(udevice_info, "PRODUCT=3/6666/6665");
-    if !has_our_product_string {
-        return;
-    }
-
-    dirs := dir_list(info.full_name);
-    for dirs {
-        if contains(it, "/event") {
-            path_chunks := split(it, "/");
-            event_name := path_chunks[path_chunks.count-1];
-            log("Found event: %\n", event_name);
-
-            return;
-        }
-    }
-}
-
-get_virtual_keyboard_path :: (full_name: string) {
-    uevent_path : = tprint("%/uevent", full_name);
-    udevice_info, success := read_entire_file(uevent_path);
-    if !success {
-        log_error("Couldn't read device uevent info: %\n", uevent_path);
-        return;
-    }
-
-    has_our_product_string := begins_with(udevice_info, "PRODUCT=3/6666/6665");
-    if !has_our_product_string {
-        return;
-    }
-
-    dirs := dir_list(full_name);
-    for dirs {
-        if contains(it, "/event") {
-            path_chunks := split(it, "/");
-            event_name := path_chunks[path_chunks.count-1];
-            log("Found event: %\n", event_name);
-
-            return;
-        }
-    }
-}
-
 read_entire_proc_info :: () -> [..]u8 {
     data: [..] u8;
     buff: [4096] u8;
@@ -454,282 +299,6 @@ is_virtual_device :: (path: string) -> bool {
         }
     }
     return false;
-}
-
-_start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
-    key_bits_num :: (KEY_MAX / 8) + 1;
-    key_bits: [key_bits_num]u8;
-    output_events: [2]input_event;
-
-    push_context {
-        device := get_loggable_device();
-
-        device_fd := open(device.event_file.data, O_RDONLY);
-
-        defer close(device_fd);
-        if device_fd < 0 {
-            log_error("Could not open % for reading its inputs\n", device.event_file);
-        }
-        device.file_descriptor = device_fd;
-
-        key_bit_result := ioctl(device_fd, EVIOCGKEY(key_bits.count), *key_bits);
-        if key_bit_result < key_bits_num {
-            log_error("Can't read % key state\n", device.event_file);
-            return null;
-        }
-
-        ev: input_event;
-        // Wait for all button on the original keyboard to get unpressed before grabbing it.
-        // The reason is - something else might be listening for inputs on the original keyboard
-        // and it'll get stuck if we suddenly grab it. For example, touchpad prevents the cursor from moving
-        // when you touch it while typing. If I grab the keyboard while it thinks that some key is pressed -
-        // it goes into the infinite stuck loop until I ungrab the keyboard. Hence, this loop.
-        // Maybe there's a better way to do it, idk...
-        can_grab := false;
-        while !can_grab {
-            size := read(device_fd, *ev, size_of(input_event));
-            if ev.type != EV_KEY || ev.value == 2 {
-                continue;
-            }
-
-            key_bit_result = ioctl(device_fd, EVIOCGKEY(key_bits.count), *key_bits);
-            if key_bit_result < key_bits_num {
-                log_error("Can't read % key state\n", device.event_file);
-                // Not sure if this is a continue or a return
-                continue;
-            }
-
-            can_grab = true;
-            for KEY_ESC..cast(u16)KEY_MAX {
-                if test_key(it) {
-                    can_grab = false;
-                    break;
-                }
-            }
-        }
-        print("Break\n");
-
-        grab_result := ioctl(device_fd, EVIOCGRAB, 1);
-        if grab_result < 0 {
-            log_error("Could not grab % for controlling its inputs\n", device.event_file);
-        }
-        defer ioctl(device_fd, EVIOCGRAB, 0);
-
-        uinput_fd := open("/dev/uinput", O_RDWR | O_NONBLOCK);
-
-        if uinput_fd < 0 {
-
-            System :: #import "System";
-
-            code, s := System.get_error_value_and_string();
-            log_error("Could not open \"/dev/uinput\" for creating a virtual keyboard, error: %\n", s);
-            log_error("Reopen the program with root privileges, or configure required udev rules\n");
-            return null;
-        }
-        defer close(uinput_fd);
-
-        keys_ioctl_result := ioctl(device_fd, EVIOCGBIT(EV_KEY, key_bits.count), *key_bits);
-        if keys_ioctl_result != key_bits_num {
-            log_error("Something is wrong with reading key bits from %, ioctl result is %, skipping it...\n", device.event_file, keys_ioctl_result);
-            return null;
-        }
-
-        // TODO: Error handling
-        ioctl(uinput_fd, UI_SET_EVBIT, EV_KEY);
-
-        // Inclusive intentionally
-        for KEY_ESC..cast(u32)KEY_MAX {
-            if test_key(it) {
-                ioctl(uinput_fd, UI_SET_KEYBIT, it);
-            }
-        }
-
-        usetup: uinput_setup;
-        usetup.id.bustype = BUS_USB;
-        usetup.id.vendor = 0x6666;
-        usetup.id.product = 0x6665;
-        usetup.name = xx "SOCD keyboard".data;
-
-        ioctl(uinput_fd, UI_DEV_SETUP, *usetup);
-        // Should I really call destroy? Seems like Linux destroys my virtual keyboard anyway
-        defer ioctl(uinput_fd, UI_DEV_DESTROY);
-        ioctl(uinput_fd, UI_DEV_CREATE);
-
-        sym_buffer: [256]u8;
-        utf8_buffer: [256]u8;
-        stop := false;
-        while !stop {
-            size := read(device_fd, *ev, size_of(input_event));
-            write_original := true;
-
-            if (size < size_of(input_event)) {
-                log_error("Reading event from % failed\n", device.event_file);
-                continue;
-            }
-
-
-            // Pass the real event into our virtual device.
-            defer if write_original {
-                written := write(uinput_fd, *ev, size_of(input_event));
-                if written < 0 {
-                    log_error("Could not pass the event on\n");
-                }
-            }
-
-            xkb_keycode: xkb_keycode_t = XKB_EVDEV_OFFSET + xx ev.code;
-            keysym := xkb_state_key_get_one_sym(global_xkb_state, xkb_keycode);
-
-            if ev.type == EV_KEY && ev.value == IS_DOWN {
-                xkb_keysym_get_name(keysym, sym_buffer.data, sym_buffer.count);
-                xkb_state_key_get_utf8(global_xkb_state, xkb_keycode, utf8_buffer.data, utf8_buffer.count);
-                //log("Pressed: % - %\n", to_string(sym_buffer.data), to_string(utf8_buffer.data));
-            }
-
-            if current_mapping_state == .SETTING_SOURCE {
-                log("SETTING SOURCE\n");
-                if ev.value == IS_DOWN && ev.type == EV_KEY {
-                    active_profile.mappings_array[active_mapping_index].source.code = ev.code;
-                    current_mapping_state = .SETTING_DESTINATION;
-                    log("Set source %\n", ev.code);
-                }
-                continue;
-            } else if current_mapping_state == .SETTING_DESTINATION {
-                if ev.value == IS_DOWN && ev.type == EV_KEY {
-                    active_profile.mappings_array[active_mapping_index].destination.code = ev.code;
-                    mapping: = active_profile.mappings_array[active_mapping_index];
-                    mapping.destination.code = ev.code;
-                    table_set(*active_profile.mappings, mapping.source.code, mapping.destination);
-                    current_mapping_state = .NOTHING;
-                    active_mapping_index = -1;
-                    log("Set destination %\n", ev.code);
-                }
-                continue;
-            } else if current_mapping_state == .SETTING_JUST_SOURCE || current_mapping_state == .SETTING_JUST_DESTINATION {
-                if ev.value == IS_DOWN && ev.type == EV_KEY {
-                    log("SETTING JUST ONE BIND\n");
-                    if current_mapping_state == .SETTING_JUST_SOURCE {
-                        print("Before\n");
-                        for v, k: active_profile.mappings {
-                            print("%, %\n", v, k);
-                        }
-                        mapping := active_profile.mappings_array[active_mapping_index];
-                        active_profile.mappings_array[active_mapping_index].source.code = ev.code;
-
-                        table_set(*active_profile.mappings, active_profile.mappings_array[active_mapping_index].source.code, mapping.destination);
-                        old_source, found := table_find(*active_profile.mappings, mapping.destination.code);
-                        print("Old source is %\n", old_source);
-                        if mapping.mode == .OPPOSITE {
-                            table_set(*active_profile.mappings, mapping.destination.code, active_profile.mappings_array[active_mapping_index].source);
-                        }
-                        // I don't think it matters whether we found it.
-                        table_remove(*active_profile.mappings, old_source.code);
-                        print("After\n");
-                        for v, k: active_profile.mappings {
-                            print("%, %\n", v, k);
-                        }
-                    } else if current_mapping_state == .SETTING_JUST_DESTINATION {
-                        active_profile.mappings_array[active_mapping_index].destination.code = ev.code;
-                        mapping := active_profile.mappings_array[active_mapping_index];
-
-                        table_set(*active_profile.mappings, mapping.source.code, mapping.destination);
-                        if mapping.mode == .OPPOSITE {
-                            table_set(*active_profile.mappings, mapping.destination.code, mapping.source);
-                            table_remove(*active_profile.mappings, mapping.source.code);
-                        }
-                    }
-
-                    current_mapping_state = .NOTHING;
-                    active_mapping_index = -1;
-                    log("Set source %\n", ev.code);
-                }
-                continue;
-            }
-
-            if !KB_HOOK_SET {
-                continue;
-            }
-
-            // NOTE: We're counting on the correct mode being set on the destination keybind
-            // in the hash table. At least for now
-            bind := get_key_mapping(ev.code);
-            if bind == dummy_bind {
-                continue;
-            }
-
-            if bind.mode == .REMAP {
-                write_original = false;
-                bind_name := get_key_name(bind.code);
-                log("Found mapping: %\n", bind_name);
-                output_events[0] = input_event.{
-                    type=EV_KEY,
-                    code=cast(u16)bind.code,
-                    value=ev.value,
-                };
-                output_events[1] = input_event.{
-                    type=EV_SYN,
-                    code=SYN_REPORT,
-                    value=0,
-                };
-
-                written := write(uinput_fd, output_events.data, size_of(input_event) * output_events.count);
-                if written < 0 {
-                    log_error("Could not write one to one mapping for %\n", bind_name);
-                }
-                continue;
-            }
-
-            if bind.mode == .OPPOSITE || bind.mode == .NEUTRAL {
-                opposing_code := bind.code;
-
-                key_bit_result := ioctl(device_fd, EVIOCGKEY(key_bits.count), *key_bits);
-                if key_bit_result < key_bits_num {
-                    log_error("Can't read % key state\n", device.event_file);
-                    continue;
-                }
-                if ev.value == 1 {
-                    if test_key(opposing_code) {
-                        if bind.mode == .NEUTRAL {
-                            write_original = false;
-                        }
-                        output_events[0] = input_event.{
-                            type=EV_KEY,
-                            code=cast(u16)opposing_code,
-                            value=IS_UP,
-                        };
-                        output_events[1] = input_event.{
-                            type=EV_SYN,
-                            code=SYN_REPORT,
-                            value=0,
-                        };
-                        written := write(uinput_fd, output_events.data, size_of(input_event) * output_events.count);
-                        if written < 0 {
-                            log_error("Could not release the key\n");
-                        }
-                    }
-                } else if ev.value == 0 {
-                    if test_key(opposing_code) {
-                        output_events[0] = input_event.{
-                            time=.{},
-                            type=EV_KEY,
-                            code=cast(u16)opposing_code,
-                            value=IS_DOWN,
-                        };
-                        output_events[1] = input_event.{
-                            time=.{},
-                            type=EV_SYN,
-                            code=SYN_REPORT,
-                            value=0,
-                        };
-                        written := write(uinput_fd, output_events.data, size_of(input_event) * output_events.count);
-                        if written < 0 {
-                            log_error("Could not repress the key\n");
-                        }
-                    }
-                }
-            }
-        }
-    }
-    return null;
 }
 
 start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
@@ -888,67 +457,57 @@ handle_libinput_event :: (event: *libinput_event, uinput_fd: s32) {
             // keyboard layouts/localization support.
             xkb_keycode: xkb_keycode_t = XKB_EVDEV_OFFSET + key;
             xkb_state_update_key(global_xkb_state, xkb_keycode, xx state);
-
         }
 
         if key == KEY_NUMLOCK return;
 
-        if current_mapping_state == .SETTING_SOURCE {
-            log("SETTING SOURCE\n");
+        using current_program_state;
+        if current_program_state.active_state == .SETTING_SOURCE || current_program_state.active_state == .SETTING_DESTINATION {
+            next_state := Mapping_State.NOTHING;
             if ev.value == IS_DOWN && ev.type == EV_KEY {
-                active_profile.mappings_array[active_mapping_index].source.code = ev.code;
-                current_mapping_state = .SETTING_DESTINATION;
-                log("Set source %\n", ev.code);
-            }
-            return;
-        } else if current_mapping_state == .SETTING_DESTINATION {
-            if ev.value == IS_DOWN && ev.type == EV_KEY {
-                active_profile.mappings_array[active_mapping_index].destination.code = ev.code;
-                mapping: = active_profile.mappings_array[active_mapping_index];
-                mapping.destination.code = ev.code;
-                table_set(*active_profile.mappings, mapping.source.code, mapping.destination);
-                current_mapping_state = .NOTHING;
-                active_mapping_index = -1;
-                log("Set destination %\n", ev.code);
-            }
-            return;
-        } else if current_mapping_state == .SETTING_JUST_SOURCE || current_mapping_state == .SETTING_JUST_DESTINATION {
-            if ev.value == IS_DOWN && ev.type == EV_KEY {
-                log("SETTING JUST ONE BIND\n");
-                if current_mapping_state == .SETTING_JUST_SOURCE {
-                    print("Before\n");
-                    for v, k: active_profile.mappings {
-                        print("%, %\n", v, k);
+                if active_state == .SETTING_SOURCE {
+                    print("mappings before:\n");
+                    for active_profile.mappings {
+                        dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
+                        print("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
                     }
-                    mapping := active_profile.mappings_array[active_mapping_index];
-                    active_profile.mappings_array[active_mapping_index].source.code = ev.code;
 
-                    table_set(*active_profile.mappings, active_profile.mappings_array[active_mapping_index].source.code, mapping.destination);
-                    old_source, found := table_find(*active_profile.mappings, mapping.destination.code);
-                    print("Old source is %\n", old_source);
-                    if mapping.mode == .OPPOSITE {
-                        table_set(*active_profile.mappings, mapping.destination.code, active_profile.mappings_array[active_mapping_index].source);
+                    old_source_code := active_mapping.source.code;
+                    if old_source_code == KEY_RESERVED next_state = .SETTING_DESTINATION;
+
+                    old_binding_from_old_source, found := table_find(*active_profile.mappings, old_source_code);
+                    print("Old source is %\n", old_binding_from_old_source);
+
+                    active_mapping.*.source.code = ev.code;
+                    table_set(*active_profile.mappings, active_mapping.source.code, active_mapping.destination);
+
+                    if active_mapping.mode == .OPPOSITE || active_mapping.mode == .NEUTRAL {
+                        table_remove(*active_profile.mappings, active_mapping.destination.code);
+                        table_set(*active_profile.mappings, active_mapping.destination.code, active_mapping.source);
                     }
                     // I don't think it matters whether we found it.
-                    table_remove(*active_profile.mappings, old_source.code);
-                    print("After\n");
-                    for v, k: active_profile.mappings {
-                        print("%, %\n", v, k);
-                    }
-                } else if current_mapping_state == .SETTING_JUST_DESTINATION {
-                    active_profile.mappings_array[active_mapping_index].destination.code = ev.code;
-                    mapping := active_profile.mappings_array[active_mapping_index];
+                    table_remove(*active_profile.mappings, old_source_code);
 
-                    table_set(*active_profile.mappings, mapping.source.code, mapping.destination);
-                    if mapping.mode == .OPPOSITE {
-                        table_set(*active_profile.mappings, mapping.destination.code, mapping.source);
-                        table_remove(*active_profile.mappings, mapping.source.code);
+                    print("mappings after:\n");
+                    for active_profile.mappings {
+                        dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
+                        print("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
                     }
+
+                    log("Set source %\n", ev.code);
+                } else if active_state == .SETTING_DESTINATION {
+                    old_destination_code := active_mapping.destination.code;
+                    active_mapping.*.destination.code = ev.code;
+
+                    table_set(*active_profile.mappings, active_mapping.source.code, active_mapping.destination);
+                    if active_mapping.mode == .OPPOSITE || active_mapping.mode == .NEUTRAL {
+                        table_set(*active_profile.mappings, active_mapping.destination.code, active_mapping.source);
+                        table_remove(*active_profile.mappings, old_destination_code);
+                    }
+                    log("Set destination %\n", ev.code);
                 }
 
-                current_mapping_state = .NOTHING;
-                active_mapping_index = -1;
-                log("Set source %\n", ev.code);
+                active_state = next_state;
             }
             return;
         }
@@ -1075,7 +634,7 @@ set_key_mapping_hook :: (window: Window_Type) {
 }
 
 get_key_name :: (key_scan_code: u32) -> string {
-    if key_scan_code == KEY_TEMP return "...";
+    if key_scan_code == KEY_RESERVED return "...";
     cached := KEY_NAMES[key_scan_code];
     if cached return cached;
 

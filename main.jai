@@ -23,9 +23,6 @@ FOR FUTURE:
     #load "linux.jai";
 }
 
-// Temp key while setting an actual mapping.
-KEY_TEMP : u32 : 0x69696969;
-
 // I think 256 key codes should be enough for any type of keyboard...
 // Indices are key scancodes
 KEY_NAMES: [65535]string;
@@ -55,14 +52,18 @@ Mapping_State :: enum {
     NOTHING :: 0;
     SETTING_SOURCE :: 1;
     SETTING_DESTINATION :: 2;
-    SETTING_JUST_SOURCE :: 3;
-    SETTING_JUST_DESTINATION :: 4;
-    DELETING_MAPPING :: 5;
+    DELETING_MAPPING :: 3;
 
-    ADDING_NEW_PROFILE :: 6;
+    ADDING_NEW_PROFILE :: 4;
 }
 
-current_mapping_state := Mapping_State.NOTHING;
+
+Program_State :: struct {
+    active_state: Mapping_State;
+    active_mapping: *Mapping;
+}
+
+current_program_state: Program_State;
 
 get_key_mapping :: (source_scan_code: u32) -> Mapping_Bind {
     destination, found := table_find(*active_profile.mappings, source_scan_code);
@@ -127,7 +128,6 @@ Profile :: struct {
 
 active_profile: Profile;
 active_profile_index := -1;
-active_mapping_index := -1;
 profiles: [..]Profile;
 
 CONFIG_HEADER :: #string HEADER
@@ -251,6 +251,7 @@ Ignoring the line and trying to continue parsing. Config line was `%`
                         tfh.error(*handler, "Incorrect mapping configuration, ignoring it. Expected MODE:source_bind:destination_bind, got %\n", right);
                         continue;
                     }
+
                     // Mapping mode
                     {
                         mapping_mode := trim(mapping_config[0]);
@@ -325,6 +326,9 @@ main :: () {
         exit(1);
     }
 
+    current_program_state = .{active_state=.NOTHING, active_mapping=null};
+    using current_program_state;
+
     the_window := create_window();
 
     // TODO: Need to separate detecting focused program and setting up keyboard hook. Probably...
@@ -355,14 +359,10 @@ main :: () {
         Input.update_window_events();
 
         for Input.get_window_resizes() {
-            // TODO: check that it's the window we care for and that dimensions indeed changed (like when moved to a monitor with different DPI).
-            //  We also get these events when the window was only moved around on the same monitor without any changes.
             Simp.update_window(it.window);
 
             if it.window == the_window {
-
                 should_reinit := (it.width != window_width) || (it.height != window_height);
-
                 window_width  = it.width;
                 window_height = it.height;
 
@@ -377,7 +377,7 @@ main :: () {
 
             // TODO: handle alt+f4
         }
-        if current_mapping_state == .NOTHING {
+        if active_state == .NOTHING {
             unset_mapping_setting_hook();
         }
 
@@ -390,6 +390,8 @@ main :: () {
 }
 
 draw_one_frame :: (dt: float, window: Window_Type) {
+    using current_program_state;
+
     proc := default_theme_procs[current_theme];
     my_theme = proc();
     my_theme.button_theme.font = button_font;
@@ -438,9 +440,9 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     add_button_rect := get_rect(10, profiles_height + 10 + 5, profiles_width / 2 - 5, 50);
     del_button_rect := get_rect(10 + profiles_width / 2 + 5, profiles_height + 10 + 5, profiles_width / 2 - 5, 50);
 
-    _, _, add_profile_released := button(add_button_rect, "Add", *my_theme.button_theme, disable_press = (current_mapping_state != .NOTHING));
+    _, _, add_profile_released := button(add_button_rect, "Add", *my_theme.button_theme, disable_press = (active_state != .NOTHING));
     if add_profile_released {
-        current_mapping_state = .ADDING_NEW_PROFILE;
+        active_state = .ADDING_NEW_PROFILE;
         subwindow_info_new_profile.open = true;
         new_profile := array_add(*profiles);
         active_profile = new_profile;
@@ -448,7 +450,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
     _, _, del_profile_released := button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_index < 0));
     if del_profile_released {
-        current_mapping_state = .NOTHING;
+        active_state = .NOTHING;
         active_profile = .{};
         array_ordered_remove_by_index(*profiles, active_profile_index);
         active_profile_index = -1;
@@ -472,7 +474,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
         } else if profiles.count && profiles[profiles.count -1].program == "" {
             array_ordered_remove_by_index(*profiles, profiles.count - 1);
-            current_mapping_state = .NOTHING;
+            active_state = .NOTHING;
         }
     }
 
@@ -484,12 +486,14 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
     add_mapping_rect := get_rect(profile_start, 10, profile_width, 50);
     _, _, add_mapping_released := button(add_mapping_rect, "Add mapping", *my_theme.button_theme);
-    if add_mapping_released && current_mapping_state == .NOTHING {
-        source := Mapping_Bind.{code=KEY_TEMP};
-        dest := Mapping_Bind.{code=KEY_TEMP};
+    if add_mapping_released && active_state == .NOTHING {
+        active_state = .SETTING_SOURCE;
+
+        source := Mapping_Bind.{code=KEY_RESERVED};
+        dest := Mapping_Bind.{code=KEY_RESERVED};
         array_insert_at(*active_profile.mappings_array, .{source=source, destination=dest}, 0);
-        current_mapping_state = .SETTING_SOURCE;
-        active_mapping_index = 0;
+        active_mapping = *active_profile.mappings_array[0];
+        table_set(*active_profile.mappings, source.code, dest);
         set_key_mapping_hook(window);
     }
 
@@ -519,6 +523,11 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     mappings_button_theme := my_theme.button_theme;
     mappings_button_theme.label_theme.alignment = .Center;
 
+    pulsating_button_theme := mappings_button_theme;
+    pulsating_button_theme.over_fade_in_speed = 20;
+    pulsating_button_theme.frame_color = pulsating_button_theme.frame_color_flash;
+    pulsating_button_theme.surface_color = pulsating_button_theme.surface_color_flash;
+
     dropdown_theme := *my_theme.dropdown_theme;
     dropdown_theme.theme_for_current_value = my_theme.button_theme;
     dropdown_theme.theme_for_each_choice.rectangle_shape.rounding_flags = 0;
@@ -531,19 +540,27 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         button_width := (s.w - 50)/3 - 1;
         source_rect := get_rect(s.x, s.y, button_width, 50);
         source_name := get_key_name(mapping.source.code);
-        _, _, released_source := button(source_rect, source_name, *mappings_button_theme, identifier=it_index, disable_press = current_mapping_state == .SETTING_DESTINATION);
+        source_pulsating := active_mapping && active_mapping == mapping && active_state == .SETTING_SOURCE;
+        source_theme := ifx source_pulsating pulsating_button_theme else mappings_button_theme;
+        _, source_state, released_source := button(source_rect, source_name, *source_theme, identifier=it_index, disable_press = active_state == .SETTING_DESTINATION);
+
+        // Making a button pulsating
+        if source_pulsating {
+            update_production_value_button(source_rect, false, source_state, .OVER, *pulsating_button_theme);
+        }
         if released_source {
-            current_mapping_state = .SETTING_JUST_SOURCE;
-            active_mapping_index = it_index;
-            mapping.*.source.code = KEY_TEMP;
+            active_state = .SETTING_SOURCE;
+            active_mapping = mapping;
             print("Source pressed\n");
         }
 
         mode_rect := get_rect(s.x + source_rect.w + 1, s.y, button_width, 50);
         changed, mode_state := dropdown(mode_rect, type_info_mapping_mode.names, xx *mapping.mode, dropdown_theme, identifier=mapping.source.code);
+
         // HACK: we might be reusing the leaked dropdown state with the same hash, left after removing a mapping with the same code
         // so test for null pointer. Need a better way to clear stale states, or remove current_value_pointer from it
         if changed {
+            active_mapping = mapping;
             new_mode := cast(Mapping_Mode, mode_state.current_value_pointer.*);
             print("mappings before:\n");
             for active_profile.mappings {
@@ -553,6 +570,9 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             destination_ptr := table_find_pointer(*active_profile.mappings, mapping.source.code);
             old_mode := destination_ptr.mode;
             destination_ptr.*.mode = new_mode;
+            active_mapping.*.source.mode = new_mode;
+            // We really rely on this one
+            active_mapping.*.destination.mode = new_mode;
 
             if new_mode == .REMAP {
                 if old_mode == .OPPOSITE || old_mode == .NEUTRAL {
@@ -567,7 +587,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
                     if dest_to_source_ptr dest_to_source_ptr.mode = new_mode;
                 }
             }
-            print("mappings after_last:\n");
+            print("mappings after:\n");
             for active_profile.mappings {
                 dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
                 print("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
@@ -576,11 +596,19 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
         dest_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1, s.y, button_width, 50);
         dest_name := get_key_name(mapping.destination.code);
-        _, _, released_dest := button(dest_rect, dest_name, *mappings_button_theme, identifier=it_index, disable_press = current_mapping_state == .SETTING_DESTINATION);
+
+        dest_pulsating := active_mapping && active_mapping == mapping && active_state == .SETTING_DESTINATION;
+        dest_theme := ifx dest_pulsating pulsating_button_theme else mappings_button_theme;
+        _, dest_state, released_dest := button(dest_rect, dest_name, *dest_theme, identifier=it_index, disable_press = active_state == .SETTING_DESTINATION);
+
+        // Making a button pulsating
+        if dest_pulsating {
+            update_production_value_button(dest_rect, false, dest_state, .OVER, *dest_theme);
+        }
+
         if released_dest {
-            current_mapping_state = .SETTING_JUST_DESTINATION;
-            active_mapping_index = it_index;
-            mapping.*.destination.code = KEY_TEMP;
+            active_state = .SETTING_DESTINATION;
+            active_mapping = mapping;
             print("Dest pressed\n");
         }
 
@@ -611,10 +639,12 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         table_remove(*state_table, dropdown_state_to_clean_up.hash);
 
         index_to_remove = -1;
+        active_state = .NOTHING;
     }
 }
 
 draw_new_profile_selector :: (r: Rect, data: *void) {
+    using current_program_state;
     //                    r = get_rect(10.5*k, 4*k, 1.8*k, 3*k);
     region, inside := begin_scrollable_region(r);
 
@@ -636,7 +666,7 @@ draw_new_profile_selector :: (r: Rect, data: *void) {
             print("Program % selected\n", it);
             subwindow_info_new_profile.open = false;
             profiles[profiles.count -1].program = copy_string(it);
-            current_mapping_state = .NOTHING;
+            active_state = .NOTHING;
         }
 
         if it_index != opened_windows.count  {
