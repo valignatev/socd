@@ -61,11 +61,13 @@ Mapping_State :: enum {
 Program_State :: struct {
     active_state: Mapping_State;
     active_mapping: *Mapping;
+    active_profile: *Profile;
 }
 
 current_program_state: Program_State;
 
 get_key_mapping :: (source_scan_code: u32) -> Mapping_Bind {
+    using current_program_state;
     destination, found := table_find(*active_profile.mappings, source_scan_code);
     if found return destination;
     return dummy_bind;
@@ -126,7 +128,6 @@ Profile :: struct {
     mappings_array: [..]Mapping;
 }
 
-active_profile: Profile;
 active_profile_index := -1;
 profiles: [..]Profile;
 
@@ -204,7 +205,6 @@ parse_settings :: (raw_settings: string, settings_filename: string) {
                     log("Profile parsed successfully\n");
                     array_add(*profiles, profile);
                     if active {
-                        active_profile = profile;
                         active_profile_index = profiles.count - 1;
                     }
                     profile_parsed = true;
@@ -398,6 +398,12 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     my_theme.button_theme.enable_variable_frame_thickness = true;
     my_theme.button_theme.rectangle_shape.rounding_flags = 0;
     my_theme.button_theme.label_theme.alignment = .Left;
+
+    pulsating_button_theme := my_theme.button_theme;
+    pulsating_button_theme.over_fade_in_speed = 20;
+    pulsating_button_theme.frame_color = pulsating_button_theme.frame_color_flash;
+    pulsating_button_theme.surface_color = pulsating_button_theme.surface_color_flash;
+
     set_default_theme(my_theme);  // Just in case we don't explicitly pass themes sometimes...!
 
     bg_col := my_theme.background_color;
@@ -424,11 +430,24 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
     profile_button_theme := my_theme.button_theme;
     profile_button_theme.frame_color = profile_button_theme.surface_color;
-    for profiles {
-        pressed := button(s, it.program, *profile_button_theme, identifier=it_index);
+    for * profiles {
+        if it_index == active_profile_index {
+            active_profile = it;
+        }
+
+        profile_pulsating := active_profile && active_profile == it && active_state == .ADDING_NEW_PROFILE;
+        theme := ifx profile_pulsating pulsating_button_theme else profile_button_theme;
+        if it == active_profile && active_state != .ADDING_NEW_PROFILE {
+            theme.frame_color = theme.frame_color_over;
+            theme.surface_color = theme.surface_color_over;
+        }
+        pressed, state := button(s, it.program, *theme, identifier=it_index);
+        if profile_pulsating {
+            update_production_value_button(s, false, state, .OVER, *pulsating_button_theme);
+        }
+
         if pressed {
             log("Profile % pressed\n", it.program);
-            active_profile = it;
             active_profile_index = it_index;
         }
 
@@ -446,14 +465,20 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         subwindow_info_new_profile.open = true;
         new_profile := array_add(*profiles);
         active_profile = new_profile;
+        active_profile_index = profiles.count - 1;
     }
 
     _, _, del_profile_released := button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_index < 0));
     if del_profile_released {
         active_state = .NOTHING;
-        active_profile = .{};
         array_ordered_remove_by_index(*profiles, active_profile_index);
-        active_profile_index = -1;
+        if profiles.count {
+            active_profile = *profiles[profiles.count - 1];
+            active_profile_index = profiles.count - 1;;
+        } else {
+            active_profile = null;
+            active_profile_index = -1;
+        }
     }
 
     //
@@ -474,6 +499,10 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
         } else if profiles.count && profiles[profiles.count -1].program == "" {
             array_ordered_remove_by_index(*profiles, profiles.count - 1);
+            if profiles.count {
+                active_profile = *profiles[profiles.count - 1];
+                active_profile_index = profiles.count - 1;;
+            }
             active_state = .NOTHING;
         }
     }
@@ -522,11 +551,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
     mappings_button_theme := my_theme.button_theme;
     mappings_button_theme.label_theme.alignment = .Center;
-
-    pulsating_button_theme := mappings_button_theme;
-    pulsating_button_theme.over_fade_in_speed = 20;
-    pulsating_button_theme.frame_color = pulsating_button_theme.frame_color_flash;
-    pulsating_button_theme.surface_color = pulsating_button_theme.surface_color_flash;
+    pulsating_button_theme.label_theme.alignment = .Center;
 
     dropdown_theme := *my_theme.dropdown_theme;
     dropdown_theme.theme_for_current_value = my_theme.button_theme;
@@ -615,6 +640,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         del_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1 + dest_rect.w + 1 + 1, s.y, 50, 50);
         _, _, del_released := button(del_rect, "X", *mappings_button_theme, identifier=it_index);
 
+        // Delete mapping
         if del_released {
             index_to_remove = it_index;
             dropdown_state_to_clean_up = mode_state;
