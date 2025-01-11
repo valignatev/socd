@@ -46,7 +46,7 @@ subwindows_initted := false;
 
 subwindow_info_new_profile: Subwindow_Info;
 subwindow_new_profile_just_got_closed := false;
-subwindow_opened_for_the_first_time := false;
+searchbar_should_be_active := true;
 
 Mapping_State :: enum {
     NOTHING :: 0;
@@ -62,6 +62,7 @@ Program_State :: struct {
     active_state: Mapping_State;
     active_mapping: *Mapping;
     active_profile: *Profile;
+    active_search: string;
 }
 
 current_program_state: Program_State;
@@ -326,7 +327,7 @@ main :: () {
         exit(1);
     }
 
-    current_program_state = .{active_state=.NOTHING, active_mapping=null};
+    current_program_state = .{active_state=.NOTHING, active_mapping=null, active_search=copy_string("")};
     using current_program_state;
 
     the_window := create_window();
@@ -394,10 +395,16 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
     proc := default_theme_procs[current_theme];
     my_theme = proc();
+
     my_theme.button_theme.font = button_font;
     my_theme.button_theme.enable_variable_frame_thickness = true;
     my_theme.button_theme.rectangle_shape.rounding_flags = 0;
     my_theme.button_theme.label_theme.alignment = .Left;
+
+    my_theme.scrollable_region_theme.region_background.shape.rounding_flags = 0;
+    my_theme.scrollable_region_theme.scrollbar_size = 0.01;
+
+    my_theme.text_input_theme.rectangle_shape.rounding_flags = 0;
 
     pulsating_button_theme := my_theme.button_theme;
     pulsating_button_theme.over_fade_in_speed = 20;
@@ -416,9 +423,6 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     // Profiles
     //
     profiles_theme := my_theme.scrollable_region_theme;
-    profiles_theme.region_background.shape.rounding_flags = 0;
-    profiles_theme.scrollbar_size = 0.01;
-
     profiles_width := 300.0;
     profiles_height := 500.0;
     r := get_rect(10, 10, profiles_width, profiles_height);
@@ -441,7 +445,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             theme.frame_color = theme.frame_color_over;
             theme.surface_color = theme.surface_color_over;
         }
-        pressed, state := button(s, it.program, *theme, identifier=it_index);
+        pressed, state := button(s, it.program, *theme, identifier=it_index, disable_press = active_state == .ADDING_NEW_PROFILE);
         if profile_pulsating {
             update_production_value_button(s, false, state, .OVER, *pulsating_button_theme);
         }
@@ -468,7 +472,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         active_profile_index = profiles.count - 1;
     }
 
-    _, _, del_profile_released := button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_index < 0));
+    _, _, del_profile_released := button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_index < 0 && active_state != .NOTHING));
     if del_profile_released {
         active_state = .NOTHING;
         array_ordered_remove_by_index(*profiles, active_profile_index);
@@ -478,32 +482,6 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         } else {
             active_profile = null;
             active_profile_index = -1;
-        }
-    }
-
-    //
-    // New Profile subwindow
-    //
-
-    {
-        theme := my_theme.subwindow_theme;
-        // r := profiles_region;
-        if !subwindows_initted {
-            subwindow_info_new_profile.rect = r;
-            subwindow_info_new_profile.title_text = "Select Window";
-            subwindow_info_new_profile.draw = draw_new_profile_selector;
-            subwindows_initted = true;
-        }
-        if subwindow_info_new_profile.open {
-            subwindow_state := add_subwindow(*subwindow_info_new_profile, *theme);
-
-        } else if profiles.count && profiles[profiles.count -1].program == "" {
-            array_ordered_remove_by_index(*profiles, profiles.count - 1);
-            if profiles.count {
-                active_profile = *profiles[profiles.count - 1];
-                active_profile_index = profiles.count - 1;;
-            }
-            active_state = .NOTHING;
         }
     }
 
@@ -524,6 +502,34 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         active_mapping = *active_profile.mappings_array[0];
         table_set(*active_profile.mappings, source.code, dest);
         set_key_mapping_hook(window);
+    }
+
+    //
+    // New Profile subwindow
+    //
+
+    {
+        theme := my_theme.subwindow_theme;
+        // r := profiles_region;
+        if !subwindows_initted {
+            subwindow_info_new_profile.rect = add_mapping_rect;
+            subwindow_info_new_profile.rect.h = 500;
+            subwindow_info_new_profile.title_text = "Select Program";
+            subwindow_info_new_profile.draw = draw_new_profile_selector;
+            subwindows_initted = true;
+        }
+        if subwindow_info_new_profile.open {
+            subwindow_state := add_subwindow(*subwindow_info_new_profile, *theme);
+
+        } else if profiles.count && profiles[profiles.count -1].program == "" {
+            array_ordered_remove_by_index(*profiles, profiles.count - 1);
+            if profiles.count {
+                active_profile = *profiles[profiles.count - 1];
+                active_profile_index = profiles.count - 1;;
+            }
+            active_state = .NOTHING;
+            searchbar_should_be_active = true;
+        }
     }
 
 
@@ -671,19 +677,38 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
 draw_new_profile_selector :: (r: Rect, data: *void) {
     using current_program_state;
-    //                    r = get_rect(10.5*k, 4*k, 1.8*k, 3*k);
-    region, inside := begin_scrollable_region(r);
 
-    NUM_BUTTONS :: 30;
-    // button_height = floor(inside.w * .22 + .5);
+    searchbar_rect := r;
+    searchbar_rect.h = 50;
 
-    // @Incomplete: Add the scrolling offset when we have it.
-    // @Incomplete: Scroll value is in pixels, what happens if the screen changes resolution?
+    // TODO: this only works the first time subwindow opens. On subsequent opens,
+    // it only activates for a single frame, because of some issue with text_input state
+    // Also, text input doesn't support Ctrl + Backspace, and it crashes when you press Delete
+    // at the start of the string
+    input_action : Text_Input_Action = ifx searchbar_should_be_active then .ACTIVATE else xx 0;
+    action, new_search, program_search_state := text_input(searchbar_rect, active_search, *my_theme.text_input_theme, input_action = input_action);
+    if action & .TEXT_MODIFIED {
+        active_search = program_search_state.text;
+    }
+
+    if input_action {
+        searchbar_should_be_active = false;
+    }
+
+    if !program_search_state.text {
+        // +10 to offset for the text input caret.
+        label_theme := my_theme.label_theme;
+        label_theme.alignment = .Right;
+        label(searchbar_rect, "Type to narrow...", *label_theme);
+    }
+
+    scrollable_rect := r;
+    scrollable_rect.y = searchbar_rect.y + searchbar_rect.h;
+    region, inside := begin_scrollable_region(scrollable_rect, *my_theme.scrollable_region_theme);
+
     s := inside;
     s.h = 50;
     s.y -= scroll_value_new_profile;
-    // button_theme.label_theme.alignment = .Center;
-    // button_theme.font = null;
 
     opened_windows := get_list_of_programs();
     for opened_windows {
@@ -693,6 +718,7 @@ draw_new_profile_selector :: (r: Rect, data: *void) {
             subwindow_info_new_profile.open = false;
             profiles[profiles.count -1].program = copy_string(it);
             active_state = .NOTHING;
+            searchbar_should_be_active = true;
         }
 
         if it_index != opened_windows.count  {

@@ -159,6 +159,7 @@ get_x11_window_name :: (window: u32) -> string {
 }
 
 get_list_of_programs :: () -> []string {
+    using current_program_state;
     con := global_xcb_connection;
     result := _opened_programs;
 
@@ -184,17 +185,17 @@ get_list_of_programs :: () -> []string {
             attrs_reply := xcb_get_window_attributes_reply(con, attrs_cookie, *attrs_error);
 
             registered_events := attrs_reply.all_event_masks;
-            if registered_events & (.KEY_PRESS | .KEY_RELEASE | .BUTTON_PRESS | .BUTTON_RELEASE) == 0 {
+            if registered_events & (.KEY_PRESS | .KEY_RELEASE | .BUTTON_PRESS | .BUTTON_RELEASE | .EXPOSURE | .VISIBILITY_CHANGE | .FOCUS_CHANGE) == 0 {
                 continue;
             }
 
             defer c_free(attrs_reply);
 
             name := get_x11_window_name(it);
-
             if name.count > 0 {
-                // TODO: MEMORY_LEAK
-                array_add(*result, copy_string(name));
+                name_lower := to_lower_copy(name,, temp);
+                search_lower := to_lower_copy(active_search,, temp);
+                if (active_search.count && contains(name_lower, search_lower)) || !active_search.count array_add(*result, copy_string(name));
             }
         }
     }
