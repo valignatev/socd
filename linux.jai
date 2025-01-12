@@ -791,6 +791,20 @@ create_window :: (window_x := 0, window_y := 0, parent: Window_Type = None, back
 
     XSetWMProtocols(d, win, *x_global_wm_delete_window, 1);
 
+
+    // TODO: global
+    x_global_input_context = XCreateIC(
+        x_global_input_method,
+        XNClientWindow, win,
+        XNFocusWindow, win,
+        XNInputStyle, XIMPreeditNothing | XIMStatusNothing,
+        null,
+    );
+
+    if x_global_input_context {
+        log_error("Could not create X11 input context\n");
+    }
+
     array_add(*x_global_windows, win);
 
     XUnlockDisplay(d);

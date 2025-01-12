@@ -449,6 +449,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     my_theme.scrollable_region_theme.scrollbar_size = 0.01;
 
     my_theme.text_input_theme.rectangle_shape.rounding_flags = 0;
+    my_theme.text_input_theme.button_theme.font = button_font;
 
     pulsating_button_theme := my_theme.button_theme;
     pulsating_button_theme.over_fade_in_speed = 20;
