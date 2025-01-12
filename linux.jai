@@ -4,6 +4,8 @@
 #load "./libinput.jai";
 #load "./libudev.jai";
 
+CURRENT_PLATFORM := Platform.LINUX;
+
 // This might backfire, because this is configurable on Linux
 // Might want to allocate it at runtime instead
 MAX_PATH_LENGTH :: 4096;
@@ -508,7 +510,11 @@ handle_libinput_event :: (event: *libinput_event, uinput_fd: s32) {
                     log("Set destination %\n", ev.code);
                 }
 
-                active_state = next_state;
+                if next_state == .NOTHING {
+                    finalize_state();
+                } else {
+                    active_state = next_state;
+                }
             }
             return;
         }

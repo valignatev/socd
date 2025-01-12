@@ -121,7 +121,6 @@ operator== :: (a: Mapping_Bind, b: Mapping_Bind) -> bool {
 Profile :: struct {
     platform: Platform;
     program: string;
-    // mappings: [..]Mapping;
     mappings: Mappings;
     // Array of binds for showing in UI and for some interemediate states,
     // mostly because iteration over the hash table is not
@@ -239,7 +238,7 @@ Ignoring the line and trying to continue parsing. Config line was `%`
 
                 case "active";
                     result := trim(right);
-                    if right == "true" {
+                    if result == "true" {
                         active = true;
                     }
 
@@ -317,6 +316,51 @@ Ignoring the line and trying to continue parsing. Config line was `%`
             }
         }
     }
+}
+
+serialize_settings :: () -> succes: bool {
+    success := false;
+
+    found, exe_path, exe_name := split_from_right(get_path_of_running_executable(), #char "/");
+    if !found {
+        log_error("Error: unable to find path to the executable to find the config file next to it. Your settings changes won't be saved!\n");
+        return success;
+    }
+
+    settings_filename := tprint("%/%", exe_path, "settings.socd");
+
+    b: String_Builder;
+
+    print_to_builder(*b, CONFIG_HEADER, SETTINGS_VERSION);
+
+    for profile: profiles {
+        print_to_builder(*b, "PROFILE_START\n");
+        defer print_to_builder(*b, "PROFILE_END\n");
+
+        if it_index == active_profile_index print_to_builder(*b, "active: true\n");
+
+        print_to_builder(*b, "program: %\n", profile.program);
+        print_to_builder(*b, "platform: %\n", enum_value_to_name(profile.platform));
+
+        for mapping: profile.mappings_array {
+            print_to_builder(*b, "mapping: % % %\n", enum_value_to_name(mapping.mode), mapping.source.code, mapping.destination.code);
+        }
+    }
+
+    result := builder_to_string(*b);
+    success = write_entire_file(settings_filename, result);
+    if !success {
+        log_error("Error: Could not store the settings to disk, your settings changes will not be saved!\n");
+    }
+    free(result);
+
+    return success;
+}
+
+finalize_state :: () {
+    using current_program_state;
+    active_state = .NOTHING;
+    serialize_settings();
 }
 
 main :: () {
@@ -435,6 +479,8 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     profile_button_theme := my_theme.button_theme;
     profile_button_theme.frame_color = profile_button_theme.surface_color;
     for * profiles {
+        if it.platform != CURRENT_PLATFORM continue;
+
         if it_index == active_profile_index {
             active_profile = it;
         }
@@ -453,6 +499,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         if pressed {
             log("Profile % pressed\n", it.program);
             active_profile_index = it_index;
+            finalize_state();
         }
 
         s.y += floor(50 * 1.1 + 1);
@@ -474,7 +521,6 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
     _, _, del_profile_released := button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_index < 0 && active_state != .NOTHING));
     if del_profile_released {
-        active_state = .NOTHING;
         array_ordered_remove_by_index(*profiles, active_profile_index);
         if profiles.count {
             active_profile = *profiles[profiles.count - 1];
@@ -483,6 +529,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             active_profile = null;
             active_profile_index = -1;
         }
+        finalize_state();
     }
 
     //
@@ -527,7 +574,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
                 active_profile = *profiles[profiles.count - 1];
                 active_profile_index = profiles.count - 1;;
             }
-            active_state = .NOTHING;
+            finalize_state();
             searchbar_should_be_active = true;
         }
     }
@@ -671,7 +718,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         table_remove(*state_table, dropdown_state_to_clean_up.hash);
 
         index_to_remove = -1;
-        active_state = .NOTHING;
+        finalize_state();
     }
 }
 
@@ -717,7 +764,7 @@ draw_new_profile_selector :: (r: Rect, data: *void) {
             print("Program % selected\n", it);
             subwindow_info_new_profile.open = false;
             profiles[profiles.count -1].program = copy_string(it);
-            active_state = .NOTHING;
+            finalize_state();
             searchbar_should_be_active = true;
         }
 
@@ -762,5 +809,6 @@ Simp :: #import "Simp";
 #import "System";
 #import "Window_Creation";
 tfh :: #import "Text_File_Handler";
+#import "Reflection";
 
-#import "Print_Vars";
+// #import "Print_Vars";

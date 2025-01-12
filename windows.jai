@@ -1,3 +1,6 @@
+
+CURRENT_PLATFORM := Platform.WINDOWS;
+
 // TODO: uinput exposes the same names.
 KEY_ESC  : u32 : 0x01;
 KEY_W    : u32 : 0x11;
