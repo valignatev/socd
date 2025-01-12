@@ -504,8 +504,8 @@ handle_libinput_event :: (event: *libinput_event, uinput_fd: s32) {
 
                     table_set(*active_profile.mappings, active_mapping.source.code, active_mapping.destination);
                     if active_mapping.mode == .OPPOSITE || active_mapping.mode == .NEUTRAL {
-                        table_set(*active_profile.mappings, active_mapping.destination.code, active_mapping.source);
                         table_remove(*active_profile.mappings, old_destination_code);
+                        table_set(*active_profile.mappings, active_mapping.destination.code, active_mapping.source);
                     }
                     log("Set destination %\n", ev.code);
                 }
@@ -581,12 +581,10 @@ handle_libinput_event :: (event: *libinput_event, uinput_fd: s32) {
                         value=0,
                     };
 
-                    print("WRITING: %\n", output_events);
                     written := write(uinput_fd, output_events.data, size_of(input_event) * output_events.count);
                     if written < 0 {
                         log_error("Could not release the key\n");
                     }
-                    print("WRITTEN: %\n", written);
                 }
             } else if ev.value == 0 {
                 if test_key(opposing_code) {

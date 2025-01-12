@@ -512,11 +512,12 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
     _, _, add_profile_released := button(add_button_rect, "Add", *my_theme.button_theme, disable_press = (active_state != .NOTHING));
     if add_profile_released {
-        active_state = .ADDING_NEW_PROFILE;
         subwindow_info_new_profile.open = true;
         new_profile := array_add(*profiles);
+        new_profile.platform = CURRENT_PLATFORM;
         active_profile = new_profile;
         active_profile_index = profiles.count - 1;
+        active_state = .ADDING_NEW_PROFILE;
     }
 
     _, _, del_profile_released := button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_index < 0 && active_state != .NOTHING));
@@ -763,7 +764,7 @@ draw_new_profile_selector :: (r: Rect, data: *void) {
         if released {
             print("Program % selected\n", it);
             subwindow_info_new_profile.open = false;
-            profiles[profiles.count -1].program = copy_string(it);
+            profiles[profiles.count - 1].program = copy_string(it);
             finalize_state();
             searchbar_should_be_active = true;
         }
