@@ -320,6 +320,7 @@ Ignoring the line and trying to continue parsing. Config line was `%`
 
 serialize_settings :: () -> succes: bool {
     success := false;
+    allowed_to_write := false;
 
     found, exe_path, exe_name := split_from_right(get_path_of_running_executable(), #char "/");
     if !found {
@@ -330,12 +331,14 @@ serialize_settings :: () -> succes: bool {
     settings_filename := tprint("%/%", exe_path, "settings.socd");
 
     b: String_Builder;
-
     print_to_builder(*b, CONFIG_HEADER, SETTINGS_VERSION);
 
     for profile: profiles {
         print_to_builder(*b, "PROFILE_START\n");
-        defer print_to_builder(*b, "PROFILE_END\n");
+        defer {
+            print_to_builder(*b, "PROFILE_END\n");
+            allowed_to_write = true;
+        }
 
         if it_index == active_profile_index print_to_builder(*b, "active: true\n");
 
@@ -348,7 +351,7 @@ serialize_settings :: () -> succes: bool {
     }
 
     result := builder_to_string(*b);
-    success = write_entire_file(settings_filename, result);
+    if allowed_to_write success = write_entire_file(settings_filename, result);
     if !success {
         log_error("Error: Could not store the settings to disk, your settings changes will not be saved!\n");
     }
@@ -616,7 +619,10 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     type_info_mapping_mode := type_info(Mapping_Mode);
     index_to_remove: s64 = -1;
     dropdown_state_to_clean_up: Dropdown_State;
-    for * mapping: active_profile.mappings_array {
+
+    // HACK: make dummy active profile instead of this awful null check
+    mappings := ifx active_profile cast([]Mapping) active_profile.mappings_array else Mapping.[];
+    for * mapping: mappings {
         button_width := (s.w - 50)/3 - 1;
         source_rect := get_rect(s.x, s.y, button_width, 50);
         source_name := get_key_name(mapping.source.code);
@@ -738,6 +744,13 @@ draw_new_profile_selector :: (r: Rect, data: *void) {
     action, new_search, program_search_state := text_input(searchbar_rect, active_search, *my_theme.text_input_theme, input_action = input_action);
     if action & .TEXT_MODIFIED {
         active_search = program_search_state.text;
+    }
+    if action & .ENTERED {
+        // TODO: kinda copypaste from below
+        subwindow_info_new_profile.open = false;
+        profiles[profiles.count - 1].program = copy_string(new_search);
+        finalize_state();
+        searchbar_should_be_active = true;
     }
 
     if input_action {
