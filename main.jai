@@ -1,15 +1,13 @@
 /*
 ~~TODOS~~
 FOR SHIPPING:
-- Implement saving to the profile.
 - Fix numpad bug on Windows
-- Better focused program recognition. Now it's just case-sensitive string contains.
-- Profile add and delete.
 - Better dropdown ui for mapping mode.
-- Automatic scroll for when stuff doesn't fit into the scrollable region.
-- Search autocomplete when selecting a program for new profile.
+- Handle Alt-F4.
 
 FOR FUTURE:
+- Minimize to tray.
+- Better focused program recognition. Now it's just case-sensitive string contains.
 - Global Profile that is always active unless some other profile kicks in. Good for testing.
 - Debug UI. Showing stuff like currently pressed key, when mappings kick in, list of mappings.
 - Mouse bindings
@@ -62,8 +60,11 @@ Program_State :: struct {
     active_state: Mapping_State;
     active_mapping: *Mapping;
     active_profile: *Profile;
-    active_search: string;
+    active_search: *Text_Input_State;
+    need_to_scroll_profiles: bool;
+    // need_to_scroll_mappings_region: bool;
 }
+dummy_input_text_state: Text_Input_State;
 
 current_program_state: Program_State;
 
@@ -129,6 +130,7 @@ Profile :: struct {
 }
 
 active_profile_index := -1;
+
 profiles: [..]Profile;
 
 CONFIG_HEADER :: #string HEADER
@@ -334,13 +336,13 @@ serialize_settings :: () -> succes: bool {
     print_to_builder(*b, CONFIG_HEADER, SETTINGS_VERSION);
 
     for profile: profiles {
-        print_to_builder(*b, "PROFILE_START\n");
+        append(*b, "PROFILE_START\n");
         defer {
-            print_to_builder(*b, "PROFILE_END\n");
+            append(*b, "PROFILE_END\n");
             allowed_to_write = true;
         }
 
-        if it_index == active_profile_index print_to_builder(*b, "active: true\n");
+        if it_index == active_profile_index append(*b, "active: true\n");
 
         print_to_builder(*b, "program: %\n", profile.program);
         print_to_builder(*b, "platform: %\n", enum_value_to_name(profile.platform));
@@ -374,7 +376,7 @@ main :: () {
         exit(1);
     }
 
-    current_program_state = .{active_state=.NOTHING, active_mapping=null, active_search=copy_string("")};
+    current_program_state = .{active_state=.NOTHING, active_mapping=null, active_search=*dummy_input_text_state};
     using current_program_state;
 
     the_window := create_window();
@@ -476,14 +478,16 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     r := get_rect(10, 10, profiles_width, profiles_height);
     profiles_region, inside_profiles_region := begin_scrollable_region(r, *profiles_theme);
 
-    s := inside_profiles_region;
-    s.h = 50;
-    s.y -= scroll_value_profiles_region;
+    program_rect := inside_profiles_region;
+    program_rect.h = 50;
+    program_rect.y -= scroll_value_profiles_region;
 
     profile_button_theme := my_theme.button_theme;
     profile_button_theme.frame_color = profile_button_theme.surface_color;
+    rendered_profiles_count := 0;
     for * profiles {
         if it.platform != CURRENT_PLATFORM continue;
+        rendered_profiles_count += 1;
 
         if it_index == active_profile_index {
             active_profile = it;
@@ -495,9 +499,9 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             theme.frame_color = theme.frame_color_over;
             theme.surface_color = theme.surface_color_over;
         }
-        pressed, state := button(s, it.program, *theme, identifier=it_index, disable_press = active_state == .ADDING_NEW_PROFILE);
+        pressed, state := button(program_rect, it.program, *theme, identifier=it_index, disable_press = active_state == .ADDING_NEW_PROFILE);
         if profile_pulsating {
-            update_production_value_button(s, false, state, .OVER, *pulsating_button_theme);
+            update_production_value_button(program_rect, false, state, .OVER, *pulsating_button_theme);
         }
 
         if pressed {
@@ -506,15 +510,21 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             finalize_state();
         }
 
-        s.y += floor(50 * 1.1 + 1);
+        program_rect.y += floor(50 * 1.1 + 1);
     }
 
-    end_scrollable_region(profiles_region, s.x + s.w, s.y, *scroll_value_profiles_region);
+    end_scrollable_region(profiles_region, program_rect.x + program_rect.w, program_rect.y, *scroll_value_profiles_region);
+
+    // Is there a better way to snap scrollable region to the end?
+    if need_to_scroll_profiles {
+        scroll_scrollable_region(profiles_region, program_rect.y, *scroll_value_profiles_region);
+        need_to_scroll_profiles = false;
+    }
 
     add_button_rect := get_rect(10, profiles_height + 10 + 5, profiles_width / 2 - 5, 50);
     del_button_rect := get_rect(10 + profiles_width / 2 + 5, profiles_height + 10 + 5, profiles_width / 2 - 5, 50);
 
-    _, _, add_profile_released := button(add_button_rect, "Add", *my_theme.button_theme, disable_press = (active_state != .NOTHING));
+    _, _, add_profile_released := button(add_button_rect, "Add", *my_theme.button_theme, /*disable_press = (active_state != .NOTHING)*/);
     if add_profile_released {
         subwindow_info_new_profile.open = true;
         new_profile := array_add(*profiles);
@@ -522,9 +532,10 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         active_profile = new_profile;
         active_profile_index = profiles.count - 1;
         active_state = .ADDING_NEW_PROFILE;
+        need_to_scroll_profiles = true;
     }
 
-    _, _, del_profile_released := button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_index < 0 && active_state != .NOTHING));
+    _, _, del_profile_released := button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_index < 0 || active_state != .NOTHING));
     if del_profile_released {
         array_ordered_remove_by_index(*profiles, active_profile_index);
         if profiles.count {
@@ -554,6 +565,8 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         active_mapping = *active_profile.mappings_array[0];
         table_set(*active_profile.mappings, source.code, dest);
         set_key_mapping_hook(window);
+
+        // need_to_scroll_mappings_region = true;
     }
 
     //
@@ -579,6 +592,10 @@ draw_one_frame :: (dt: float, window: Window_Type) {
                 active_profile = *profiles[profiles.count - 1];
                 active_profile_index = profiles.count - 1;;
             }
+
+            set_text(active_search, active_search.pre_modification_text, replace_pre_modification_text=false);
+            // active_widget_remove(active_search);
+            // active_search.pending_result_actions |= .TEXT_MODIFIED;
             finalize_state();
             searchbar_should_be_active = true;
         }
@@ -604,7 +621,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     mappings_rect := get_rect(profile_start, 10 + add_mapping_rect.h + 10, profile_width, mappings_height);
 
     mappings_region, inside_mappings_region := begin_scrollable_region(mappings_rect, *mappings_theme);
-    s = inside_mappings_region;
+    s := inside_mappings_region;
     s.y -= scroll_value_mappings_region;
 
     mappings_button_theme := my_theme.button_theme;
@@ -615,6 +632,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     dropdown_theme.theme_for_current_value = my_theme.button_theme;
     dropdown_theme.theme_for_each_choice.rectangle_shape.rounding_flags = 0;
     dropdown_theme.theme_for_current_choice.rectangle_shape.rounding_flags = 0;
+    dropdown_theme.theme_for_current_value.text_color = my_theme.button_theme.surface_color;
 
     type_info_mapping_mode := type_info(Mapping_Mode);
     index_to_remove: s64 = -1;
@@ -639,6 +657,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             active_mapping = mapping;
             print("Source pressed\n");
         }
+
 
         mode_rect := get_rect(s.x + source_rect.w + 1, s.y, button_width, 50);
         changed, mode_state := dropdown(mode_rect, type_info_mapping_mode.names, xx *mapping.mode, dropdown_theme, identifier=mapping.source.code);
@@ -680,6 +699,52 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             }
         }
 
+        // Arrow lol
+        {
+            color := my_theme.button_theme.surface_color_down;
+            mode_r := get_rect(s.x + source_rect.w + 1, s.y, button_width, 50);
+            base_h := mode_r.h/2;
+            base_y := mode_r.y + base_h/2;
+            base_x := mode_r.x;
+
+            arrow_width := button_width * 0.25;
+            if mapping.mode == .OPPOSITE {
+                Simp.immediate_triangle(
+                    .{base_x + arrow_width, base_y  , 0},
+                    .{base_x,                       base_y + base_h/2, 0},
+                    .{base_x + arrow_width, base_y + base_h  , 0},
+                    color,
+                    color,
+                    color,
+                );
+
+                base_x = base_x + arrow_width;
+                mode_r.w = mode_r.w - 2 * arrow_width;
+            }
+
+            if mapping.mode == .REMAP {
+                mode_r.w = mode_r.w - arrow_width;
+            }
+
+            Simp.immediate_quad(
+                base_x, base_y + base_h/3,
+                base_x + mode_r.w, base_y + base_h/1.5,
+                color,
+            );
+
+            if mapping.mode == .REMAP || mapping.mode == .OPPOSITE {
+                Simp.immediate_triangle(
+                    .{base_x + mode_r.w,              base_y       , 0},
+                    .{base_x + mode_r.w + arrow_width, base_y + base_h/2, 0},
+                    .{base_x + mode_r.w,              base_y + base_h  , 0},
+                    color,
+                    color,
+                    color,
+                );
+            }
+        }
+
+
         dest_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1, s.y, button_width, 50);
         dest_name := get_key_name(mapping.destination.code);
 
@@ -713,6 +778,11 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
     end_scrollable_region(mappings_region, s.x + s.w, s.y, *scroll_value_mappings_region);
 
+    // if need_to_scroll_mappings_region {
+    //     scroll_scrollable_region(mappings_region, s.y, *scroll_value_mappings_region);
+    //     need_to_scroll_mappings_region = false;
+    // }
+
     draw_popups();
     Simp.swap_buffers(window);
 
@@ -741,15 +811,18 @@ draw_new_profile_selector :: (r: Rect, data: *void) {
     // Also, text input doesn't support Ctrl + Backspace, and it crashes when you press Delete
     // at the start of the string
     input_action : Text_Input_Action = ifx searchbar_should_be_active then .ACTIVATE else xx 0;
-    action, new_search, program_search_state := text_input(searchbar_rect, active_search, *my_theme.text_input_theme, input_action = input_action);
-    if action & .TEXT_MODIFIED {
-        active_search = program_search_state.text;
-    }
+    action:, new_search:, active_search = text_input(searchbar_rect, active_search.text, *my_theme.text_input_theme, input_action = input_action);
     if action & .ENTERED {
         // TODO: kinda copypaste from below
         subwindow_info_new_profile.open = false;
         profiles[profiles.count - 1].program = copy_string(new_search);
         finalize_state();
+        active_search.text = "";
+        searchbar_should_be_active = true;
+    }
+    if action & .ESCAPED {
+        subwindow_info_new_profile.open = false;
+        active_search.text = "";
         searchbar_should_be_active = true;
     }
 
@@ -757,7 +830,7 @@ draw_new_profile_selector :: (r: Rect, data: *void) {
         searchbar_should_be_active = false;
     }
 
-    if !program_search_state.text {
+    if !active_search.text {
         // +10 to offset for the text input caret.
         label_theme := my_theme.label_theme;
         label_theme.alignment = .Right;
@@ -779,6 +852,7 @@ draw_new_profile_selector :: (r: Rect, data: *void) {
             print("Program % selected\n", it);
             subwindow_info_new_profile.open = false;
             profiles[profiles.count - 1].program = copy_string(it);
+            active_search.text = "";
             finalize_state();
             searchbar_should_be_active = true;
         }
@@ -789,6 +863,12 @@ draw_new_profile_selector :: (r: Rect, data: *void) {
     }
 
     end_scrollable_region(region, s.x + s.w, s.y + s.h, *scroll_value_new_profile);
+}
+
+scroll_scrollable_region :: (state: *Scrollable_Region_State, max_y: float, scroll_value: *float) {
+    scroll_content_size := max(max_y - (state.inner_rect.y - scroll_value.*), state.inner_rect.h);
+    max_scroll_value := scroll_content_size - state.inner_rect.h;
+    scroll_value.* = max_scroll_value;
 }
 
 init_fonts :: (window: Window_Type) {

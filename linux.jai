@@ -196,8 +196,8 @@ get_list_of_programs :: () -> []string {
             name := get_x11_window_name(it);
             if name.count > 0 {
                 name_lower := to_lower_copy(name,, temp);
-                search_lower := to_lower_copy(active_search,, temp);
-                if (active_search.count && contains(name_lower, search_lower)) || !active_search.count array_add(*result, copy_string(name));
+                search_lower := to_lower_copy(active_search.text,, temp);
+                if (active_search.text.count && contains(name_lower, search_lower)) || !active_search.text.count array_add(*result, copy_string(name));
             }
         }
     }
