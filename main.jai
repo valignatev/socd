@@ -55,7 +55,6 @@ Mapping_State :: enum {
     ADDING_NEW_PROFILE :: 4;
 }
 
-
 Program_State :: struct {
     active_state: Mapping_State;
     active_mapping: *Mapping;
