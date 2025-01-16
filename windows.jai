@@ -1,7 +1,8 @@
 
 CURRENT_PLATFORM := Platform.WINDOWS;
 
-// TODO: uinput exposes the same names.
+// TODO: input exposes the same names.
+KEY_RESERVED : u32 : 0;
 KEY_ESC  : u32 : 0x01;
 KEY_W    : u32 : 0x11;
 KEY_A    : u32 : 0x1e;
@@ -12,6 +13,7 @@ KEY_O    : u32 : 0x18;
 KEY_U    : u32 : 0x16;
 KEY_P    : u32 : 0x19;
 KEY_9    : u32 : 0xA;
+KEY_MAX  : u32 : 0x2ff;
 
 MAX_PATH_LENGTH :: MAX_PATH;
 mapping_resolving_hook: HHOOK;
@@ -19,8 +21,8 @@ mapping_setting_hook: HHOOK;
 
 // TODO: these buffers should probably be thread(context)-locals. Just in case...
 key_name_buffer: [301]u16;
-kb_real_state: [4]u32; // whether the key is pressed on a physical keyboard
-kb_virtual_state: [4]u32; // whether the key is pressed on a software level
+kb_real_state: [248]u32; // whether the key is pressed on a physical keyboard
+kb_virtual_state: [248]u32; // whether the key is pressed on a software level
 
 
 scan_code_to_lparam :: (scan_code: u32) -> u32 {
@@ -31,7 +33,7 @@ scan_code_to_lparam :: (scan_code: u32) -> u32 {
 
 // Returns textual name of the key in UTF8
 get_key_name :: (key_scan_code: u32) -> string {
-    if key_scan_code == KEY_TEMP return "...";
+    if key_scan_code == KEY_RESERVED return "...";
     cached := KEY_NAMES[key_scan_code];
     if cached {
         return cached;
@@ -44,7 +46,7 @@ get_key_name :: (key_scan_code: u32) -> string {
         log_error("Couldn't get the key name for the key with scancode %. Error is %\n", key_scan_code, error);
         return "KEY ERROR";
     }
-    key_name, ok := wide_to_utf8_new(key_name_buffer.data, length);
+    key_name, ok := wide_to_utf8(key_name_buffer.data, length);
     if !ok {
         error := GetLastError();
         log_error("Couldn't convert the key name to UTF8 for scancode %. Buffer content is %. Error is %\n", key_scan_code, key_name_buffer, error);
@@ -70,126 +72,127 @@ low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 
     key_virtual_code := kb_input.vkCode;
     key_scan_code := kb_input.scanCode;
     push_context {
-        key_name := get_key_name(key_scan_code);
+        // key_name := get_key_name(key_scan_code);
 
-        log("Key is % - %\n", key_scan_code, key_name);
-        mapping := get_key_mapping(key_scan_code);
-        if mapping {
-            key_name := get_key_name(mapping);
-            log("Found mapping: %\n", key_name);
+        // log("Key is % - %\n", key_scan_code, key_name);
+        // bind := get_key_mapping(key_scan_code);
+        // if bind != dummy_bind {
+        //     key_name := get_key_name(bind.code);
+        //     log("Found bind: %\n", key_name);
 
-            if wparam == WM_KEYDOWN || wparam == WM_SYSKEYDOWN {
-                input: INPUT;
-                input.type = .INPUT_KEYBOARD;
-                input.ki = KEYBDINPUT.{0, cast(u16)mapping, KEYEVENTF_SCANCODE, 0, null};
-                events_count := SendInput(1, *input, size_of(INPUT));
-                if events_count == 0 {
-                    error := GetLastError();
-                    log_error("SendInput failed with error: %\n", error);
-                }
-                log("Sent % down events\n", events_count);
-            } else if wparam == WM_KEYUP || wparam == WM_SYSKEYUP {
-                log("Found up event\n");
-                input: INPUT;
-                input.type = .INPUT_KEYBOARD;
-                input.ki = KEYBDINPUT.{0, cast(u16)mapping, KEYEVENTF_KEYUP | KEYEVENTF_SCANCODE, 0, null};
-                events_count := SendInput(1, *input, size_of(INPUT));
-                if events_count == 0 {
-                    error := GetLastError();
-                    log_error("SendInput failed with error: %\n", error);
-                }
-                log("Sent % up events\n", events_count);
+        //     if wparam == WM_KEYDOWN || wparam == WM_SYSKEYDOWN {
+        //         input: INPUT;
+        //         input.type = .INPUT_KEYBOARD;
+        //         input.ki = KEYBDINPUT.{0, cast(u16)bind, KEYEVENTF_SCANCODE, 0, null};
+        //         events_count := SendInput(1, *input, size_of(INPUT));
+        //         if events_count == 0 {
+        //             error := GetLastError();
+        //             log_error("SendInput failed with error: %\n", error);
+        //         }
+        //         log("Sent % down events\n", events_count);
+        //     } else if wparam == WM_KEYUP || wparam == WM_SYSKEYUP {
+        //         log("Found up event\n");
+        //         input: INPUT;
+        //         input.type = .INPUT_KEYBOARD;
+        //         input.ki = KEYBDINPUT.{0, cast(u16)bind.code, KEYEVENTF_KEYUP | KEYEVENTF_SCANCODE, 0, null};
+        //         events_count := SendInput(1, *input, size_of(INPUT));
+        //         if events_count == 0 {
+        //             error := GetLastError();
+        //             log_error("SendInput failed with error: %\n", error);
+        //         }
+        //         log("Sent % up events\n", events_count);
 
-            }
-            return CallNextHookEx(null, n_code, wparam, lparam);
-        }
+        //     }
+        //     return CallNextHookEx(null, n_code, wparam, lparam);
+        // }
 
-        opposing_key, direction, opposing_direction := find_opposing_key_and_directions(key_scan_code);
-        if !opposing_key {
-            return CallNextHookEx(null, n_code, wparam, lparam);
-        }
+        // opposing_key, direction, opposing_direction := find_opposing_key_and_directions(key_scan_code);
+        // if !opposing_key {
+        //     return CallNextHookEx(null, n_code, wparam, lparam);
+        // }
 
-        if wparam == WM_KEYDOWN || wparam == WM_SYSKEYDOWN {
-            kb_real_state[direction] = IS_DOWN;
-            kb_virtual_state[direction] = IS_DOWN;
-            if kb_real_state[opposing_direction] == IS_DOWN && kb_virtual_state[opposing_direction] == IS_DOWN {
-                input: INPUT;
-                input.type = .INPUT_KEYBOARD;
-                input.ki = KEYBDINPUT.{0, cast(u16)opposing_key, KEYEVENTF_KEYUP | KEYEVENTF_SCANCODE, 0, null};
-                events_count := SendInput(1, *input, size_of(INPUT));
-                if events_count == 0 {
-                    error := GetLastError();
-                    log_error("SendInput failed with error: %\n", error);
-                } else {
-                    kb_virtual_state[opposing_direction] = IS_UP;
-                }
-                log("Sent % events\n", events_count);
-            }
-        } else if wparam == WM_KEYUP || wparam == WM_SYSKEYUP {
-            kb_real_state[direction] = IS_UP;
-            kb_virtual_state[direction] = IS_UP;
-            if kb_real_state[opposing_direction] == IS_DOWN {
-                input: INPUT;
-                input.type = .INPUT_KEYBOARD;
-                input.ki = KEYBDINPUT.{0, cast(u16)opposing_key, KEYEVENTF_SCANCODE, 0, null};
-                events_count := SendInput(1, *input, size_of(INPUT));
-                if events_count == 0 {
-                    error := GetLastError();
-                    log_error("SendInput failed with error: %\n", error);
-                } else {
-                    kb_virtual_state[opposing_direction] = IS_DOWN;
-                }
-            }
-        }
+        // if wparam == WM_KEYDOWN || wparam == WM_SYSKEYDOWN {
+        //     kb_real_state[direction] = IS_DOWN;
+        //     kb_virtual_state[direction] = IS_DOWN;
+        //     if kb_real_state[opposing_direction] == IS_DOWN && kb_virtual_state[opposing_direction] == IS_DOWN {
+        //         input: INPUT;
+        //         input.type = .INPUT_KEYBOARD;
+        //         input.ki = KEYBDINPUT.{0, cast(u16)opposing_key, KEYEVENTF_KEYUP | KEYEVENTF_SCANCODE, 0, null};
+        //         events_count := SendInput(1, *input, size_of(INPUT));
+        //         if events_count == 0 {
+        //             error := GetLastError();
+        //             log_error("SendInput failed with error: %\n", error);
+        //         } else {
+        //             kb_virtual_state[opposing_direction] = IS_UP;
+        //         }
+        //         log("Sent % events\n", events_count);
+        //     }
+        // } else if wparam == WM_KEYUP || wparam == WM_SYSKEYUP {
+        //     kb_real_state[direction] = IS_UP;
+        //     kb_virtual_state[direction] = IS_UP;
+        //     if kb_real_state[opposing_direction] == IS_DOWN {
+        //         input: INPUT;
+        //         input.type = .INPUT_KEYBOARD;
+        //         input.ki = KEYBDINPUT.{0, cast(u16)opposing_key, KEYEVENTF_SCANCODE, 0, null};
+        //         events_count := SendInput(1, *input, size_of(INPUT));
+        //         if events_count == 0 {
+        //             error := GetLastError();
+        //             log_error("SendInput failed with error: %\n", error);
+        //         } else {
+        //             kb_virtual_state[opposing_direction] = IS_DOWN;
+        //         }
+        //     }
+        // }
 
         return CallNextHookEx(null, n_code, wparam, lparam);
     }
 }
 
 mapping_setting_hook_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 #c_call {
+    using current_program_state;
     push_context {
-        key_virtual_code := wparam;
-        // How to interpret lparam: https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input
-        hiword := (lparam >> 16) & 0xffff;
-        // Scan code is bits 16-23, so byte 3, or the low byte of the hiword. It's a bit confusing...
-        raw_scan_code := cast(u32)hiword & 0xff;
-        key_scan_code : u32 = 0;
+        // key_virtual_code := wparam;
+        // // How to interpret lparam: https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input
+        // hiword := (lparam >> 16) & 0xffff;
+        // // Scan code is bits 16-23, so byte 3, or the low byte of the hiword. It's a bit confusing...
+        // raw_scan_code := cast(u32)hiword & 0xff;
+        // key_scan_code : u32 = 0;
 
-        // Extended bit is 24th. TODO: Use it, or we get confused with numlock is enabled vs when it's not\
-        // Something like:
-            // if (extended)  key_scan_code = MAKEWORD(key_scan_code, 0xE0);
-        is_extended := cast(u32)(hiword & KF_EXTENDED) == KF_EXTENDED;
+        // // Extended bit is 24th. TODO: Use it, or we get confused with numlock is enabled vs when it's not\
+        // // Something like:
+        //     // if (extended)  key_scan_code = MAKEWORD(key_scan_code, 0xE0);
+        // is_extended := cast(u32)(hiword & KF_EXTENDED) == KF_EXTENDED;
 
-        if is_extended {
-            log("We are extended\n");
-            key_scan_code = (0xe0 << 8) | raw_scan_code;
-        } else {
-            key_scan_code = raw_scan_code;
-        }
+        // if is_extended {
+        //     log("We are extended\n");
+        //     key_scan_code = (0xe0 << 8) | raw_scan_code;
+        // } else {
+        //     key_scan_code = raw_scan_code;
+        // }
 
-        // Transition state flag is bit 31
-        is_down := hiword & KF_UP == 0;
+        // // Transition state flag is bit 31
+        // is_down := hiword & KF_UP == 0;
 
-        if is_down {
-            length := GetKeyNameTextW(xx lparam, key_name_buffer.data, key_name_buffer.count);
-        if length == 0 {
-            error := GetLastError();
-            log_error("Couldn't get the key name for the key with scancode %. Error is %\n", key_scan_code, error);
-        }
-        key_name, ok := wide_to_utf8_new(key_name_buffer.data, length);
-        if !ok {
-            error := GetLastError();
-            log_error("Couldn't convert the key name to UTF8 for scancode %. Buffer content is %. Error is %\n", key_scan_code, key_name_buffer, error);
-        }
-            log("New mapping key pressed: %\n", key_name);
-            if current_mapping_state == .SETTING_SOURCE {
-                mapping_sources[0] = key_scan_code;
-                current_mapping_state = .SETTING_DESTINATION;
-            } else if current_mapping_state == .SETTING_DESTINATION {
-                mapping_destinations[0] = key_scan_code;
-                current_mapping_state = .NOTHING;
-            }
-        }
+        // if is_down {
+        //     length := GetKeyNameTextW(xx lparam, key_name_buffer.data, key_name_buffer.count);
+        // if length == 0 {
+        //     error := GetLastError();
+        //     log_error("Couldn't get the key name for the key with scancode %. Error is %\n", key_scan_code, error);
+        // }
+        // key_name, ok := wide_to_utf8(key_name_buffer.data, length);
+        // if !ok {
+        //     error := GetLastError();
+        //     log_error("Couldn't convert the key name to UTF8 for scancode %. Buffer content is %. Error is %\n", key_scan_code, key_name_buffer, error);
+        // }
+        //     log("New mapping key pressed: %\n", key_name);
+        //     if active_state == .SETTING_SOURCE {
+        //         mapping_sources[0] = key_scan_code;
+        //         active_state = .SETTING_DESTINATION;
+        //     } else if active_state == .SETTING_DESTINATION {
+        //         mapping_destinations[0] = key_scan_code;
+        //         active_state = .NOTHING;
+        //     }
+        // }
     }
     return CallNextHookEx(null, n_code, wparam, lparam);
 }
@@ -216,6 +219,7 @@ detect_focused_program :: (
         return;
     }
     push_context {
+        focused_program_buffer: [MAX_PATH]u16;
         foreground_process := OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, 0, process_id);
         if !foreground_process {
             // Sometimes we can't open a process (#5 "access denied"). Ignore it I guess.
@@ -227,19 +231,100 @@ detect_focused_program :: (
 
         filename_size : u32 = MAX_PATH;
         // This function API is so fucking weird. Read its docs extremely carefully
-        QueryFullProcessImageNameW(foreground_process, 0, focused_program_path.data, *filename_size);
+        QueryFullProcessImageNameW(foreground_process, 0, focused_program_buffer.data, *filename_size);
         CloseHandle(foreground_process);
-        PathStripPathW(focused_program_path.data);
-        focused_program_name, ok := wide_to_utf8_new(focused_program_path.data);
+        PathStripPathW(focused_program_buffer.data);
+        focused_program_name, ok := wide_to_utf8(focused_program_buffer.data);
         log("Window activated: %\n", focused_program_name);
 
         program_handle := GetModuleHandleW(null);
 
-        if array_find(ALLOWED_PROGRAMS, focused_program_name) {
-            set_kb_hook(program_handle);
-            return;
+        for profile: profiles {
+            if profile.program == focused_program_name && profile.platform == CURRENT_PLATFORM {
+                set_kb_hook(program_handle);
+            } else {
+                unset_kb_hook();
+            }
         }
         unset_kb_hook();
+    }
+}
+
+_list_of_process_ids: [..]u32;
+_opened_programs: Table(string, bool);
+
+get_list_of_programs :: () -> [..]string {
+    using current_program_state;
+    defer table_reset(*_opened_programs);
+
+    result: [..]string;
+    enum_processes();
+    for process_id: _list_of_process_ids {
+        if process_id == 0 continue;
+        focused_program_buffer: [MAX_PATH]u16;
+        foreground_process := OpenProcess(PROCESS_QUERY_INFORMATION, 0, process_id);
+        if !foreground_process {
+            // log_error("Couldn't open the foreground process, error code is %\n", GetLastError());
+            continue;
+        }
+
+        filename_size : u32 = MAX_PATH;
+        // This function API is so fucking weird. Read its docs extremely carefully
+        QueryFullProcessImageNameW(foreground_process, 0, focused_program_buffer.data, *filename_size);
+        CloseHandle(foreground_process);
+        PathStripPathW(focused_program_buffer.data);
+        name, ok := wide_to_utf8(focused_program_buffer.data);
+
+        // Idk if this ever happens
+        if !ok {
+            continue;
+        }
+
+        name_lower := to_lower_copy(name,, temp);
+        search_lower := to_lower_copy(active_search.text,, temp);
+        if (active_search.text.count && contains(name_lower, search_lower)) || !active_search.text.count {
+            _, found := table_find(*_opened_programs, name);
+            if !found {
+                copied_string := copy_string(name);
+                table_set(*_opened_programs, copied_string, true);
+                array_add(*result, copied_string);
+            }
+        }
+    }
+
+    return result;
+}
+
+enum_processes :: () {
+    new_count_in_bytes: s64;
+    enum_success := K32EnumProcesses(_list_of_process_ids.data, xx (_list_of_process_ids.count*size_of(u32)), xx *new_count_in_bytes);
+    if !enum_success {
+        #import "System";
+        error_code, error_string := get_error_value_and_string();
+        log_error("Couldn't get list of running programs. Error code: %, message: %\n", error_code, error_string);
+    }
+
+    if new_count_in_bytes/size_of(u32) < _list_of_process_ids.count {
+        _list_of_process_ids.count = new_count_in_bytes/size_of(u32);
+        return;
+    }
+
+    while new_count_in_bytes/size_of(u32) >= _list_of_process_ids.count {
+        // Guarding against the infinite loop when new count is equal to count and doesn't change between iterations.
+        prev_new_count_in_bytes := new_count_in_bytes;
+
+        array_reserve(*_list_of_process_ids, new_count_in_bytes/size_of(u32) + 100);
+        _list_of_process_ids.count = new_count_in_bytes/size_of(u32) + 100;
+
+        enum_success := K32EnumProcesses(_list_of_process_ids.data, xx (_list_of_process_ids.count*size_of(u32)), xx *new_count_in_bytes);
+        if !enum_success {
+            #import "System";
+            error_code, error_string := get_error_value_and_string();
+            log_error("Couldn't get list of running programs. Error code: %, message: %\n", error_code, error_string);
+        }
+        if prev_new_count_in_bytes == new_count_in_bytes {
+            break;
+        }
     }
 }
 
@@ -290,14 +375,8 @@ unset_kb_hook :: () {
     // Forget buttons that are pressed before unhooking from the keyboard
     // So that when we hook again we don't end up in a dirty state where one
     // of the buttons is being stuck from the previous hook
-    kb_real_state[DIRECTION_LEFT] = IS_UP;
-    kb_real_state[DIRECTION_RIGHT] = IS_UP;
-    kb_real_state[DIRECTION_UP] = IS_UP;
-    kb_real_state[DIRECTION_DOWN] = IS_UP;
-    kb_virtual_state[DIRECTION_LEFT] = IS_UP;
-    kb_virtual_state[DIRECTION_RIGHT] = IS_UP;
-    kb_virtual_state[DIRECTION_UP] = IS_UP;
-    kb_virtual_state[DIRECTION_DOWN] = IS_UP;
+    memset(kb_real_state.data, 0, kb_real_state.count);
+    memset(kb_virtual_state.data, 0, kb_virtual_state.count);
     mapping_resolving_hook_is_installed = false;
 }
 
@@ -326,6 +405,8 @@ create_window :: () -> Window_Type {
 }
 
 platform_init :: () -> success: bool #must {
+    array_reserve(*_list_of_process_ids, 1000);
+    _list_of_process_ids.count = 1000;
     return true;
 }
 
@@ -398,6 +479,7 @@ LLKHF_INJECTED :: 0x00000010; // Test the event-injected (from any process) flag
 EVENT_OBJECT_FOCUS :: 0x8005;
 WINEVENT_OUTOFCONTEXT :: 0;
 
+PROCESS_VM_READ :: 0x0010;
 PROCESS_QUERY_INFORMATION :: 0x0400;
 PROCESS_QUERY_LIMITED_INFORMATION :: 0x1000;
 
@@ -419,6 +501,9 @@ OpenProcess :: (dwDesiredAccess: u32, bInheritHandle: s32, dwProcessId: u32) -> 
 QueryFullProcessImageNameW :: (hProcess: HANDLE, dwFlags: u32, lpExeName: *u16, lpdwSize: *u32) -> s32 #foreign kernel32;
 PathStripPathW :: (pszPath: *u16) #foreign shlwapi;
 
+K32EnumProcesses :: (lpidProcess: *u32, cb: u32, lpcbNeeded: *u32) -> BOOL #foreign kernel32;
+
 
 #import "Windows";
 #import "Windows_Utf8";
+#import "Hash_Table";
