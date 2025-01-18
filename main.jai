@@ -4,9 +4,9 @@ FOR SHIPPING:
 - Fix numpad bug on Windows
 - Better dropdown ui for mapping mode.
 - Handle Alt-F4.
+- Minimize to tray.
 
 FOR FUTURE:
-- Minimize to tray.
 - Better focused program recognition. Now it's just case-sensitive string contains.
 - Global Profile that is always active unless some other profile kicks in. Good for testing.
 - Debug UI. Showing stuff like currently pressed key, when mappings kick in, list of mappings.
@@ -67,9 +67,12 @@ dummy_input_text_state: Text_Input_State;
 
 current_program_state: Program_State;
 
+
+dummy_bind := Mapping_Bind.{};
 get_key_mapping :: (source_scan_code: u32) -> Mapping_Bind {
     using current_program_state;
     destination, found := table_find(*active_profile.mappings, source_scan_code);
+
     if found return destination;
     return dummy_bind;
 }
@@ -110,8 +113,6 @@ Mapping :: struct {
 // hash_function :: (source: u32) -> u32 { return source + 2; }
 // Key can be something like N lower bits is code, and then some high byte for the Bind_Kind.
 Mappings :: Table(u32, Mapping_Bind, /*hash_function*/);
-
-dummy_bind := Mapping_Bind.{};
 
 operator== :: (a: Mapping_Bind, b: Mapping_Bind) -> bool {
     if a.code == b.code && a.mode == b.mode && a.kind == b.kind return true;
@@ -283,7 +284,7 @@ Ignoring the line and trying to continue parsing. Config line was `%`
                             tfh.error(*handler, "Incorrect bind, ignoring it. Got % which is an illegal key/button code\n", bind);
                             continue;
                         }
-                        if bind <= 0 || bind >= KEY_MAX {
+                        if bind <= 0 {
                             tfh.error(*handler, "Key bind is out of bounds, ignoring it. Got %\n", bind);
                             continue;
                         }
@@ -298,7 +299,7 @@ Ignoring the line and trying to continue parsing. Config line was `%`
                             tfh.error(*handler, "Incorrect bind, ignoring it. Got % which is an illegal key/button code\n", bind);
                             continue;
                         }
-                        if bind <= 0 || bind >= KEY_MAX {
+                        if bind <= 0 {
                             tfh.error(*handler, "Key bind is out of bounds, ignoring it. Got %\n", bind);
                             continue;
                         }
@@ -383,9 +384,7 @@ main :: () {
     // TODO: Need to separate detecting focused program and setting up keyboard hook. Probably...
     start_detecting_focused_program();
 
-    #if OS == .LINUX {
-        start_logging_keys();
-    }
+    start_logging_keys();
 
     Simp.set_render_target(the_window, .LEFT_HANDED);
     init_fonts(the_window);

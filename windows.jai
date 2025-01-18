@@ -1,4 +1,23 @@
+/*
+Le NumPad handling
+NumLock gets pressed and released before every key that's numlocked. it has LL_KF_EXTENDED flag
+then, an actual key gets pressed and released, it doesn't have LL_KF_EXTENDED flag
+Then, NumLock gets pressed and released AGAIN.
 
+This is handled as a single logical key press (and release).
+
+When a key is held down, we first get a numlock (scanCode == 69 or 0x40) press/release,
+then actual key presses, while you're holding it.
+Then a key release.
+Then, numlock press and release.
+
+If you interrupt a key that you hold by some other numpad key, you don't get an intermediate numlock press/release,
+you just get keycodes for other key without an extended flag, and only then numlock press/release
+
+If you interrupt a repeating numpad key with some key not on a numpad, they receive inputs in order. But numlock key only clears
+after you release the numpad key. So you have to assume that initial numlock only applies to the key code that immediately follows it.
+And any other key code is not numlocked. And non-numlocked key can have extended key flags on it.
+*/
 CURRENT_PLATFORM := Platform.WINDOWS;
 
 // TODO: input exposes the same names.
@@ -24,10 +43,9 @@ key_name_buffer: [301]u16;
 kb_real_state: [248]u32; // whether the key is pressed on a physical keyboard
 kb_virtual_state: [248]u32; // whether the key is pressed on a software level
 
-
 scan_code_to_lparam :: (scan_code: u32) -> u32 {
+    // Extended key is handled in keyboard hooks
     lparam := scan_code << 16;
-    // TODO: Handle extended bit
     return lparam;
 }
 
@@ -56,6 +74,21 @@ get_key_name :: (key_scan_code: u32) -> string {
     return key_name;
 }
 
+
+start_logging_keys :: () {
+    instance := GetModuleHandleW(null);
+
+    if !mapping_resolving_hook_is_installed {
+        log("hooking this shit\n");
+        mapping_resolving_hook = SetWindowsHookExW(WH_KEYBOARD_LL, cast(HOOKPROC)low_level_keyboard_proc, null, 0);
+        if (mapping_resolving_hook != null) {
+            mapping_resolving_hook_is_installed = true;
+        } else {
+            log_error("hook failed oopsie\n");
+        }
+    }
+}
+
 // TODO: Try to find a way to be more optimal (like bailing out earlier) on key repeats:
 // https://learn.microsoft.com/en-us/windows/win32/winmsg/lowlevelkeyboardproc
 low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 #c_call {
@@ -72,127 +105,133 @@ low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 
     key_virtual_code := kb_input.vkCode;
     key_scan_code := kb_input.scanCode;
     push_context {
-        // key_name := get_key_name(key_scan_code);
+        // 69 is numlock, just swallow it. Depend on LLKF_EXTENDED instead,
+        // because numlocked keys don't have it set...
+        if key_scan_code == 69 {
+            return CallNextHookEx(null, n_code, wparam, lparam);
+        }
+        if kb_input.flags & .LLKHF_EXTENDED {
+            // We're adding 0xE100 to the scancode to signify that it's "EXTENDED".
+            // This lets procedures like GetKeyNameTextW to correctly distinguish between
+            // arrows and numpad keys, for example. Becuase Windows is fucking dogshit ass garbage that decided
+            // to reuse the same scancodes between those keys. Another W for Linux.
+            key_scan_code |= 0xE100;
+        }
+        key_name := get_key_name(key_scan_code);
 
-        // log("Key is % - %\n", key_scan_code, key_name);
-        // bind := get_key_mapping(key_scan_code);
-        // if bind != dummy_bind {
-        //     key_name := get_key_name(bind.code);
-        //     log("Found bind: %\n", key_name);
+        bind := get_key_mapping(key_scan_code);
+        if bind == dummy_bind {
+            return CallNextHookEx(null, n_code, wparam, lparam);
+        }
 
-        //     if wparam == WM_KEYDOWN || wparam == WM_SYSKEYDOWN {
-        //         input: INPUT;
-        //         input.type = .INPUT_KEYBOARD;
-        //         input.ki = KEYBDINPUT.{0, cast(u16)bind, KEYEVENTF_SCANCODE, 0, null};
-        //         events_count := SendInput(1, *input, size_of(INPUT));
-        //         if events_count == 0 {
-        //             error := GetLastError();
-        //             log_error("SendInput failed with error: %\n", error);
-        //         }
-        //         log("Sent % down events\n", events_count);
-        //     } else if wparam == WM_KEYUP || wparam == WM_SYSKEYUP {
-        //         log("Found up event\n");
-        //         input: INPUT;
-        //         input.type = .INPUT_KEYBOARD;
-        //         input.ki = KEYBDINPUT.{0, cast(u16)bind.code, KEYEVENTF_KEYUP | KEYEVENTF_SCANCODE, 0, null};
-        //         events_count := SendInput(1, *input, size_of(INPUT));
-        //         if events_count == 0 {
-        //             error := GetLastError();
-        //             log_error("SendInput failed with error: %\n", error);
-        //         }
-        //         log("Sent % up events\n", events_count);
+        if bind.mode == .REMAP {
+            bind_name := get_key_name(bind.code);
+            log("Found mapping: %\n", bind_name);
 
-        //     }
-        //     return CallNextHookEx(null, n_code, wparam, lparam);
-        // }
+            extended := bind.code & 0xE100;
+            scan := bind.code & 0x00FF;
 
-        // opposing_key, direction, opposing_direction := find_opposing_key_and_directions(key_scan_code);
-        // if !opposing_key {
-        //     return CallNextHookEx(null, n_code, wparam, lparam);
-        // }
+            flags : KEYBDINPUT_Flags = ifx wparam == WM_KEYDOWN || wparam == WM_SYSKEYDOWN then xx 0 else .KEYEVENTF_KEYUP;
+            flags |= ifx extended then .KEYEVENTF_EXTENDEDKEY else xx 0;
+            flags |= .KEYEVENTF_SCANCODE;
 
-        // if wparam == WM_KEYDOWN || wparam == WM_SYSKEYDOWN {
-        //     kb_real_state[direction] = IS_DOWN;
-        //     kb_virtual_state[direction] = IS_DOWN;
-        //     if kb_real_state[opposing_direction] == IS_DOWN && kb_virtual_state[opposing_direction] == IS_DOWN {
-        //         input: INPUT;
-        //         input.type = .INPUT_KEYBOARD;
-        //         input.ki = KEYBDINPUT.{0, cast(u16)opposing_key, KEYEVENTF_KEYUP | KEYEVENTF_SCANCODE, 0, null};
-        //         events_count := SendInput(1, *input, size_of(INPUT));
-        //         if events_count == 0 {
-        //             error := GetLastError();
-        //             log_error("SendInput failed with error: %\n", error);
-        //         } else {
-        //             kb_virtual_state[opposing_direction] = IS_UP;
-        //         }
-        //         log("Sent % events\n", events_count);
-        //     }
-        // } else if wparam == WM_KEYUP || wparam == WM_SYSKEYUP {
-        //     kb_real_state[direction] = IS_UP;
-        //     kb_virtual_state[direction] = IS_UP;
-        //     if kb_real_state[opposing_direction] == IS_DOWN {
-        //         input: INPUT;
-        //         input.type = .INPUT_KEYBOARD;
-        //         input.ki = KEYBDINPUT.{0, cast(u16)opposing_key, KEYEVENTF_SCANCODE, 0, null};
-        //         events_count := SendInput(1, *input, size_of(INPUT));
-        //         if events_count == 0 {
-        //             error := GetLastError();
-        //             log_error("SendInput failed with error: %\n", error);
-        //         } else {
-        //             kb_virtual_state[opposing_direction] = IS_DOWN;
-        //         }
-        //     }
-        // }
-
-        return CallNextHookEx(null, n_code, wparam, lparam);
+            input: INPUT;
+            input.type = .INPUT_KEYBOARD;
+            input.ki = KEYBDINPUT.{0, cast(u16)scan, flags, 0, null};
+            events_count := SendInput(1, *input, size_of(INPUT));
+            if events_count == 0 {
+                error := GetLastError();
+                log_error("SendInput failed with error: %\n", error);
+            }
+            log("Sent % down events\n", events_count);
+            // Returning non-zero means that we don't want the original key to get propagated
+            return 1;
+        }
     }
+    return CallNextHookEx(null, n_code, wparam, lparam);
 }
 
 mapping_setting_hook_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 #c_call {
     using current_program_state;
     push_context {
-        // key_virtual_code := wparam;
-        // // How to interpret lparam: https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input
-        // hiword := (lparam >> 16) & 0xffff;
-        // // Scan code is bits 16-23, so byte 3, or the low byte of the hiword. It's a bit confusing...
-        // raw_scan_code := cast(u32)hiword & 0xff;
-        // key_scan_code : u32 = 0;
+        key_virtual_code := wparam;
+        // How to interpret lparam: https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input
+        hiword := (lparam >> 16) & 0xffff;
+        // Scan code is bits 16-23, so byte 3, or the low byte of the hiword. It's a bit confusing...
+        raw_scan_code := cast(u32)hiword & 0xff;
+        key_scan_code : u32 = 0;
 
-        // // Extended bit is 24th. TODO: Use it, or we get confused with numlock is enabled vs when it's not\
-        // // Something like:
-        //     // if (extended)  key_scan_code = MAKEWORD(key_scan_code, 0xE0);
-        // is_extended := cast(u32)(hiword & KF_EXTENDED) == KF_EXTENDED;
+        // Extended bit is 24th. TODO: Use it, or we get confused with numlock is enabled vs when it's not
+        // Something like:
+        is_extended := cast(u32)(hiword & KF_EXTENDED) == KF_EXTENDED;
 
-        // if is_extended {
-        //     log("We are extended\n");
-        //     key_scan_code = (0xe0 << 8) | raw_scan_code;
-        // } else {
-        //     key_scan_code = raw_scan_code;
-        // }
+        if is_extended {
+            // log("We are extended\n");
+            key_scan_code = (0xe1 << 8) | raw_scan_code;
+        } else {
+            key_scan_code = raw_scan_code;
+        }
 
-        // // Transition state flag is bit 31
-        // is_down := hiword & KF_UP == 0;
+        // Transition state flag is bit 31. Transition means whether key is pressed or released!
+        is_down := hiword & KF_UP == 0;
 
-        // if is_down {
-        //     length := GetKeyNameTextW(xx lparam, key_name_buffer.data, key_name_buffer.count);
-        // if length == 0 {
-        //     error := GetLastError();
-        //     log_error("Couldn't get the key name for the key with scancode %. Error is %\n", key_scan_code, error);
-        // }
-        // key_name, ok := wide_to_utf8(key_name_buffer.data, length);
-        // if !ok {
-        //     error := GetLastError();
-        //     log_error("Couldn't convert the key name to UTF8 for scancode %. Buffer content is %. Error is %\n", key_scan_code, key_name_buffer, error);
-        // }
-        //     log("New mapping key pressed: %\n", key_name);
-        //     if active_state == .SETTING_SOURCE {
-        //         mapping_sources[0] = key_scan_code;
-        //         active_state = .SETTING_DESTINATION;
-        //     } else if active_state == .SETTING_DESTINATION {
-        //         mapping_destinations[0] = key_scan_code;
-        //         active_state = .NOTHING;
-        //     }
-        // }
+        // Numlock is extended here, so 0xe100 + 0x0045 is numlock, we just ignore it.
+        if key_scan_code == 0xe145 return CallNextHookEx(null, n_code, wparam, lparam);
+
+        key_name := get_key_name(key_scan_code);
+        // log("New mapping key pressed: %\n", key_name);
+        if active_state == .SETTING_SOURCE || active_state == .SETTING_DESTINATION {
+            next_state := Mapping_State.NOTHING;
+            if is_down {
+                if active_state == .SETTING_SOURCE {
+                    // print("mappings before:\n");
+                    // for active_profile.mappings {
+                    //     dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
+                    //     print("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
+                    // }
+
+                    old_source_code := active_mapping.source.code;
+                    if old_source_code == KEY_RESERVED next_state = .SETTING_DESTINATION;
+
+                    old_binding_from_old_source, found := table_find(*active_profile.mappings, old_source_code);
+                    // print("Old source is %\n", old_binding_from_old_source);
+
+                    active_mapping.*.source.code = key_scan_code;
+                    table_set(*active_profile.mappings, active_mapping.source.code, active_mapping.destination);
+
+                    if active_mapping.mode == .OPPOSITE || active_mapping.mode == .NEUTRAL {
+                        table_remove(*active_profile.mappings, active_mapping.destination.code);
+                        table_set(*active_profile.mappings, active_mapping.destination.code, active_mapping.source);
+                    }
+                    // I don't think it matters whether we found it.
+                    table_remove(*active_profile.mappings, old_source_code);
+
+                    // print("mappings after:\n");
+                    // for active_profile.mappings {
+                    //     dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
+                    //     print("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
+                    // }
+
+                    // log("Set source %\n", key_scan_code);
+                } else if active_state == .SETTING_DESTINATION {
+                    old_destination_code := active_mapping.destination.code;
+                    active_mapping.*.destination.code = key_scan_code;
+
+                    table_set(*active_profile.mappings, active_mapping.source.code, active_mapping.destination);
+                    if active_mapping.mode == .OPPOSITE || active_mapping.mode == .NEUTRAL {
+                        table_remove(*active_profile.mappings, old_destination_code);
+                        table_set(*active_profile.mappings, active_mapping.destination.code, active_mapping.source);
+                    }
+                    // log("Set destination %\n", key_scan_code);
+                }
+
+                if next_state == .NOTHING {
+                    finalize_state();
+                } else {
+                    active_state = next_state;
+                }
+            }
+        }
     }
     return CallNextHookEx(null, n_code, wparam, lparam);
 }
@@ -237,16 +276,16 @@ detect_focused_program :: (
         focused_program_name, ok := wide_to_utf8(focused_program_buffer.data);
         log("Window activated: %\n", focused_program_name);
 
-        program_handle := GetModuleHandleW(null);
+        // program_handle := GetModuleHandleW(null);
 
-        for profile: profiles {
-            if profile.program == focused_program_name && profile.platform == CURRENT_PLATFORM {
-                set_kb_hook(program_handle);
-            } else {
-                unset_kb_hook();
-            }
-        }
-        unset_kb_hook();
+        // for profile: profiles {
+        //     if profile.program == focused_program_name && profile.platform == CURRENT_PLATFORM {
+        //         set_kb_hook(program_handle);
+        //     } else {
+        //         unset_kb_hook();
+        //     }
+        // }
+        // unset_kb_hook();
     }
 }
 
@@ -415,10 +454,22 @@ HOOKPROC :: *void;
 WH_KEYBOARD :: 2;
 WH_KEYBOARD_LL :: 13;
 
+// KF_EXTENDED :: 0x0100;
+// KF_ALTDOWN :: 0x2000;
+// KF_UP :: 0x8000;
+
+KBD_Flags :: enum_flags u32 {
+    LLKHF_EXTENDED :: KF_EXTENDED >> 8;
+    LLKHF_LOWER_IL_INJECTED :: 0x00000002;
+    LLKHF_INJECTED :: 0x00000010;
+    LLKHF_ALTDOWN :: KF_ALTDOWN >> 8;
+    LLKHF_UP :: KF_UP >> 8;
+}
+
 KBDLLHOOKSTRUCT :: struct {
    vkCode: u32;
    scanCode: u32;
-   flags: u32;
+   flags: KBD_Flags;
    time: u32;
    dwExtraInfo: u32;
 }
@@ -441,10 +492,17 @@ INPUT :: struct {
 KEYEVENTF_KEYUP : u32 : 0x0002;
 KEYEVENTF_SCANCODE : u32 : 0x0008;
 
+KEYBDINPUT_Flags :: enum_flags u32 {
+    KEYEVENTF_EXTENDEDKEY :: 0x0001;
+    KEYEVENTF_KEYUP :: 0x0002;
+    KEYEVENTF_SCANCODE :: 0x0008;
+    KEYEVENTF_UNICODE :: 0x0004;
+}
+
 KEYBDINPUT :: struct {
   wVk: u16;
   wScan: u16;
-  dwFlags: u32;
+  dwFlags: KEYBDINPUT_Flags;
   time: u32;
   dwExtraInfo: *u32;
 }
@@ -490,6 +548,7 @@ shlwapi :: #system_library "shlwapi";
 SetWindowsHookExW :: (idHook: s32, lpfn: HOOKPROC, hmod: HINSTANCE, dwThreadId: u32) -> HHOOK #foreign user32;
 UnhookWindowsHookEx :: (hhk: HHOOK) -> s32 #foreign user32;
 CallNextHookEx :: (hhk: HHOOK, nCode: s32, wParam: WPARAM, lParam: LPARAM) -> s64 #foreign user32;
+MapVirtualKeyW :: (uCode: u32, uMapType: u32) -> u32 #foreign user32;
 GetKeyNameTextW :: (lparam: u32, lp_string: *u16, cch_size: s32) -> s32 #foreign user32;
 // TODO: Make it a pointer to an array of INPUTs instead:
 // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput
