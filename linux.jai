@@ -899,7 +899,7 @@ close_restricted :: (fd: s32, user_data: *void) #c_call {
 interface_: libinput_interface = .{open_restricted, close_restricted};
 
 
-platform_init :: () -> success: bool #must {
+platform_init :: (window: u64) -> success: bool #must {
 
     // x11 and libxkbcommon
     {
