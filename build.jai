@@ -1,3 +1,5 @@
+#load "modules/Control_Flow/or_return_build.jai";
+
 build :: () {
     w := compiler_create_workspace("Target Program");
     if !w {
@@ -14,10 +16,18 @@ build :: () {
 
     compiler_begin_intercept(w);
     add_build_file("./main.jai", w);
+    or_return_add_source(w);
 
     while true {
         message := compiler_wait_for_message();
-        if message.kind == .COMPLETE break;
+        if message.kind == {
+        case .TYPECHECKED;
+            typechecked := cast(*Message_Typechecked) message;
+            or_return_handle_typechecked(typechecked);
+
+        case .COMPLETE;
+            break;
+        }
     }
 
     compiler_end_intercept(w);

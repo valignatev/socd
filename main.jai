@@ -67,14 +67,15 @@ dummy_input_text_state: Text_Input_State;
 
 current_program_state: Program_State;
 
-
 dummy_bind := Mapping_Bind.{};
 get_key_mapping :: (source_scan_code: u32) -> Mapping_Bind {
     using current_program_state;
-    destination, found := table_find(*active_profile.mappings, source_scan_code);
+    // destination, found := table_find(*active_profile.mappings, source_scan_code);
+    destination := or_return(table_find(*active_profile.mappings, source_scan_code));
+    return destination;
 
-    if found return destination;
-    return dummy_bind;
+    // if found return destination;
+    // return dummy_bind;
 }
 
 SETTINGS_VERSION :: 1;
@@ -905,5 +906,4 @@ tfh :: #import "Text_File_Handler";
 #import "Reflection";
 #import "File";
 #import "File_Utilities";
-
-// #import "Print_Vars";
+#import "Control_Flow";
