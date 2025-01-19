@@ -40,8 +40,9 @@ mapping_setting_hook: HHOOK;
 
 // TODO: these buffers should probably be thread(context)-locals. Just in case...
 key_name_buffer: [301]u16;
-kb_real_state: [248]u32; // whether the key is pressed on a physical keyboard
-kb_virtual_state: [248]u32; // whether the key is pressed on a software level
+// 0xe1ff is the biggest theoretical key code with an extended byte set.
+// GetAsyncKeyState is not available in low level keyboard procedures, so we need to maintain our own.
+kb_real_state: [57856]bool; // whether the key is pressed on a physical keyboard
 
 scan_code_to_lparam :: (scan_code: u32) -> u32 {
     // Extended key is handled in keyboard hooks
@@ -78,15 +79,15 @@ get_key_name :: (key_scan_code: u32) -> string {
 start_logging_keys :: () {
     instance := GetModuleHandleW(null);
 
-    if !mapping_resolving_hook_is_installed {
-        log("hooking this shit\n");
-        mapping_resolving_hook = SetWindowsHookExW(WH_KEYBOARD_LL, cast(HOOKPROC)low_level_keyboard_proc, null, 0);
-        if (mapping_resolving_hook != null) {
-            mapping_resolving_hook_is_installed = true;
-        } else {
-            log_error("hook failed oopsie\n");
-        }
-    }
+    // if !mapping_resolving_hook_is_installed {
+    //     log("hooking this shit\n");
+    //     mapping_resolving_hook = SetWindowsHookExW(WH_KEYBOARD_LL, cast(HOOKPROC)low_level_keyboard_proc, null, 0);
+    //     if (mapping_resolving_hook != null) {
+    //         mapping_resolving_hook_is_installed = true;
+    //     } else {
+    //         log_error("hook failed oopsie\n");
+    //     }
+    // }
 }
 
 // TODO: Try to find a way to be more optimal (like bailing out earlier) on key repeats:
@@ -110,6 +111,7 @@ low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 
         if key_scan_code == 69 {
             return CallNextHookEx(null, n_code, wparam, lparam);
         }
+        is_down := ifx wparam == WM_KEYDOWN || wparam == WM_SYSKEYDOWN then true else false;
         if kb_input.flags & .LLKHF_EXTENDED {
             // We're adding 0xE100 to the scancode to signify that it's "EXTENDED".
             // This lets procedures like GetKeyNameTextW to correctly distinguish between
@@ -117,35 +119,80 @@ low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 
             // to reuse the same scancodes between those keys. Another W for Linux.
             key_scan_code |= 0xE100;
         }
+
         key_name := get_key_name(key_scan_code);
+        kb_real_state[key_scan_code] = is_down;
 
         bind := get_key_mapping(key_scan_code);
         if bind == dummy_bind {
             return CallNextHookEx(null, n_code, wparam, lparam);
         }
 
+        extended := bind.code & 0xE100;
+        bind_scan := bind.code & 0x00FF;
+
         if bind.mode == .REMAP {
             bind_name := get_key_name(bind.code);
-            log("Found mapping: %\n", bind_name);
 
-            extended := bind.code & 0xE100;
-            scan := bind.code & 0x00FF;
-
-            flags : KEYBDINPUT_Flags = ifx wparam == WM_KEYDOWN || wparam == WM_SYSKEYDOWN then xx 0 else .KEYEVENTF_KEYUP;
+            flags : KEYBDINPUT_Flags = ifx is_down then xx 0 else .KEYEVENTF_KEYUP;
             flags |= ifx extended then .KEYEVENTF_EXTENDEDKEY else xx 0;
             flags |= .KEYEVENTF_SCANCODE;
 
             input: INPUT;
             input.type = .INPUT_KEYBOARD;
-            input.ki = KEYBDINPUT.{0, cast(u16)scan, flags, 0, null};
+            input.ki = KEYBDINPUT.{0, cast(u16)bind_scan, flags, 0, null};
+            print("Sending %\n", scan);
             events_count := SendInput(1, *input, size_of(INPUT));
             if events_count == 0 {
                 error := GetLastError();
                 log_error("SendInput failed with error: %\n", error);
             }
-            log("Sent % down events\n", events_count);
             // Returning non-zero means that we don't want the original key to get propagated
             return 1;
+        }
+        if bind.mode == .OPPOSITE || bind.mode == .NEUTRAL {
+            // Get the state of the opposite key
+            opposite_is_down := kb_real_state[bind_scan];
+
+            if is_down {
+                if opposite_is_down {
+                    flags : KEYBDINPUT_Flags = .KEYEVENTF_KEYUP;
+                    flags |= ifx extended then .KEYEVENTF_EXTENDEDKEY else xx 0;
+                    flags |= .KEYEVENTF_SCANCODE;
+
+                    input: INPUT;
+                    input.type = .INPUT_KEYBOARD;
+                    input.ki = KEYBDINPUT.{0, cast(u16)bind_scan, flags, 0, null};
+                    events_count := SendInput(1, *input, size_of(INPUT));
+
+                    if events_count == 0 {
+                        error := GetLastError();
+                        log_error("SendInput failed with error: %\n", error);
+                    }
+
+                    if bind.mode == .NEUTRAL {
+                        // Do not propagate the original key if it's meant to cancel out
+                        return 1;
+                    }
+
+                }
+            } else {
+                if opposite_is_down {
+                    flags : KEYBDINPUT_Flags = 0;
+                    flags |= ifx extended then .KEYEVENTF_EXTENDEDKEY else xx 0;
+                    flags |= .KEYEVENTF_SCANCODE;
+
+                    input: INPUT;
+                    input.type = .INPUT_KEYBOARD;
+                    input.ki = KEYBDINPUT.{0, cast(u16)bind_scan, flags, 0, null};
+                    events_count := SendInput(1, *input, size_of(INPUT));
+
+                    if events_count == 0 {
+                        error := GetLastError();
+                        log_error("SendInput failed with error: %\n", error);
+                    }
+                }
+            }
         }
     }
     return CallNextHookEx(null, n_code, wparam, lparam);
@@ -276,16 +323,15 @@ detect_focused_program :: (
         focused_program_name, ok := wide_to_utf8(focused_program_buffer.data);
         log("Window activated: %\n", focused_program_name);
 
-        // program_handle := GetModuleHandleW(null);
+        program_handle := GetModuleHandleW(null);
 
-        // for profile: profiles {
-        //     if profile.program == focused_program_name && profile.platform == CURRENT_PLATFORM {
-        //         set_kb_hook(program_handle);
-        //     } else {
-        //         unset_kb_hook();
-        //     }
-        // }
-        // unset_kb_hook();
+        for profile: profiles {
+            if profile.program == focused_program_name && profile.platform == CURRENT_PLATFORM {
+                set_kb_hook(program_handle);
+                return;
+            }
+        }
+        unset_kb_hook();
     }
 }
 
@@ -415,7 +461,6 @@ unset_kb_hook :: () {
     // So that when we hook again we don't end up in a dirty state where one
     // of the buttons is being stuck from the previous hook
     memset(kb_real_state.data, 0, kb_real_state.count);
-    memset(kb_virtual_state.data, 0, kb_virtual_state.count);
     mapping_resolving_hook_is_installed = false;
 }
 
