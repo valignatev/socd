@@ -370,16 +370,18 @@ finalize_state :: () {
 
 main :: () {
 
-    success := platform_init();
-    if !success {
-        log_error("Initialization failed\n");
-        exit(1);
-    }
-
     current_program_state = .{active_state=.NOTHING, active_mapping=null, active_search=*dummy_input_text_state};
     using current_program_state;
 
     the_window := create_window();
+
+    // I want to init everything after the Window, because if there's an error, I want to potentially
+    // show it in the window, instead of yelling in the terminal like some pussy ass Linux nerd.
+    success := platform_init(the_window);
+    if !success {
+        log_error("Initialization failed\n");
+        exit(1);
+    }
 
     // TODO: Need to separate detecting focused program and setting up keyboard hook. Probably...
     start_detecting_focused_program();

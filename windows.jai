@@ -22,18 +22,6 @@ CURRENT_PLATFORM := Platform.WINDOWS;
 
 // TODO: input exposes the same names.
 KEY_RESERVED : u32 : 0;
-KEY_ESC  : u32 : 0x01;
-KEY_W    : u32 : 0x11;
-KEY_A    : u32 : 0x1e;
-KEY_S    : u32 : 0x1f;
-KEY_D    : u32 : 0x20;
-KEY_L    : u32 : 0x26;
-KEY_O    : u32 : 0x18;
-KEY_U    : u32 : 0x16;
-KEY_P    : u32 : 0x19;
-KEY_9    : u32 : 0xA;
-KEY_MAX  : u32 : 0x2ff;
-
 MAX_PATH_LENGTH :: MAX_PATH;
 mapping_resolving_hook: HHOOK;
 mapping_setting_hook: HHOOK;
@@ -488,20 +476,97 @@ create_window :: () -> Window_Type {
     return the_window;
 }
 
-platform_init :: () -> success: bool #must {
+
+tray_proc :: (hWnd: HWND, message: u32, wParam: WPARAM, lParam: LPARAM) #c_call {
+    push_context {
+        print("COCK DETECTED\n");
+
+    // TODO: do this, otherwise icon gets stuck in the tray until the use hovers mouse over it.
+    // case WM_DESTROY:
+    //     Shell_NotifyIcon(NIM_DELETE,&niData);
+    }
+}
+
+
+HIDDEN_WINDOW_CLASS := "HIDDEN_WINDOW_CLASS";
+
+
+// A hidden window we use specifically to handle tray events
+create_hidden_window :: (window_name: string, parent: Window_Type = null) -> HWND {
+    hInstance := GetModuleHandleW(null);
+
+    wc: WNDCLASSEXW;
+    wc.cbSize = size_of(WNDCLASSEXW);
+    wc.hInstance            = hInstance;
+    wc.lpszClassName        = utf8_to_wide(HIDDEN_WINDOW_CLASS,, temp);
+
+
+    wc.lpfnWndProc = xx tray_proc;
+
+    if RegisterClassExW(*wc) == 0 {
+        log_error("RegisterClassExW returned 0.\n");
+        return null;
+    }
+
+    hwnd := CreateWindowExW(
+        0,
+        utf8_to_wide(HIDDEN_WINDOW_CLASS,, temp),
+        utf8_to_wide(window_name,, temp),
+        0,
+        xx CW_USEDEFAULT, xx CW_USEDEFAULT,
+        xx CW_USEDEFAULT,
+        xx CW_USEDEFAULT,
+        parent,
+        null,
+        cast (HINSTANCE) 0,
+        null,
+    );
+
+    if hwnd == null {
+        log_error("CreateWindowExW returned 0.\n");
+        return null;
+    }
+
+    return hwnd;
+}
+
+
+platform_init :: (window: HWND) -> success: bool #must {
     array_reserve(*_list_of_process_ids, 1000);
     _list_of_process_ids.count = 1000;
+
+    tray_window := create_hidden_window("hidden_tray_window", window);
+    if !tray_window {
+        log_error("COCK BLOCKED: %\n", GetLastError());
+    }
+
+    process_handle := GetModuleHandleW(null);
+    tray: NOTIFYICONDATAW;
+    tray.cbSize = size_of(NOTIFYICONDATAW);
+    tray.uID = 1231234545;
+    tray.uFlags = .NIF_ICON | .NIF_MESSAGE | .NIF_TIP;
+    tray.hIcon = LoadIconW(process_handle, MAKEINTRESOURCE(2));
+
+    tray.hWnd = tray_window;
+    tray.uCallbackMessage = WM_APP + 1;
+
+    result := Shell_NotifyIconW(.NIM_ADD, *tray);
+    if result != 1 {
+        log_error("Tray fuckup kid\n");
+    }
     return true;
+}
+
+WM_APP :: 0x8000;
+
+MAKEINTRESOURCE :: (x: s32) -> *u16 {
+    return cast(*u16) x;  // Sigh.
 }
 
 HHOOK :: *void;
 HOOKPROC :: *void;
 WH_KEYBOARD :: 2;
 WH_KEYBOARD_LL :: 13;
-
-// KF_EXTENDED :: 0x0100;
-// KF_ALTDOWN :: 0x2000;
-// KF_UP :: 0x8000;
 
 KBD_Flags :: enum_flags u32 {
     LLKHF_EXTENDED :: KF_EXTENDED >> 8;
@@ -567,28 +632,90 @@ HARDWAREINPUT :: struct {
     wParamH: u16;
 }
 
+Notify_Icon_Flags :: enum_flags u32 {
+    NIF_MESSAGE  :: 0x00000001;
+    NIF_ICON     :: 0x00000002;
+    NIF_TIP      :: 0x00000004;
+    NIF_STATE    :: 0x00000008;
+    NIF_INFO     :: 0x00000010;
+    NIF_GUID     :: 0x00000020;
+    NIF_REALTIME :: 0x00000040;
+    NIF_SHOWTIP  :: 0x00000080;
+}
+
+Notify_Icon_State_Mask :: enum_flags u32 {
+    NIS_HIDDEN     :: 0x00000001;
+    NIS_SHAREDICON :: 0x00000002;
+}
+
+Notify_Icon_State :: Notify_Icon_State_Mask;
+
+
+Notify_Icon_Info_Flags :: enum_flags u32 {
+    NIIF_NONE               :: 0x00000000;
+    NIIF_INFO               :: 0x00000001;
+    NIIF_WARNING            :: 0x00000002;
+    NIIF_ERROR              :: 0x00000003;
+    NIIF_USER               :: 0x00000004;
+    NIIF_NOSOUND            :: 0x00000010;
+    NIIF_LARGE_ICON         :: 0x00000020;
+    NIIF_RESPECT_QUIET_TIME :: 0x00000080;
+    NIIF_ICON_MASK          :: 0x0000000F;
+}
+
+NOTIFYICONDATAW :: struct {
+    cbSize: u32;
+    hWnd: HWND;
+    uID: u32;
+    uFlags: Notify_Icon_Flags;
+    uCallbackMessage: u32;
+    hIcon: HICON;
+    szTip: [128]u16;
+    dwState: Notify_Icon_State;
+    dwStateMask: Notify_Icon_State_Mask;
+    szInfo: [256]u16;
+    DUMMYUNIONNAME :: union {
+        uTimeout: u32;
+        uVersion: u32;
+    };
+    szInfoTitle: [64]u16;
+    dwInfoFlags: Notify_Icon_Info_Flags;
+    guidItem: GUID;
+    hBalloonIcon: HICON ;
+}
+
+Notify_Icon_Message :: enum u32 {
+    NIM_ADD        :: 0x00000000;
+    NIM_MODIFY     :: 0x00000001;
+    NIM_DELETE     :: 0x00000002;
+    NIM_SETFOCUS   :: 0x00000003;
+    NIM_SETVERSION :: 0x00000004;
+}
+
 HC_ACTION :: 0; // The wParam and lParam parameters contain information about a keyboard message.
 
 KF_EXTENDED :: 0x0100; //  	Manipulates the extended key flag.
-KF_DLGMODE :: 0x0800; //  	Manipulates the dialog mode flag, which indicates whether a dialog box is active.
+KF_DLGMODE  :: 0x0800; //  	Manipulates the dialog mode flag, which indicates whether a dialog box is active.
 KF_MENUMODE :: 0x1000; //  	Manipulates the menu mode flag, which indicates whether a menu is active.
-KF_ALTDOWN :: 0x2000; //  	Manipulates the context code flag.
-KF_REPEAT :: 0x4000; //  	Manipulates the previous key state flag.
-KF_UP :: 0x8000; //  	Manipulates the transition state flag.
+KF_ALTDOWN  :: 0x2000; //  	Manipulates the context code flag.
+KF_REPEAT   :: 0x4000; //  	Manipulates the previous key state flag.
+KF_UP       :: 0x8000; //  	Manipulates the transition state flag.
 
 LLKHF_EXTENDED :: 0x0100 >> 8; // Test the extended-key flag.
 LLKHF_INJECTED :: 0x00000010; // Test the event-injected (from any process) flag.
 
 EVENT_OBJECT_FOCUS :: 0x8005;
 WINEVENT_OUTOFCONTEXT :: 0;
+WINEVENT_INCONTEXT :: 4;
 
 PROCESS_VM_READ :: 0x0010;
 PROCESS_QUERY_INFORMATION :: 0x0400;
 PROCESS_QUERY_LIMITED_INFORMATION :: 0x1000;
 
-user32 :: #system_library "user32";
-kernel32 :: #system_library "kernel32";
-shlwapi :: #system_library "shlwapi";
+user32   :: #library,system "user32";
+kernel32 :: #library,system "kernel32";
+shlwapi  :: #library,system "shlwapi";
+shell32  :: #library,system "shell32";
 
 SetWindowsHookExW :: (idHook: s32, lpfn: HOOKPROC, hmod: HINSTANCE, dwThreadId: u32) -> HHOOK #foreign user32;
 UnhookWindowsHookEx :: (hhk: HHOOK) -> s32 #foreign user32;
@@ -606,7 +733,8 @@ QueryFullProcessImageNameW :: (hProcess: HANDLE, dwFlags: u32, lpExeName: *u16, 
 PathStripPathW :: (pszPath: *u16) #foreign shlwapi;
 
 K32EnumProcesses :: (lpidProcess: *u32, cb: u32, lpcbNeeded: *u32) -> BOOL #foreign kernel32;
-
+Shell_NotifyIconW :: (dwMessage: Notify_Icon_Message, lpData: *NOTIFYICONDATAW) -> BOOL #foreign shell32;
+CreateDialogParamW :: (hInstance: HINSTANCE, lpTemplateName: *u16, hWndParent: HWND, lpDialogFunc: HOOKPROC, dwInitParam: LPARAM) -> HWND #foreign user32;
 
 #import "Windows";
 #import "Windows_Utf8";
