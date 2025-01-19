@@ -1,7 +1,6 @@
 /*
 ~~TODOS~~
 FOR SHIPPING:
-- Fix numpad bug on Windows
 - Better dropdown ui for mapping mode.
 - Handle Alt-F4.
 - Minimize to tray.
@@ -654,6 +653,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         if released_source {
             active_state = .SETTING_SOURCE;
             active_mapping = mapping;
+            set_key_mapping_hook(window);
             print("Source pressed\n");
         }
 
@@ -759,6 +759,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         if released_dest {
             active_state = .SETTING_DESTINATION;
             active_mapping = mapping;
+            set_key_mapping_hook(window);
             print("Dest pressed\n");
         }
 
