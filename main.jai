@@ -727,9 +727,11 @@ draw_one_frame :: (dt: float, window: Window_Type) {
                 base_color,
             );
 
-            // color := my_theme.button_theme.surface_color_down;
             color := my_theme.button_theme.frame_color;
-            // color := Vector4.{.55, .05, .55, 1};
+            color = lerp(color, dropdown_button_theme.frame_color_over,  dropdown_button_state.over_factor);
+            color = lerp(color, dropdown_button_theme.frame_color_down,  dropdown_button_state.down_effect_t);
+            color = lerp(color, dropdown_button_theme.frame_color_flash, dropdown_button_state.pressed_factor);
+
             base_h := mode_r.h/2;
             base_y := mode_r.y + base_h/2;
             base_x := mode_r.x;
