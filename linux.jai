@@ -987,6 +987,10 @@ platform_init :: (window: u64) -> success: bool #must {
     return true;
 }
 
+platform_close_window :: (window: u64) {
+    XWithdrawWindow(x_global_display, window, 0);
+}
+
 libc :: #system_library "libc";
 c_free :: (memory: *void) #foreign libc "free";
 

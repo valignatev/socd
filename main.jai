@@ -40,10 +40,10 @@ window_height := 600;
 current_theme: s32 = xx Default_Themes.Default;
 my_theme: Overall_Theme;  // This gets filled out by calling the Theme_Proc for current_theme.
 subwindows_initted := false;
-
 subwindow_info_new_profile: Subwindow_Info;
 subwindow_new_profile_just_got_closed := false;
 searchbar_should_be_active := true;
+default_button_height := 50.0;
 
 Mapping_State :: enum {
     NOTHING :: 0;
@@ -421,7 +421,13 @@ main :: () {
         }
 
         for event: Input.events_this_frame {
-            if event.type == .QUIT then quit = true;
+            if event.type == .QUIT {
+                quit = true;
+
+                // A funny "pretend to be fast" hack. On Linux, closing a lot of file descriptors
+                // takes a while, so we can close the window instantly as if our program was very fast!
+                platform_close_window(the_window);
+            }
 
             getrect_handle_event(event);
 
@@ -461,6 +467,8 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     pulsating_button_theme.frame_color = pulsating_button_theme.frame_color_flash;
     pulsating_button_theme.surface_color = pulsating_button_theme.surface_color_flash;
 
+    button_height := default_button_height;
+
     set_default_theme(my_theme);  // Just in case we don't explicitly pass themes sometimes...!
 
     bg_col := my_theme.background_color;
@@ -479,7 +487,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     profiles_region, inside_profiles_region := begin_scrollable_region(r, *profiles_theme);
 
     program_rect := inside_profiles_region;
-    program_rect.h = 50;
+    program_rect.h = button_height;
     program_rect.y -= scroll_value_profiles_region;
 
     profile_button_theme := my_theme.button_theme;
@@ -510,7 +518,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             finalize_state();
         }
 
-        program_rect.y += floor(50 * 1.1 + 1);
+        program_rect.y += floor(button_height * 1.1 + 1);
     }
 
     end_scrollable_region(profiles_region, program_rect.x + program_rect.w, program_rect.y, *scroll_value_profiles_region);
@@ -521,8 +529,8 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         need_to_scroll_profiles = false;
     }
 
-    add_button_rect := get_rect(10, profiles_height + 10 + 5, profiles_width / 2 - 5, 50);
-    del_button_rect := get_rect(10 + profiles_width / 2 + 5, profiles_height + 10 + 5, profiles_width / 2 - 5, 50);
+    add_button_rect := get_rect(10, profiles_height + 10 + 5, profiles_width / 2 - 5, button_height);
+    del_button_rect := get_rect(10 + profiles_width / 2 + 5, profiles_height + 10 + 5, profiles_width / 2 - 5, button_height);
 
     _, _, add_profile_released := button(add_button_rect, "Add", *my_theme.button_theme, /*disable_press = (active_state != .NOTHING)*/);
     if add_profile_released {
@@ -554,7 +562,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     profile_start := profiles_width + 30;
     profile_width := 500.0;
 
-    add_mapping_rect := get_rect(profile_start, 10, profile_width, 50);
+    add_mapping_rect := get_rect(profile_start, 10, profile_width, button_height);
     _, _, add_mapping_released := button(add_mapping_rect, "Add mapping", *my_theme.button_theme);
     if add_mapping_released && active_state == .NOTHING {
         active_state = .SETTING_SOURCE;
@@ -606,7 +614,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     // EMERGENCY QUIT BUTTON. TODO: only enable it in debug mode
     //
     close_start := add_mapping_rect.w + add_mapping_rect.x + 10;
-    close_rect := get_rect(close_start, 10, 50, 50);
+    close_rect := get_rect(close_start, 10, button_height, button_height);
     _, _, close_released := button(close_rect, "X", *my_theme.button_theme);
     if close_released {
         exit(1);
@@ -642,7 +650,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     mappings := ifx active_profile cast([]Mapping) active_profile.mappings_array else Mapping.[];
     for * mapping: mappings {
         button_width := (s.w - 50)/3 - 1;
-        source_rect := get_rect(s.x, s.y, button_width, 50);
+        source_rect := get_rect(s.x, s.y, button_width, button_height);
         source_name := get_key_name(mapping.source.code);
         source_pulsating := active_mapping && active_mapping == mapping && active_state == .SETTING_SOURCE;
         source_theme := ifx source_pulsating pulsating_button_theme else mappings_button_theme;
@@ -660,7 +668,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         }
 
 
-        mode_rect := get_rect(s.x + source_rect.w + 1, s.y, button_width, 50);
+        mode_rect := get_rect(s.x + source_rect.w + 1, s.y, button_width, button_height);
         changed, mode_state := dropdown(mode_rect, type_info_mapping_mode.names, xx *mapping.mode, dropdown_theme, identifier=mapping.source.code);
 
         // HACK: we might be reusing the leaked dropdown state with the same hash, left after removing a mapping with the same code
@@ -702,8 +710,26 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
         // Arrow lol
         {
-            color := my_theme.button_theme.surface_color_down;
-            mode_r := get_rect(s.x + source_rect.w + 1, s.y, button_width, 50);
+
+            mode_r := get_rect(s.x + source_rect.w + 1, s.y, button_width, button_height);
+            dropdown_button_state := mode_state.current_value_state;
+            dropdown_button_theme := dropdown_theme.theme_for_current_value;
+
+            // Logic from button to make the arrow pulsate and flash
+            base_color := dropdown_button_theme.surface_color;
+            base_color = lerp(base_color, dropdown_button_theme.surface_color_over,  dropdown_button_state.over_factor);
+            base_color = lerp(base_color, dropdown_button_theme.surface_color_down,  dropdown_button_state.down_effect_t);
+            base_color = lerp(base_color, dropdown_button_theme.surface_color_flash, dropdown_button_state.pressed_factor);
+
+            Simp.immediate_quad(
+                mode_r.x , mode_r.y,
+                mode_r.x + mode_r.w , mode_r.y + mode_r.h,
+                base_color,
+            );
+
+            // color := my_theme.button_theme.surface_color_down;
+            color := my_theme.button_theme.frame_color;
+            // color := Vector4.{.55, .05, .55, 1};
             base_h := mode_r.h/2;
             base_y := mode_r.y + base_h/2;
             base_x := mode_r.x;
@@ -711,9 +737,9 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             arrow_width := button_width * 0.25;
             if mapping.mode == .OPPOSITE {
                 Simp.immediate_triangle(
-                    .{base_x + arrow_width, base_y  , 0},
-                    .{base_x,                       base_y + base_h/2, 0},
-                    .{base_x + arrow_width, base_y + base_h  , 0},
+                    .{base_x + arrow_width, base_y,            0},
+                    .{base_x              , base_y + base_h/2, 0},
+                    .{base_x + arrow_width, base_y + base_h,   0},
                     color,
                     color,
                     color,
@@ -728,16 +754,16 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             }
 
             Simp.immediate_quad(
-                base_x, base_y + base_h/3,
-                base_x + mode_r.w, base_y + base_h/1.5,
+                base_x            , base_y + base_h/3,
+                base_x + mode_r.w , base_y + base_h/1.5,
                 color,
             );
 
             if mapping.mode == .REMAP || mapping.mode == .OPPOSITE {
                 Simp.immediate_triangle(
-                    .{base_x + mode_r.w,              base_y       , 0},
+                    .{base_x + mode_r.w,               base_y           , 0},
                     .{base_x + mode_r.w + arrow_width, base_y + base_h/2, 0},
-                    .{base_x + mode_r.w,              base_y + base_h  , 0},
+                    .{base_x + mode_r.w,               base_y + base_h  , 0},
                     color,
                     color,
                     color,
@@ -746,7 +772,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         }
 
 
-        dest_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1, s.y, button_width, 50);
+        dest_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1, s.y, button_width, button_height);
         dest_name := get_key_name(mapping.destination.code);
 
         dest_pulsating := active_mapping && active_mapping == mapping && active_state == .SETTING_DESTINATION;
@@ -765,7 +791,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             print("Dest pressed\n");
         }
 
-        del_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1 + dest_rect.w + 1 + 1, s.y, 50, 50);
+        del_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1 + dest_rect.w + 1 + 1, s.y, 50, button_height);
         _, _, del_released := button(del_rect, "X", *mappings_button_theme, identifier=it_index);
 
         // Delete mapping
@@ -774,7 +800,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             dropdown_state_to_clean_up = mode_state;
         }
 
-        s.y += floor(50 * 1.1 + 1);
+        s.y += floor(button_height * 1.1 + 1);
 
     }
 
@@ -804,9 +830,10 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
 draw_new_profile_selector :: (r: Rect, data: *void) {
     using current_program_state;
+    button_height := default_button_height;
 
     searchbar_rect := r;
-    searchbar_rect.h = 50;
+    searchbar_rect.h = button_height;
 
     // TODO: this only works the first time subwindow opens. On subsequent opens,
     // it only activates for a single frame, because of some issue with text_input state
@@ -844,7 +871,7 @@ draw_new_profile_selector :: (r: Rect, data: *void) {
     region, inside := begin_scrollable_region(scrollable_rect, *my_theme.scrollable_region_theme);
 
     s := inside;
-    s.h = 50;
+    s.h = button_height;
     s.y -= scroll_value_new_profile;
 
     opened_windows := get_list_of_programs();
@@ -860,7 +887,7 @@ draw_new_profile_selector :: (r: Rect, data: *void) {
         }
 
         if it_index != opened_windows.count  {
-            s.y += floor(50 * 1.1 + 0.5);  // Just so r.y is in the right place for end_scrollable_region().
+            s.y += floor(button_height * 1.1 + 0.5);  // Just so r.y is in the right place for end_scrollable_region().
         }
     }
 
