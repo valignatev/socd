@@ -1,9 +1,8 @@
 /*
 ~~TODOS~~
 FOR SHIPPING:
-- Better dropdown ui for mapping mode.
 - Handle Alt-F4.
-- Minimize to tray.
+- Prevent constant rerendering of UI.
 
 FOR FUTURE:
 - Better focused program recognition. Now it's just case-sensitive string contains.
@@ -34,6 +33,8 @@ scroll_value_profiles_region: float;
 scroll_value_mappings_region: float;
 scroll_value_new_profile: float;
 
+the_window: Window_Type;
+the_window_hidden := false;
 window_width := 900;
 window_height := 600;
 
@@ -369,17 +370,23 @@ finalize_state :: () {
 }
 
 main :: () {
-
+    close_to_tray := true;
     current_program_state = .{active_state=.NOTHING, active_mapping=null, active_search=*dummy_input_text_state};
     using current_program_state;
 
-    the_window := create_window();
+    success_init, init_reason := platform_init();
+    if !success_init {
+        log_error(init_reason);
+        exit(1);
+    }
+
+    the_window = create_window();
 
     // I want to init everything after the Window, because if there's an error, I want to potentially
     // show it in the window, instead of yelling in the terminal like some pussy ass Linux nerd.
-    success := platform_init(the_window);
-    if !success {
-        log_error("Initialization failed\n");
+    success_post_window := platform_after_window_created(the_window);
+    if !success_post_window {
+        log_error("Post window creation initialization failed\n");
         exit(1);
     }
 
@@ -423,10 +430,13 @@ main :: () {
         for event: Input.events_this_frame {
             if event.type == .QUIT {
                 quit = true;
-
-                // A funny "pretend to be fast" hack. On Linux, closing a lot of file descriptors
-                // takes a while, so we can close the window instantly as if our program was very fast!
-                platform_close_window(the_window);
+                platform_deinit(the_window);
+            } else if event.type == .WINDOW_CLOSE {
+                if close_to_tray {
+                    platform_hide_to_tray(the_window);
+                } else {
+                    quit = true;
+                }
             }
 
             getrect_handle_event(event);

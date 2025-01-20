@@ -987,7 +987,9 @@ platform_init :: (window: u64) -> success: bool #must {
     return true;
 }
 
-platform_close_window :: (window: u64) {
+platform_deinit :: (window: u64) {
+    // A funny "pretend to be fast" hack. On Linux, closing a lot of file descriptors
+    // takes a while, so we can close the window instantly as if our program was very fast!
     XWithdrawWindow(x_global_display, window, 0);
 }
 

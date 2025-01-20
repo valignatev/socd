@@ -11,21 +11,31 @@ build :: () {
 
     target_options.output_executable_name = "hitboxer";
     set_build_options(target_options, w);
-
     set_build_options_dc(.{do_output=false});
+
+    modules_dir := join(#filepath, "modules/Input");
+    remap_import(w, "", "Input", "");
 
     compiler_begin_intercept(w);
     add_build_file("./main.jai", w);
+
     or_return_add_source(w);
+    print("%\n", modules_dir);
 
     while true {
         message := compiler_wait_for_message();
         if message.kind == {
-        case .TYPECHECKED;
+            case .FAILED_IMPORT;
+            m := cast(*Message_Failed_Import) message;
+            if m.target_module_name == {
+                case "Input";
+                provide_import(message.workspace, m, .PATH_TO_DIRECTORY, modules_dir);
+            }
+            case .TYPECHECKED;
             typechecked := cast(*Message_Typechecked) message;
             or_return_handle_typechecked(typechecked);
 
-        case .COMPLETE;
+            case .COMPLETE;
             break;
         }
     }

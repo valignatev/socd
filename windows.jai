@@ -23,6 +23,7 @@ CURRENT_PLATFORM := Platform.WINDOWS;
 // TODO: input exposes the same names.
 KEY_RESERVED : u32 : 0;
 MAX_PATH_LENGTH :: MAX_PATH;
+HIDDEN_WINDOW_CLASS := "HIDDEN_WINDOW_CLASS";
 mapping_resolving_hook: HHOOK;
 mapping_setting_hook: HHOOK;
 
@@ -31,6 +32,8 @@ key_name_buffer: [301]u16;
 // 0xe1ff is the biggest theoretical key code with an extended byte set.
 // GetAsyncKeyState is not available in low level keyboard procedures, so we need to maintain our own.
 kb_real_state: [57856]bool; // whether the key is pressed on a physical keyboard
+
+tray_info: NOTIFYICONDATAW;
 
 scan_code_to_lparam :: (scan_code: u32) -> u32 {
     // Extended key is handled in keyboard hooks
@@ -65,18 +68,9 @@ get_key_name :: (key_scan_code: u32) -> string {
 
 
 start_logging_keys :: () {
-    instance := GetModuleHandleW(null);
-
-    // if !mapping_resolving_hook_is_installed {
-    //     log("hooking this shit\n");
-    //     mapping_resolving_hook = SetWindowsHookExW(WH_KEYBOARD_LL, cast(HOOKPROC)low_level_keyboard_proc, null, 0);
-    //     if (mapping_resolving_hook != null) {
-    //         mapping_resolving_hook_is_installed = true;
-    //     } else {
-    //         log_error("hook failed oopsie\n");
-    //     }
-    // }
+    // 
 }
+
 
 // TODO: Try to find a way to be more optimal (like bailing out earlier) on key repeats:
 // https://learn.microsoft.com/en-us/windows/win32/winmsg/lowlevelkeyboardproc
@@ -465,6 +459,7 @@ get_dpi_scale :: (window: Window_Type) -> float {
     return dpi / 96.0;
 }
 
+
 create_window :: () -> Window_Type {
     // Windows is very bad at thread-switching by default unless you do this. Sad.
     timeBeginPeriod(1);
@@ -477,19 +472,53 @@ create_window :: () -> Window_Type {
 }
 
 
-tray_proc :: (hWnd: HWND, message: u32, wParam: WPARAM, lParam: LPARAM) #c_call {
-    push_context {
-        print("COCK DETECTED\n");
-
-    // TODO: do this, otherwise icon gets stuck in the tray until the use hovers mouse over it.
-    // case WM_DESTROY:
-    //     Shell_NotifyIcon(NIM_DELETE,&niData);
-    }
+platform_hide_to_tray :: (window: HWND) {
+    ShowWindow(window, SW_HIDE);
+    the_window_hidden = true;
 }
 
+tray_proc :: (hwnd: HWND, message: u32, wParam: WPARAM, lParam: LPARAM) -> s64 #c_call {
 
-HIDDEN_WINDOW_CLASS := "HIDDEN_WINDOW_CLASS";
+    exit_menu : u64 = 100;
+    push_context {
+        if message == {
+            case WM_APP + 1; {
+                if lParam == {
+                    case WM_LBUTTONDOWN; {
+                        if the_window_hidden {
+                            ShowWindow(the_window, SW_SHOW);
+                        } else {
+                            ShowWindow(the_window, SW_HIDE);
+                        }
+                        the_window_hidden = !the_window_hidden;
+                    }
+                    case WM_RBUTTONDOWN; {
+                        pt: POINT;
+                        GetCursorPos(*pt);
+                        // From TrackPopupMenuEx remarks
+                        // To display a context menu for a notification icon, the current window must be the foreground
+                        // window before the application calls TrackPopupMenu or TrackPopupMenuEx.
+                        // Otherwise, the menu will not disappear when the user clicks outside of the menu
+                        SetForegroundWindow(hwnd);
 
+                        hmenu := CreatePopupMenu();
+                        InsertMenuW(hmenu, 0, .MF_BYPOSITION | .MF_STRING, xx exit_menu, utf8_to_wide("Exit the program",, temp));
+                        // result will hold 0 or the id of the menu item because of .TPM_RETURNCMD passed
+                        result := TrackPopupMenuEx(hmenu, .TPM_LEFTALIGN | .TPM_LEFTBUTTON | .TPM_BOTTOMALIGN | .TPM_RETURNCMD , pt.x, pt.y, hwnd, null);
+                        PostMessageW(hwnd, WM_COMMAND, xx result, 0);
+                        // MSDN says that I MUST call DestroyMenu, or they'll put me to Guantanamo Bay :(
+                        DestroyMenu(hmenu);
+                    }
+                }
+            }
+            case WM_COMMAND; {
+                if wParam == exit_menu PostMessageW(the_window, WM_QUIT, 0, 0);
+            }
+        }
+    }
+
+    return DefWindowProcW(hwnd, message, wParam, lParam);
+}
 
 // A hidden window we use specifically to handle tray events
 create_hidden_window :: (window_name: string, parent: Window_Type = null) -> HWND {
@@ -516,7 +545,7 @@ create_hidden_window :: (window_name: string, parent: Window_Type = null) -> HWN
         xx CW_USEDEFAULT, xx CW_USEDEFAULT,
         xx CW_USEDEFAULT,
         xx CW_USEDEFAULT,
-        parent,
+        null,
         null,
         cast (HINSTANCE) 0,
         null,
@@ -531,30 +560,44 @@ create_hidden_window :: (window_name: string, parent: Window_Type = null) -> HWN
 }
 
 
-platform_init :: (window: HWND) -> success: bool #must {
-    array_reserve(*_list_of_process_ids, 1000);
-    _list_of_process_ids.count = 1000;
-
+platform_after_window_created :: (window: HWND) -> success: bool #must {
     tray_window := create_hidden_window("hidden_tray_window", window);
     if !tray_window {
-        log_error("COCK BLOCKED: %\n", GetLastError());
+        log_error("Failed to create a base window for the tray icon: %\n", GetLastError());
     }
 
     process_handle := GetModuleHandleW(null);
-    tray: NOTIFYICONDATAW;
-    tray.cbSize = size_of(NOTIFYICONDATAW);
-    tray.uID = 1231234545;
-    tray.uFlags = .NIF_ICON | .NIF_MESSAGE | .NIF_TIP;
-    tray.hIcon = LoadIconW(process_handle, MAKEINTRESOURCE(2));
+    tray_info.cbSize = size_of(NOTIFYICONDATAW);
+    tray_info.uID = 1231234545;
+    tray_info.uFlags = .NIF_ICON | .NIF_MESSAGE | .NIF_TIP;
+    tray_info.hIcon = LoadIconW(process_handle, MAKEINTRESOURCE(2));
 
-    tray.hWnd = tray_window;
-    tray.uCallbackMessage = WM_APP + 1;
+    tray_info.hWnd = tray_window;
+    tray_info.uCallbackMessage = WM_APP + 1;
 
-    result := Shell_NotifyIconW(.NIM_ADD, *tray);
+    result := Shell_NotifyIconW(.NIM_ADD, *tray_info);
     if result != 1 {
-        log_error("Tray fuckup kid\n");
+        log_error("Failed to create a tray icon: %\n", GetLastError());
     }
     return true;
+}
+
+
+platform_init :: () -> success: bool #must, reason: string {
+    array_reserve(*_list_of_process_ids, 1000);
+    _list_of_process_ids.count = 1000;
+    the_window = FindWindowW(null, utf8_to_wide("Hitboxer",, temp));
+    if the_window {
+        ShowWindow(the_window, SW_SHOW);
+        SetForegroundWindow(the_window);
+        return false, "Another instance of the app is already running, trying to put it to the foreground\n";
+    }
+    return true, "";
+}
+
+
+platform_deinit :: (window: HWND) {
+    Shell_NotifyIconW(.NIM_DELETE, *tray_info);
 }
 
 WM_APP :: 0x8000;
@@ -692,6 +735,53 @@ Notify_Icon_Message :: enum u32 {
     NIM_SETVERSION :: 0x00000004;
 }
 
+Insert_Menu_Flags :: enum_flags u32 {
+    MF_BYCOMMAND    :: 0x00000000;
+    MF_BYPOSITION   :: 0x00000400;
+    MF_BITMAP       :: 0x00000004;
+    MF_CHECKED      :: 0x00000008;
+    MF_DISABLED     :: 0x00000002;
+    MF_ENABLED      :: 0x00000000;
+    MF_GRAYED       :: 0x00000001;
+    MF_MENUBARBREAK :: 0x00000020;
+    MF_MENUBREAK    :: 0x00000040;
+    MF_OWNERDRAW    :: 0x00000100;
+    MF_POPUP        :: 0x00000010;
+    MF_SEPARATOR    :: 0x00000800;
+    MF_STRING       :: 0x00000000;
+    MF_UNCHECKED    :: 0x00000000;
+}
+
+Track_Popup_Menu_Flags :: enum_flags u32 {
+    TPM_CENTERALIGN     :: 0x0004;
+    TPM_LEFTALIGN       :: 0x0000;
+    TPM_RIGHTALIGN      :: 0x0008;
+
+    TPM_BOTTOMALIGN     :: 0x0020;
+    TPM_TOPALIGN        :: 0x0000;
+    TPM_VCENTERALIGN    :: 0x0010;
+
+    TPM_NONOTIFY        :: 0x0080;
+    TPM_RETURNCMD       :: 0x0100;
+
+    TPM_LEFTBUTTON      :: 0x0000;
+    TPM_RIGHTBUTTON     :: 0x0002;
+
+    TPM_HORNEGANIMATION :: 0x0800;
+    TPM_HORPOSANIMATION :: 0x0400;
+    TPM_NOANIMATION     :: 0x4000;
+    TPM_VERNEGANIMATION :: 0x2000;
+    TPM_VERPOSANIMATION :: 0x1000;
+
+    TPM_HORIZONTAL      :: 0x0000;
+    TPM_VERTICAL        :: 0x0040;
+}
+
+TPMPARAMS :: struct {
+  cbSize: u32;
+  rcExclude: RECT;
+};
+
 HC_ACTION :: 0; // The wParam and lParam parameters contain information about a keyboard message.
 
 KF_EXTENDED :: 0x0100; //  	Manipulates the extended key flag.
@@ -719,6 +809,9 @@ shell32  :: #library,system "shell32";
 
 SetWindowsHookExW :: (idHook: s32, lpfn: HOOKPROC, hmod: HINSTANCE, dwThreadId: u32) -> HHOOK #foreign user32;
 UnhookWindowsHookEx :: (hhk: HHOOK) -> s32 #foreign user32;
+PostMessageW :: (hWnd: HWND, Msg: u32, wParam: WPARAM, lParam: LPARAM) -> BOOL #foreign user32;
+FindWindowW :: (lpClassName: *u16, lpWindowName: *u16) -> HWND #foreign user32;
+SetForegroundWindow :: (hWnd: HWND) -> BOOL #foreign user32;
 CallNextHookEx :: (hhk: HHOOK, nCode: s32, wParam: WPARAM, lParam: LPARAM) -> s64 #foreign user32;
 MapVirtualKeyW :: (uCode: u32, uMapType: u32) -> u32 #foreign user32;
 GetKeyNameTextW :: (lparam: u32, lp_string: *u16, cch_size: s32) -> s32 #foreign user32;
@@ -733,8 +826,15 @@ QueryFullProcessImageNameW :: (hProcess: HANDLE, dwFlags: u32, lpExeName: *u16, 
 PathStripPathW :: (pszPath: *u16) #foreign shlwapi;
 
 K32EnumProcesses :: (lpidProcess: *u32, cb: u32, lpcbNeeded: *u32) -> BOOL #foreign kernel32;
+// Icons
 Shell_NotifyIconW :: (dwMessage: Notify_Icon_Message, lpData: *NOTIFYICONDATAW) -> BOOL #foreign shell32;
 CreateDialogParamW :: (hInstance: HINSTANCE, lpTemplateName: *u16, hWndParent: HWND, lpDialogFunc: HOOKPROC, dwInitParam: LPARAM) -> HWND #foreign user32;
+
+// Menus
+CreatePopupMenu :: () -> HMENU #foreign user32;
+DestroyMenu :: (hmenu: HMENU) -> BOOL #foreign user32;
+InsertMenuW :: (hMenu: HMENU, uPosition: u32, uFlags: Insert_Menu_Flags, uIDNewItem: *u32, lpNewItem: *u16) -> BOOL #foreign user32;
+TrackPopupMenuEx :: (hMenu: HMENU, uFlags: Track_Popup_Menu_Flags, x: s32, y: s32, hwnd: HWND, lptpm: *TPMPARAMS) -> BOOL #foreign user32;
 
 #import "Windows";
 #import "Windows_Utf8";
