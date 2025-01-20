@@ -20,7 +20,6 @@ build :: () {
     add_build_file("./main.jai", w);
 
     or_return_add_source(w);
-    print("%\n", modules_dir);
 
     while true {
         message := compiler_wait_for_message();

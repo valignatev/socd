@@ -859,6 +859,10 @@ is_keyboard :: (device_fd: s32, device_path: string) -> bool {
     return false;
 }
 
+platform_hide_to_tray :: (window: Window_Type) {
+
+}
+
 libinput_opened_devices: Table(string, s32);
 uinput_device_created := false;
 virtual_device_path: string;
@@ -899,7 +903,7 @@ close_restricted :: (fd: s32, user_data: *void) #c_call {
 interface_: libinput_interface = .{open_restricted, close_restricted};
 
 
-platform_init :: (window: u64) -> success: bool #must {
+platform_init :: () -> success: bool #must, init_reason: string {
 
     // x11 and libxkbcommon
     {
@@ -908,10 +912,8 @@ platform_init :: (window: u64) -> success: bool #must {
         con_errors := xcb_connection_has_error(global_xcb_connection);
 
         if con_errors {
-            log_error("Can't connect to X11 with xcb, error code is: %\n", con_errors);
-            return false;
+            return false, tprint("Can't connect to X11 with xcb, error code is: %\n", con_errors);
         }
-
 
         // Atoms
         name_error: *xcb_generic_error_t;
@@ -919,8 +921,7 @@ platform_init :: (window: u64) -> success: bool #must {
         name_reply := xcb_intern_atom_reply(global_xcb_connection, name_cookie, *name_error);
 
         if !name_reply {
-            log_error("Can't get _NET_WM_NAME atom, error is: %\n", name_error.*);
-            return false;
+            return false, tprint("Can't get _NET_WM_NAME atom, error is: %\n", name_error.*);
         }
         NET_NAME_ATOM = name_reply.atom;
 
@@ -938,16 +939,14 @@ platform_init :: (window: u64) -> success: bool #must {
         );
 
         if (!ret) {
-            log_error("Couldn't setup XKB extension\n");
-            return false;
+            return false, "Couldn't setup XKB extension\n";
         }
 
         global_xkb_context = xkb_context_new(.NO_FLAGS);
 
         core_kbd_device_id := xkb_x11_get_core_keyboard_device_id(global_xcb_connection);
         if (core_kbd_device_id == -1) {
-            log_error("Couldn't find core keyboard device\n");
-            return false;
+            return false, "Couldn't find core keyboard device\n";
         } else {
             log("Core keyboard device is %\n", core_kbd_device_id);
         }
@@ -956,8 +955,7 @@ platform_init :: (window: u64) -> success: bool #must {
 
         global_xkb_state = xkb_x11_state_new_from_device(global_xkb_keymap, global_xcb_connection, core_kbd_device_id);
         if (!global_xkb_state) {
-            log_error("Couldn't create xkb state for device\n");
-            return false;
+            return false, "Couldn't create xkb state for device\n";
         }
     }
 
@@ -966,24 +964,25 @@ platform_init :: (window: u64) -> success: bool #must {
     {
         udev = udev_new();
         if !udev_context {
-            log_error("Couldn't initialize udev context\n");
-            return false;
+            return false, "Couldn't initialize udev context\n";
         }
 
         libinput = libinput_udev_create_context(*interface_, null, udev);
         if !libinput {
-            log_error("Couldn't initialize libinput context\n");
-            return false;
+            return false, "Couldn't initialize libinput context\n";
         }
 
         // NOTE: Is there any issue with hardcoding a single seat here?
         // Are setups where input devices are spread across multiple seats even exit?
         if libinput_udev_assign_seat(libinput, "seat0") == -1 {
-            log_error("Libinput couldn't assign seat\n");
-            return false;
+            return false, "Libinput couldn't assign seat\n";
         }
     }
 
+    return true, "";
+}
+
+platform_after_window_created :: (window: Window_Type) -> bool #must {
     return true;
 }
 
