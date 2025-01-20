@@ -639,6 +639,8 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     dropdown_theme := *my_theme.dropdown_theme;
     dropdown_theme.theme_for_current_value = my_theme.button_theme;
     dropdown_theme.theme_for_each_choice.rectangle_shape.rounding_flags = 0;
+    dropdown_theme.theme_for_each_choice.font = my_theme.button_theme.font;
+    dropdown_theme.theme_for_current_choice.font = my_theme.button_theme.font;
     dropdown_theme.theme_for_current_choice.rectangle_shape.rounding_flags = 0;
     dropdown_theme.theme_for_current_value.text_color = my_theme.button_theme.surface_color;
 
@@ -912,7 +914,7 @@ init_fonts :: (window: Window_Type) {
     dpi := get_dpi_scale(window);
 
     // Window height was here
-    pixel_height := 600 / dpi / 24;
+    pixel_height := 600 / dpi / 26;
     button_font = Simp.get_font_at_size("data", "OpenSans-Bold.ttf", cast(s64)(pixel_height * dpi));
     assert(button_font != null);
 }
