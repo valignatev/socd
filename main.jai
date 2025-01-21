@@ -3,6 +3,7 @@
 FOR SHIPPING:
 - Handle Alt-F4.
 - Prevent constant rerendering of UI.
+- LINUX: Do not grab devices until we are able to create a virtual one. Otherwise we're really fucked
 
 FOR FUTURE:
 - Better focused program recognition. Now it's just case-sensitive string contains.
