@@ -20,6 +20,8 @@ FOR FUTURE:
     #load "linux.jai";
 }
 
+#load "./ui.jai";
+
 // I think 256 key codes should be enough for any type of keyboard...
 // Indices are key scancodes
 KEY_NAMES: [65535]string;
@@ -62,6 +64,7 @@ Program_State :: struct {
     active_profile: *Profile;
     active_search: *Text_Input_State;
     need_to_scroll_profiles: bool;
+    need_to_rerender := false;
     // need_to_scroll_mappings_region: bool;
 }
 dummy_input_text_state: Text_Input_State;
@@ -414,6 +417,7 @@ main :: () {
         Clamp(*dt, 0, 0.1);
         last_time = current_time;
 
+        platform_wait_for_message();
         Input.update_window_events();
 
         for Input.get_window_resizes() {
@@ -459,6 +463,7 @@ main :: () {
 draw_one_frame :: (dt: float, window: Window_Type) {
     using current_program_state;
 
+    need_to_rerender = false;
     proc := default_theme_procs[current_theme];
     my_theme = proc();
 
@@ -518,10 +523,8 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             theme.frame_color = theme.frame_color_over;
             theme.surface_color = theme.surface_color_over;
         }
-        pressed, state := button(program_rect, it.program, *theme, identifier=it_index, disable_press = active_state == .ADDING_NEW_PROFILE);
-        if profile_pulsating {
-            update_production_value_button(program_rect, false, state, .OVER, *pulsating_button_theme);
-        }
+
+        pressed, state := our_button(program_rect, it.program, *theme, identifier=it_index, disable_press = active_state == .ADDING_NEW_PROFILE, pulsate=profile_pulsating);
 
         if pressed {
             log("Profile % pressed\n", it.program);
@@ -543,7 +546,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     add_button_rect := get_rect(10, profiles_height + 10 + 5, profiles_width / 2 - 5, button_height);
     del_button_rect := get_rect(10 + profiles_width / 2 + 5, profiles_height + 10 + 5, profiles_width / 2 - 5, button_height);
 
-    _, _, add_profile_released := button(add_button_rect, "Add", *my_theme.button_theme, /*disable_press = (active_state != .NOTHING)*/);
+    _, _, add_profile_released := our_button(add_button_rect, "Add", *my_theme.button_theme, /*disable_press = (active_state != .NOTHING)*/);
     if add_profile_released {
         subwindow_info_new_profile.open = true;
         new_profile := array_add(*profiles);
@@ -554,7 +557,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         need_to_scroll_profiles = true;
     }
 
-    _, _, del_profile_released := button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_index < 0 || active_state != .NOTHING));
+    _, _, del_profile_released := our_button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_index < 0 || active_state != .NOTHING));
     if del_profile_released {
         array_ordered_remove_by_index(*profiles, active_profile_index);
         if profiles.count {
@@ -574,7 +577,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     profile_width := 500.0;
 
     add_mapping_rect := get_rect(profile_start, 10, profile_width, button_height);
-    _, _, add_mapping_released := button(add_mapping_rect, "Add mapping", *my_theme.button_theme);
+    _, _, add_mapping_released := our_button(add_mapping_rect, "Add mapping", *my_theme.button_theme);
     if add_mapping_released && active_state == .NOTHING {
         active_state = .SETTING_SOURCE;
 
@@ -620,13 +623,12 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         }
     }
 
-
     //
     // EMERGENCY QUIT BUTTON. TODO: only enable it in debug mode
     //
     close_start := add_mapping_rect.w + add_mapping_rect.x + 10;
     close_rect := get_rect(close_start, 10, button_height, button_height);
-    _, _, close_released := button(close_rect, "X", *my_theme.button_theme);
+    _, _, close_released := our_button(close_rect, "X", *my_theme.button_theme);
     if close_released {
         exit(1);
     }
@@ -665,21 +667,21 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         button_width := (s.w - 50)/3 - 1;
         source_rect := get_rect(s.x, s.y, button_width, button_height);
         source_name := get_key_name(mapping.source.code);
+
         source_pulsating := active_mapping && active_mapping == mapping && active_state == .SETTING_SOURCE;
         source_theme := ifx source_pulsating pulsating_button_theme else mappings_button_theme;
-        _, source_state, released_source := button(source_rect, source_name, *source_theme, identifier=it_index, disable_press = active_state == .SETTING_DESTINATION);
+        _, source_state, released_source := our_button(source_rect, source_name, *source_theme, identifier=it_index, disable_press = active_state == .SETTING_DESTINATION, pulsate = source_pulsating);
 
         // Making a button pulsating
-        if source_pulsating {
-            update_production_value_button(source_rect, false, source_state, .OVER, *pulsating_button_theme);
-        }
+        // if source_pulsating {
+        //     update_production_value_button(source_rect, false, source_state, .OVER, *pulsating_button_theme);
+        // }
         if released_source {
             active_state = .SETTING_SOURCE;
             active_mapping = mapping;
             set_key_mapping_hook(window);
             print("Source pressed\n");
         }
-
 
         mode_rect := get_rect(s.x + source_rect.w + 1, s.y, button_width, button_height);
         changed, mode_state := dropdown(mode_rect, type_info_mapping_mode.names, xx *mapping.mode, dropdown_theme, identifier=mapping.source.code);
@@ -721,83 +723,15 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             }
         }
 
-        // Arrow lol
-        {
-
-            mode_r := get_rect(s.x + source_rect.w + 1, s.y, button_width, button_height);
-            dropdown_button_state := mode_state.current_value_state;
-            dropdown_button_theme := dropdown_theme.theme_for_current_value;
-
-            // Logic from button to make the arrow pulsate and flash
-            base_color := dropdown_button_theme.surface_color;
-            base_color = lerp(base_color, dropdown_button_theme.surface_color_over,  dropdown_button_state.over_factor);
-            base_color = lerp(base_color, dropdown_button_theme.surface_color_down,  dropdown_button_state.down_effect_t);
-            base_color = lerp(base_color, dropdown_button_theme.surface_color_flash, dropdown_button_state.pressed_factor);
-
-            Simp.immediate_quad(
-                mode_r.x , mode_r.y,
-                mode_r.x + mode_r.w , mode_r.y + mode_r.h,
-                base_color,
-            );
-
-            color := my_theme.button_theme.frame_color;
-            color = lerp(color, dropdown_button_theme.frame_color_over,  dropdown_button_state.over_factor);
-            color = lerp(color, dropdown_button_theme.frame_color_down,  dropdown_button_state.down_effect_t);
-            color = lerp(color, dropdown_button_theme.frame_color_flash, dropdown_button_state.pressed_factor);
-
-            base_h := mode_r.h/2;
-            base_y := mode_r.y + base_h/2;
-            base_x := mode_r.x;
-
-            arrow_width := button_width * 0.25;
-            if mapping.mode == .OPPOSITE {
-                Simp.immediate_triangle(
-                    .{base_x + arrow_width, base_y,            0},
-                    .{base_x              , base_y + base_h/2, 0},
-                    .{base_x + arrow_width, base_y + base_h,   0},
-                    color,
-                    color,
-                    color,
-                );
-
-                base_x = base_x + arrow_width;
-                mode_r.w = mode_r.w - 2 * arrow_width;
-            }
-
-            if mapping.mode == .REMAP {
-                mode_r.w = mode_r.w - arrow_width;
-            }
-
-            Simp.immediate_quad(
-                base_x            , base_y + base_h/3,
-                base_x + mode_r.w , base_y + base_h/1.5,
-                color,
-            );
-
-            if mapping.mode == .REMAP || mapping.mode == .OPPOSITE {
-                Simp.immediate_triangle(
-                    .{base_x + mode_r.w,               base_y           , 0},
-                    .{base_x + mode_r.w + arrow_width, base_y + base_h/2, 0},
-                    .{base_x + mode_r.w,               base_y + base_h  , 0},
-                    color,
-                    color,
-                    color,
-                );
-            }
-        }
-
+        mode_r := get_rect(s.x + source_rect.w + 1, s.y, button_width, button_height);
+        arrow(mode_r, *mode_state, dropdown_theme, mapping.mode);
 
         dest_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1, s.y, button_width, button_height);
         dest_name := get_key_name(mapping.destination.code);
 
         dest_pulsating := active_mapping && active_mapping == mapping && active_state == .SETTING_DESTINATION;
         dest_theme := ifx dest_pulsating pulsating_button_theme else mappings_button_theme;
-        _, dest_state, released_dest := button(dest_rect, dest_name, *dest_theme, identifier=it_index, disable_press = active_state == .SETTING_DESTINATION);
-
-        // Making a button pulsating
-        if dest_pulsating {
-            update_production_value_button(dest_rect, false, dest_state, .OVER, *dest_theme);
-        }
+        _, dest_state, released_dest := our_button(dest_rect, dest_name, *dest_theme, identifier=it_index, disable_press = active_state == .SETTING_DESTINATION, pulsate = dest_pulsating);
 
         if released_dest {
             active_state = .SETTING_DESTINATION;
@@ -807,7 +741,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         }
 
         del_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1 + dest_rect.w + 1 + 1, s.y, 50, button_height);
-        _, _, del_released := button(del_rect, "X", *mappings_button_theme, identifier=it_index);
+        _, _, del_released := our_button(del_rect, "X", *mappings_button_theme, identifier=it_index);
 
         // Delete mapping
         if del_released {
@@ -841,6 +775,9 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         index_to_remove = -1;
         finalize_state();
     }
+    if need_to_rerender || GetRect.active_widget {
+        platform_wake_up_main_thread();
+    }
 }
 
 draw_new_profile_selector :: (r: Rect, data: *void) {
@@ -850,10 +787,6 @@ draw_new_profile_selector :: (r: Rect, data: *void) {
     searchbar_rect := r;
     searchbar_rect.h = button_height;
 
-    // TODO: this only works the first time subwindow opens. On subsequent opens,
-    // it only activates for a single frame, because of some issue with text_input state
-    // Also, text input doesn't support Ctrl + Backspace, and it crashes when you press Delete
-    // at the start of the string
     input_action : Text_Input_Action = ifx searchbar_should_be_active then .ACTIVATE else xx 0;
     action:, new_search:, active_search = text_input(searchbar_rect, active_search.text, *my_theme.text_input_theme, input_action = input_action);
     if action & .ENTERED {
@@ -891,7 +824,7 @@ draw_new_profile_selector :: (r: Rect, data: *void) {
 
     opened_windows := get_list_of_programs();
     for opened_windows {
-        _, _, released := button(s, it, identifier=it_index);
+        _, _, released := our_button(s, it, identifier=it_index);
         if released {
             print("Program % selected\n", it);
             subwindow_info_new_profile.open = false;
@@ -942,7 +875,7 @@ mapping_setting_hook_is_installed := false;
 #import "Hash_Table";
 Input :: #import "Input";
 Simp :: #import "Simp";
-#import "GetRect_LeftHanded";
+using GetRect :: #import "GetRect_LeftHanded";
 #import "Math";
 #import "String";
 #import "System";

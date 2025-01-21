@@ -520,6 +520,7 @@ tray_proc :: (hwnd: HWND, message: u32, wParam: WPARAM, lParam: LPARAM) -> s64 #
     return DefWindowProcW(hwnd, message, wParam, lParam);
 }
 
+
 // A hidden window we use specifically to handle tray events
 create_hidden_window :: (window_name: string, parent: Window_Type = null) -> HWND {
     hInstance := GetModuleHandleW(null);
@@ -596,20 +597,31 @@ platform_init :: () -> success: bool #must, reason: string {
 }
 
 
+platform_wait_for_message :: inline () {
+    WaitMessage();
+}
+
+
+platform_wake_up_main_thread :: () {
+    PostMessageW(the_window, WM_USER, 0, 0);
+}
+
+
 platform_deinit :: (window: HWND) {
     Shell_NotifyIconW(.NIM_DELETE, *tray_info);
 }
 
-WM_APP :: 0x8000;
 
 MAKEINTRESOURCE :: (x: s32) -> *u16 {
     return cast(*u16) x;  // Sigh.
 }
 
+
 HHOOK :: *void;
 HOOKPROC :: *void;
 WH_KEYBOARD :: 2;
 WH_KEYBOARD_LL :: 13;
+
 
 KBD_Flags :: enum_flags u32 {
     LLKHF_EXTENDED :: KF_EXTENDED >> 8;
@@ -619,6 +631,7 @@ KBD_Flags :: enum_flags u32 {
     LLKHF_UP :: KF_UP >> 8;
 }
 
+
 KBDLLHOOKSTRUCT :: struct {
    vkCode: u32;
    scanCode: u32;
@@ -627,11 +640,13 @@ KBDLLHOOKSTRUCT :: struct {
    dwExtraInfo: u32;
 }
 
+
 INPUT_Type :: enum u32 {
     INPUT_MOUSE :: 0;
     INPUT_KEYBOARD :: 1;
     INPUT_HARDWARE :: 2;
 }
+
 
 INPUT :: struct {
     type: INPUT_Type;
@@ -642,8 +657,10 @@ INPUT :: struct {
     hi: HARDWAREINPUT;
 }
 
+
 KEYEVENTF_KEYUP : u32 : 0x0002;
 KEYEVENTF_SCANCODE : u32 : 0x0008;
+
 
 KEYBDINPUT_Flags :: enum_flags u32 {
     KEYEVENTF_EXTENDEDKEY :: 0x0001;
@@ -652,13 +669,15 @@ KEYBDINPUT_Flags :: enum_flags u32 {
     KEYEVENTF_UNICODE :: 0x0004;
 }
 
+
 KEYBDINPUT :: struct {
-  wVk: u16;
-  wScan: u16;
-  dwFlags: KEYBDINPUT_Flags;
-  time: u32;
-  dwExtraInfo: *u32;
+    wVk: u16;
+    wScan: u16;
+    dwFlags: KEYBDINPUT_Flags;
+    time: u32;
+    dwExtraInfo: *u32;
 }
+
 
 MOUSEINPUT :: struct {
     dx: s32;
@@ -669,11 +688,13 @@ MOUSEINPUT :: struct {
     dwExtraInfo: *u32;
 }
 
+
 HARDWAREINPUT :: struct {
     uMsg: u32;
     wParamL: u16;
     wParamH: u16;
 }
+
 
 Notify_Icon_Flags :: enum_flags u32 {
     NIF_MESSAGE  :: 0x00000001;
@@ -686,10 +707,12 @@ Notify_Icon_Flags :: enum_flags u32 {
     NIF_SHOWTIP  :: 0x00000080;
 }
 
+
 Notify_Icon_State_Mask :: enum_flags u32 {
     NIS_HIDDEN     :: 0x00000001;
     NIS_SHAREDICON :: 0x00000002;
 }
+
 
 Notify_Icon_State :: Notify_Icon_State_Mask;
 
@@ -705,6 +728,7 @@ Notify_Icon_Info_Flags :: enum_flags u32 {
     NIIF_RESPECT_QUIET_TIME :: 0x00000080;
     NIIF_ICON_MASK          :: 0x0000000F;
 }
+
 
 NOTIFYICONDATAW :: struct {
     cbSize: u32;
@@ -727,6 +751,7 @@ NOTIFYICONDATAW :: struct {
     hBalloonIcon: HICON ;
 }
 
+
 Notify_Icon_Message :: enum u32 {
     NIM_ADD        :: 0x00000000;
     NIM_MODIFY     :: 0x00000001;
@@ -734,6 +759,7 @@ Notify_Icon_Message :: enum u32 {
     NIM_SETFOCUS   :: 0x00000003;
     NIM_SETVERSION :: 0x00000004;
 }
+
 
 Insert_Menu_Flags :: enum_flags u32 {
     MF_BYCOMMAND    :: 0x00000000;
@@ -751,6 +777,7 @@ Insert_Menu_Flags :: enum_flags u32 {
     MF_STRING       :: 0x00000000;
     MF_UNCHECKED    :: 0x00000000;
 }
+
 
 Track_Popup_Menu_Flags :: enum_flags u32 {
     TPM_CENTERALIGN     :: 0x0004;
@@ -777,10 +804,15 @@ Track_Popup_Menu_Flags :: enum_flags u32 {
     TPM_VERTICAL        :: 0x0040;
 }
 
+
 TPMPARAMS :: struct {
   cbSize: u32;
   rcExclude: RECT;
-};
+}
+
+
+WM_USER :: 0x0400;
+WM_APP :: 0x8000;
 
 HC_ACTION :: 0; // The wParam and lParam parameters contain information about a keyboard message.
 
@@ -810,6 +842,7 @@ shell32  :: #library,system "shell32";
 SetWindowsHookExW :: (idHook: s32, lpfn: HOOKPROC, hmod: HINSTANCE, dwThreadId: u32) -> HHOOK #foreign user32;
 UnhookWindowsHookEx :: (hhk: HHOOK) -> s32 #foreign user32;
 PostMessageW :: (hWnd: HWND, Msg: u32, wParam: WPARAM, lParam: LPARAM) -> BOOL #foreign user32;
+WaitMessage :: () -> BOOL #foreign user32;
 FindWindowW :: (lpClassName: *u16, lpWindowName: *u16) -> HWND #foreign user32;
 SetForegroundWindow :: (hWnd: HWND) -> BOOL #foreign user32;
 CallNextHookEx :: (hhk: HHOOK, nCode: s32, wParam: WPARAM, lParam: LPARAM) -> s64 #foreign user32;
