@@ -1,11 +1,12 @@
 /*
 ~~TODOS~~
 FOR SHIPPING:
-- Handle Alt-F4.
-- Prevent constant rerendering of UI.
 - LINUX: Do not grab devices until we are able to create a virtual one. Otherwise we're really fucked
+- Ban setting profile for the app itself
 
 FOR FUTURE:
+- Disallow multiple binds for the same button
+- Disallow to bind a button to itself
 - Better focused program recognition. Now it's just case-sensitive string contains.
 - Global Profile that is always active unless some other profile kicks in. Good for testing.
 - Debug UI. Showing stuff like currently pressed key, when mappings kick in, list of mappings.
@@ -65,6 +66,7 @@ Program_State :: struct {
     active_search: *Text_Input_State;
     need_to_scroll_profiles: bool;
     need_to_rerender := false;
+    close_to_tray := false;
     // need_to_scroll_mappings_region: bool;
 }
 dummy_input_text_state: Text_Input_State;
@@ -186,12 +188,30 @@ parse_settings :: (raw_settings: string, settings_filename: string) {
 
     while true {
         line, line_found := tfh.consume_next_line(*handler);
-
         if !line_found break;
-        // Looking for separator
-        if !equal(line, "PROFILE_START") {
-            tfh.warn(*handler, "Expected profile separator, but found %\n, assuming no profiles configured", line);
-            break;
+
+        // First, we search for known global settings
+        colon_found, left, right := split_from_left(line, #char ":");
+        // This means there are no global settings defined
+        if !colon_found {
+            // Then, we start lookign for profiles
+            if !equal(line, "PROFILE_START") {
+                tfh.warn(*handler, "Expected profile separator, but found %\n, assuming no profiles configured", line);
+                break;
+            }
+        } else {
+            left = trim(left);
+            to_lower_in_place(left);
+            if left == {
+                case "close_to_tray";
+                    result := trim(right);
+                    if result == "true" current_program_state.close_to_tray = true;
+                    continue;
+                case; {
+                    tfh.error(*handler, "Unexpected global configuration ignored: %\n", left);
+                    continue;
+                }
+            }
         }
 
         profile: Profile;
@@ -326,6 +346,7 @@ Ignoring the line and trying to continue parsing. Config line was `%`
 }
 
 serialize_settings :: () -> succes: bool {
+    using current_program_state;
     success := false;
     allowed_to_write := false;
 
@@ -339,6 +360,8 @@ serialize_settings :: () -> succes: bool {
 
     b: String_Builder;
     print_to_builder(*b, CONFIG_HEADER, SETTINGS_VERSION);
+
+    print_to_builder(*b, "close_to_tray: %\n", close_to_tray);
 
     for profile: profiles {
         append(*b, "PROFILE_START\n");
@@ -374,7 +397,6 @@ finalize_state :: () {
 }
 
 main :: () {
-    close_to_tray := true;
     current_program_state = .{active_state=.NOTHING, active_mapping=null, active_search=*dummy_input_text_state};
     using current_program_state;
 
@@ -432,11 +454,15 @@ main :: () {
             }
         }
 
+        is_altf4 := false;
         for event: Input.events_this_frame {
+            if event.type == .KEYBOARD && event.key_pressed && event.key_code == .F4 && event.alt_pressed {
+                is_altf4 = true;
+            }
             if event.type == .QUIT {
                 quit = true;
                 platform_deinit(the_window);
-            } else if event.type == .WINDOW_CLOSE {
+            } else if event.type == .WINDOW_CLOSE || is_altf4 {
                 if close_to_tray {
                     platform_hide_to_tray(the_window);
                 } else {

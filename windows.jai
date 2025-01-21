@@ -466,7 +466,7 @@ create_window :: () -> Window_Type {
     the_window := create_window(window_width, window_height, "Hitboxer");
     // We can't specify style in create_window, so change it afterwards.
     // TLDR is that we want a regular window but without an ability to maximize and resize it.
-    SetWindowLongPtrW(the_window, GWL_STYLE, WS_VISIBLE | WS_OVERLAPPED | WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU);
+    // SetWindowLongPtrW(the_window, GWL_STYLE, WS_VISIBLE | WS_OVERLAPPED | WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU);
 
     return the_window;
 }
