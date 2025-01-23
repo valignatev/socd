@@ -68,7 +68,7 @@ get_key_name :: (key_scan_code: u32) -> string {
 
 
 start_logging_keys :: () {
-    // 
+    //
 }
 
 
@@ -87,92 +87,91 @@ low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 
 
     key_virtual_code := kb_input.vkCode;
     key_scan_code := kb_input.scanCode;
-    push_context {
-        // 69 is numlock, just swallow it. Depend on LLKF_EXTENDED instead,
-        // because numlocked keys don't have it set...
-        if key_scan_code == 69 {
-            return CallNextHookEx(null, n_code, wparam, lparam);
+
+    push_my_context();
+    // 69 is numlock, just swallow it. Depend on LLKF_EXTENDED instead,
+    // because numlocked keys don't have it set...
+    if key_scan_code == 69 {
+        return CallNextHookEx(null, n_code, wparam, lparam);
+    }
+    is_down := ifx wparam == WM_KEYDOWN || wparam == WM_SYSKEYDOWN then true else false;
+    if kb_input.flags & .LLKHF_EXTENDED {
+        // We're adding 0xE100 to the scancode to signify that it's "EXTENDED".
+        // This lets procedures like GetKeyNameTextW to correctly distinguish between
+        // arrows and numpad keys, for example. Becuase Windows is fucking dogshit ass garbage that decided
+        // to reuse the same scancodes between those keys. Another W for Linux.
+        key_scan_code |= 0xE100;
+    }
+
+    key_name := get_key_name(key_scan_code);
+    kb_real_state[key_scan_code] = is_down;
+
+    bind := get_key_mapping(key_scan_code);
+    if bind == dummy_bind {
+        return CallNextHookEx(null, n_code, wparam, lparam);
+    }
+
+    extended := bind.code & 0xE100;
+    bind_scan := bind.code & 0x00FF;
+
+    if bind.mode == .REMAP {
+        bind_name := get_key_name(bind.code);
+
+        flags : KEYBDINPUT_Flags = ifx is_down then xx 0 else .KEYEVENTF_KEYUP;
+        flags |= ifx extended then .KEYEVENTF_EXTENDEDKEY else xx 0;
+        flags |= .KEYEVENTF_SCANCODE;
+
+        input: INPUT;
+        input.type = .INPUT_KEYBOARD;
+        input.ki = KEYBDINPUT.{0, cast(u16)bind_scan, flags, 0, null};
+        events_count := SendInput(1, *input, size_of(INPUT));
+        if events_count == 0 {
+            error := GetLastError();
+            log_error("SendInput failed with error: %\n", error);
         }
-        is_down := ifx wparam == WM_KEYDOWN || wparam == WM_SYSKEYDOWN then true else false;
-        if kb_input.flags & .LLKHF_EXTENDED {
-            // We're adding 0xE100 to the scancode to signify that it's "EXTENDED".
-            // This lets procedures like GetKeyNameTextW to correctly distinguish between
-            // arrows and numpad keys, for example. Becuase Windows is fucking dogshit ass garbage that decided
-            // to reuse the same scancodes between those keys. Another W for Linux.
-            key_scan_code |= 0xE100;
-        }
+        // Returning non-zero means that we don't want the original key to get propagated
+        return 1;
+    }
+    if bind.mode == .OPPOSITE || bind.mode == .NEUTRAL {
+        // Get the state of the opposite key
+        opposite_is_down := kb_real_state[bind_scan];
 
-        key_name := get_key_name(key_scan_code);
-        kb_real_state[key_scan_code] = is_down;
+        if is_down {
+            if opposite_is_down {
+                flags : KEYBDINPUT_Flags = .KEYEVENTF_KEYUP;
+                flags |= ifx extended then .KEYEVENTF_EXTENDEDKEY else xx 0;
+                flags |= .KEYEVENTF_SCANCODE;
 
-        bind := get_key_mapping(key_scan_code);
-        if bind == dummy_bind {
-            return CallNextHookEx(null, n_code, wparam, lparam);
-        }
+                input: INPUT;
+                input.type = .INPUT_KEYBOARD;
+                input.ki = KEYBDINPUT.{0, cast(u16)bind_scan, flags, 0, null};
+                events_count := SendInput(1, *input, size_of(INPUT));
 
-        extended := bind.code & 0xE100;
-        bind_scan := bind.code & 0x00FF;
-
-        if bind.mode == .REMAP {
-            bind_name := get_key_name(bind.code);
-
-            flags : KEYBDINPUT_Flags = ifx is_down then xx 0 else .KEYEVENTF_KEYUP;
-            flags |= ifx extended then .KEYEVENTF_EXTENDEDKEY else xx 0;
-            flags |= .KEYEVENTF_SCANCODE;
-
-            input: INPUT;
-            input.type = .INPUT_KEYBOARD;
-            input.ki = KEYBDINPUT.{0, cast(u16)bind_scan, flags, 0, null};
-            print("Sending %\n", scan);
-            events_count := SendInput(1, *input, size_of(INPUT));
-            if events_count == 0 {
-                error := GetLastError();
-                log_error("SendInput failed with error: %\n", error);
-            }
-            // Returning non-zero means that we don't want the original key to get propagated
-            return 1;
-        }
-        if bind.mode == .OPPOSITE || bind.mode == .NEUTRAL {
-            // Get the state of the opposite key
-            opposite_is_down := kb_real_state[bind_scan];
-
-            if is_down {
-                if opposite_is_down {
-                    flags : KEYBDINPUT_Flags = .KEYEVENTF_KEYUP;
-                    flags |= ifx extended then .KEYEVENTF_EXTENDEDKEY else xx 0;
-                    flags |= .KEYEVENTF_SCANCODE;
-
-                    input: INPUT;
-                    input.type = .INPUT_KEYBOARD;
-                    input.ki = KEYBDINPUT.{0, cast(u16)bind_scan, flags, 0, null};
-                    events_count := SendInput(1, *input, size_of(INPUT));
-
-                    if events_count == 0 {
-                        error := GetLastError();
-                        log_error("SendInput failed with error: %\n", error);
-                    }
-
-                    if bind.mode == .NEUTRAL {
-                        // Do not propagate the original key if it's meant to cancel out
-                        return 1;
-                    }
-
+                if events_count == 0 {
+                    error := GetLastError();
+                    log_error("SendInput failed with error: %\n", error);
                 }
-            } else {
-                if opposite_is_down {
-                    flags : KEYBDINPUT_Flags = 0;
-                    flags |= ifx extended then .KEYEVENTF_EXTENDEDKEY else xx 0;
-                    flags |= .KEYEVENTF_SCANCODE;
 
-                    input: INPUT;
-                    input.type = .INPUT_KEYBOARD;
-                    input.ki = KEYBDINPUT.{0, cast(u16)bind_scan, flags, 0, null};
-                    events_count := SendInput(1, *input, size_of(INPUT));
+                if bind.mode == .NEUTRAL {
+                    // Do not propagate the original key if it's meant to cancel out
+                    return 1;
+                }
 
-                    if events_count == 0 {
-                        error := GetLastError();
-                        log_error("SendInput failed with error: %\n", error);
-                    }
+            }
+        } else {
+            if opposite_is_down {
+                flags : KEYBDINPUT_Flags = 0;
+                flags |= ifx extended then .KEYEVENTF_EXTENDEDKEY else xx 0;
+                flags |= .KEYEVENTF_SCANCODE;
+
+                input: INPUT;
+                input.type = .INPUT_KEYBOARD;
+                input.ki = KEYBDINPUT.{0, cast(u16)bind_scan, flags, 0, null};
+                events_count := SendInput(1, *input, size_of(INPUT));
+
+                if events_count == 0 {
+                    error := GetLastError();
+                    log_error("SendInput failed with error: %\n", error);
                 }
             }
         }
@@ -182,83 +181,66 @@ low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 
 
 mapping_setting_hook_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 #c_call {
     using current_program_state;
-    push_context {
-        key_virtual_code := wparam;
-        // How to interpret lparam: https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input
-        hiword := (lparam >> 16) & 0xffff;
-        // Scan code is bits 16-23, so byte 3, or the low byte of the hiword. It's a bit confusing...
-        raw_scan_code := cast(u32)hiword & 0xff;
-        key_scan_code : u32 = 0;
+    push_my_context();
+    key_virtual_code := wparam;
+    // How to interpret lparam: https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input
+    hiword := (lparam >> 16) & 0xffff;
+    // Scan code is bits 16-23, so byte 3, or the low byte of the hiword. It's a bit confusing...
+    raw_scan_code := cast(u32)hiword & 0xff;
+    key_scan_code : u32 = 0;
 
-        // Extended bit is 24th. TODO: Use it, or we get confused with numlock is enabled vs when it's not
-        // Something like:
-        is_extended := cast(u32)(hiword & KF_EXTENDED) == KF_EXTENDED;
+    // Extended bit is 24th. TODO: Use it, or we get confused with numlock is enabled vs when it's not
+    // Something like:
+    is_extended := cast(u32)(hiword & KF_EXTENDED) == KF_EXTENDED;
 
-        if is_extended {
-            // log("We are extended\n");
-            key_scan_code = (0xe1 << 8) | raw_scan_code;
-        } else {
-            key_scan_code = raw_scan_code;
-        }
+    if is_extended {
+        // log("We are extended\n");
+        key_scan_code = (0xe1 << 8) | raw_scan_code;
+    } else {
+        key_scan_code = raw_scan_code;
+    }
 
-        // Transition state flag is bit 31. Transition means whether key is pressed or released!
-        is_down := hiword & KF_UP == 0;
+    // Transition state flag is bit 31. Transition means whether key is pressed or released!
+    is_down := hiword & KF_UP == 0;
 
-        // Numlock is extended here, so 0xe100 + 0x0045 is numlock, we just ignore it.
-        if key_scan_code == 0xe145 return CallNextHookEx(null, n_code, wparam, lparam);
+    // Numlock is extended here, so 0xe100 + 0x0045 is numlock, we just ignore it.
+    if key_scan_code == 0xe145 return CallNextHookEx(null, n_code, wparam, lparam);
 
-        key_name := get_key_name(key_scan_code);
-        // log("New mapping key pressed: %\n", key_name);
-        if active_state == .SETTING_SOURCE || active_state == .SETTING_DESTINATION {
-            next_state := Mapping_State.NOTHING;
-            if is_down {
-                if active_state == .SETTING_SOURCE {
-                    // print("mappings before:\n");
-                    // for active_profile.mappings {
-                    //     dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
-                    //     print("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
-                    // }
+    key_name := get_key_name(key_scan_code);
+    if active_state == .SETTING_SOURCE || active_state == .SETTING_DESTINATION {
+        // next_state := Mapping_State.NOTHING;
+        if is_down {
+            if active_state == .SETTING_SOURCE {
+                old_source_code := active_mapping.source.code;
+                // if old_source_code == KEY_RESERVED next_state = .SETTING_DESTINATION;
 
-                    old_source_code := active_mapping.source.code;
-                    if old_source_code == KEY_RESERVED next_state = .SETTING_DESTINATION;
+                old_binding_from_old_source, found := table_find(*active_profile.mappings, old_source_code);
+                active_mapping.*.source.code = key_scan_code;
+                table_set(*active_profile.mappings, active_mapping.source.code, active_mapping.destination);
 
-                    old_binding_from_old_source, found := table_find(*active_profile.mappings, old_source_code);
-                    // print("Old source is %\n", old_binding_from_old_source);
-
-                    active_mapping.*.source.code = key_scan_code;
-                    table_set(*active_profile.mappings, active_mapping.source.code, active_mapping.destination);
-
-                    if active_mapping.mode == .OPPOSITE || active_mapping.mode == .NEUTRAL {
-                        table_remove(*active_profile.mappings, active_mapping.destination.code);
-                        table_set(*active_profile.mappings, active_mapping.destination.code, active_mapping.source);
-                    }
-                    // I don't think it matters whether we found it.
-                    table_remove(*active_profile.mappings, old_source_code);
-
-                    // print("mappings after:\n");
-                    // for active_profile.mappings {
-                    //     dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
-                    //     print("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
-                    // }
-
-                    // log("Set source %\n", key_scan_code);
-                } else if active_state == .SETTING_DESTINATION {
-                    old_destination_code := active_mapping.destination.code;
-                    active_mapping.*.destination.code = key_scan_code;
-
-                    table_set(*active_profile.mappings, active_mapping.source.code, active_mapping.destination);
-                    if active_mapping.mode == .OPPOSITE || active_mapping.mode == .NEUTRAL {
-                        table_remove(*active_profile.mappings, old_destination_code);
-                        table_set(*active_profile.mappings, active_mapping.destination.code, active_mapping.source);
-                    }
-                    // log("Set destination %\n", key_scan_code);
+                if active_mapping.mode == .OPPOSITE || active_mapping.mode == .NEUTRAL {
+                    table_remove(*active_profile.mappings, active_mapping.destination.code);
+                    table_set(*active_profile.mappings, active_mapping.destination.code, active_mapping.source);
                 }
+                // I don't think it matters whether we found it.
+                table_remove(*active_profile.mappings, old_source_code);
 
-                if next_state == .NOTHING {
-                    finalize_state();
-                } else {
-                    active_state = next_state;
+            } else if active_state == .SETTING_DESTINATION {
+                next_state = .NOTHING;
+                old_destination_code := active_mapping.destination.code;
+                active_mapping.*.destination.code = key_scan_code;
+
+                table_set(*active_profile.mappings, active_mapping.source.code, active_mapping.destination);
+                if active_mapping.mode == .OPPOSITE || active_mapping.mode == .NEUTRAL {
+                    table_remove(*active_profile.mappings, old_destination_code);
+                    table_set(*active_profile.mappings, active_mapping.destination.code, active_mapping.source);
                 }
+            }
+
+            if next_state == .NOTHING {
+                finalize_state();
+            } else {
+                active_state = next_state;
             }
         }
     }
@@ -286,35 +268,34 @@ detect_focused_program :: (
         // for some reason. Just ignore it.
         return;
     }
-    push_context {
-        focused_program_buffer: [MAX_PATH]u16;
-        foreground_process := OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, 0, process_id);
-        if !foreground_process {
-            // Sometimes we can't open a process (#5 "access denied"). Ignore it I guess.
-            if (GetLastError() == 5) {
-                return;
-            }
-            log_error("Couldn't open the foreground process, error code is %\n", GetLastError());
+    focused_program_buffer: [MAX_PATH]u16;
+    foreground_process := OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, 0, process_id);
+    push_my_context();
+    if !foreground_process {
+        // Sometimes we can't open a process (#5 "access denied"). Ignore it I guess.
+        if (GetLastError() == 5) {
+            return;
         }
-
-        filename_size : u32 = MAX_PATH;
-        // This function API is so fucking weird. Read its docs extremely carefully
-        QueryFullProcessImageNameW(foreground_process, 0, focused_program_buffer.data, *filename_size);
-        CloseHandle(foreground_process);
-        PathStripPathW(focused_program_buffer.data);
-        focused_program_name, ok := wide_to_utf8(focused_program_buffer.data);
-        log("Window activated: %\n", focused_program_name);
-
-        program_handle := GetModuleHandleW(null);
-
-        for profile: profiles {
-            if profile.program == focused_program_name && profile.platform == CURRENT_PLATFORM {
-                set_kb_hook(program_handle);
-                return;
-            }
-        }
-        unset_kb_hook();
+        log_error("Couldn't open the foreground process, error code is %\n", GetLastError());
     }
+
+    filename_size : u32 = MAX_PATH;
+    // This function API is so fucking weird. Read its docs extremely carefully
+    QueryFullProcessImageNameW(foreground_process, 0, focused_program_buffer.data, *filename_size);
+    CloseHandle(foreground_process);
+    PathStripPathW(focused_program_buffer.data);
+    focused_program_name, ok := wide_to_utf8(focused_program_buffer.data);
+    // log("Window activated: %\n", focused_program_name);
+
+    program_handle := GetModuleHandleW(null);
+
+    for profile: profiles {
+        if profile.program == focused_program_name && profile.platform == CURRENT_PLATFORM {
+            set_kb_hook(program_handle);
+            return;
+        }
+    }
+    unset_kb_hook();
 }
 
 _list_of_process_ids: [..]u32;
@@ -331,7 +312,6 @@ get_list_of_programs :: () -> [..]string {
         focused_program_buffer: [MAX_PATH]u16;
         foreground_process := OpenProcess(PROCESS_QUERY_INFORMATION, 0, process_id);
         if !foreground_process {
-            // log_error("Couldn't open the foreground process, error code is %\n", GetLastError());
             continue;
         }
 
@@ -409,7 +389,7 @@ start_detecting_focused_program :: () {
 
 set_kb_hook :: (instance: HINSTANCE) {
     if !mapping_resolving_hook_is_installed {
-        log("hooking this shit\n");
+        // log("hooking this shit\n");
         mapping_resolving_hook = SetWindowsHookExW(WH_KEYBOARD_LL, cast(HOOKPROC)low_level_keyboard_proc, instance, 0);
         if (mapping_resolving_hook != null) {
             mapping_resolving_hook_is_installed = true;
@@ -426,7 +406,7 @@ set_key_mapping_hook :: (window: Window_Type) {
         mapping_setting_hook = SetWindowsHookExW(WH_KEYBOARD, cast(HOOKPROC)mapping_setting_hook_proc, null, GetCurrentThreadId());
         if (mapping_setting_hook != null) {
             mapping_setting_hook_is_installed = true;
-            log("listening for new mapping\n");
+            // log("listening for new mapping\n");
         } else {
             error := GetLastError();
             log_error("mapping setting hook initialization failed: %\n", error);
@@ -437,7 +417,7 @@ set_key_mapping_hook :: (window: Window_Type) {
 unset_kb_hook :: () {
     if !mapping_resolving_hook_is_installed return;
 
-    log("unhooking this shit\n");
+    // log("unhooking this shit\n");
     UnhookWindowsHookEx(mapping_resolving_hook);
     // Forget buttons that are pressed before unhooking from the keyboard
     // So that when we hook again we don't end up in a dirty state where one
@@ -448,7 +428,7 @@ unset_kb_hook :: () {
 
 unset_mapping_setting_hook :: () {
     if !mapping_setting_hook_is_installed return;
-    log("unhooking mapping setting hook\n");
+    // log("unhooking mapping setting hook\n");
     UnhookWindowsHookEx(mapping_setting_hook);
     mapping_setting_hook_is_installed = false;
 }
@@ -480,40 +460,39 @@ platform_hide_to_tray :: (window: HWND) {
 tray_proc :: (hwnd: HWND, message: u32, wParam: WPARAM, lParam: LPARAM) -> s64 #c_call {
 
     exit_menu : u64 = 100;
-    push_context {
-        if message == {
-            case WM_APP + 1; {
-                if lParam == {
-                    case WM_LBUTTONDOWN; {
-                        if the_window_hidden {
-                            ShowWindow(the_window, SW_SHOW);
-                        } else {
-                            ShowWindow(the_window, SW_HIDE);
-                        }
-                        the_window_hidden = !the_window_hidden;
+    push_my_context();
+    if message == {
+        case WM_APP + 1; {
+            if lParam == {
+                case WM_LBUTTONDOWN; {
+                    if the_window_hidden {
+                        ShowWindow(the_window, SW_SHOW);
+                    } else {
+                        ShowWindow(the_window, SW_HIDE);
                     }
-                    case WM_RBUTTONDOWN; {
-                        pt: POINT;
-                        GetCursorPos(*pt);
-                        // From TrackPopupMenuEx remarks
-                        // To display a context menu for a notification icon, the current window must be the foreground
-                        // window before the application calls TrackPopupMenu or TrackPopupMenuEx.
-                        // Otherwise, the menu will not disappear when the user clicks outside of the menu
-                        SetForegroundWindow(hwnd);
+                    the_window_hidden = !the_window_hidden;
+                }
+                case WM_RBUTTONDOWN; {
+                    pt: POINT;
+                    GetCursorPos(*pt);
+                    // From TrackPopupMenuEx remarks
+                    // To display a context menu for a notification icon, the current window must be the foreground
+                    // window before the application calls TrackPopupMenu or TrackPopupMenuEx.
+                    // Otherwise, the menu will not disappear when the user clicks outside of the menu
+                    SetForegroundWindow(hwnd);
 
-                        hmenu := CreatePopupMenu();
-                        InsertMenuW(hmenu, 0, .MF_BYPOSITION | .MF_STRING, xx exit_menu, utf8_to_wide("Exit the program",, temp));
-                        // result will hold 0 or the id of the menu item because of .TPM_RETURNCMD passed
-                        result := TrackPopupMenuEx(hmenu, .TPM_LEFTALIGN | .TPM_LEFTBUTTON | .TPM_BOTTOMALIGN | .TPM_RETURNCMD , pt.x, pt.y, hwnd, null);
-                        PostMessageW(hwnd, WM_COMMAND, xx result, 0);
-                        // MSDN says that I MUST call DestroyMenu, or they'll put me to Guantanamo Bay :(
-                        DestroyMenu(hmenu);
-                    }
+                    hmenu := CreatePopupMenu();
+                    InsertMenuW(hmenu, 0, .MF_BYPOSITION | .MF_STRING, xx exit_menu, utf8_to_wide("Exit the program",, temp));
+                    // result will hold 0 or the id of the menu item because of .TPM_RETURNCMD passed
+                    result := TrackPopupMenuEx(hmenu, .TPM_LEFTALIGN | .TPM_LEFTBUTTON | .TPM_BOTTOMALIGN | .TPM_RETURNCMD , pt.x, pt.y, hwnd, null);
+                    PostMessageW(hwnd, WM_COMMAND, xx result, 0);
+                    // MSDN says that I MUST call DestroyMenu, or they'll put me to Guantanamo Bay :(
+                    DestroyMenu(hmenu);
                 }
             }
-            case WM_COMMAND; {
-                if wParam == exit_menu PostMessageW(the_window, WM_QUIT, 0, 0);
-            }
+        }
+        case WM_COMMAND; {
+            if wParam == exit_menu PostMessageW(the_window, WM_QUIT, 0, 0);
         }
     }
 

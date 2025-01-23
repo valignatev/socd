@@ -499,6 +499,7 @@ handle_libinput_event :: (event: *libinput_event, uinput_fd: s32) {
 
                     log("Set source %\n", ev.code);
                 } else if active_state == .SETTING_DESTINATION {
+                    next_state = .NOTHING;
                     old_destination_code := active_mapping.destination.code;
                     active_mapping.*.destination.code = ev.code;
 

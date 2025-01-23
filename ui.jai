@@ -92,6 +92,15 @@ arrow :: (base_rect: GR.Rect, state: *GR.Dropdown_State, theme: *GR.Dropdown_The
     }
 }
 
+our_checkbox :: (_r: Rect, text: string, selected: bool, theme: *Checkbox_Theme = null, identifier: s64 = 0, loc := #caller_location) -> changed: bool, checkbox_state: Checkbox_State {
+    using current_program_state;
+
+    changed, state := GR.base_checkbox(_r, text, selected, theme, identifier, loc);
+    if state.selected_t need_to_rerender = true;
+
+    return changed, state;
+}
+
 #scope_file
 
 GR :: #import "GetRect_LeftHanded";

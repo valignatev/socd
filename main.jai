@@ -2,7 +2,6 @@
 ~~TODOS~~
 FOR SHIPPING:
 - LINUX: Do not grab devices until we are able to create a virtual one. Otherwise we're really fucked
-- Ban setting profile for the app itself
 
 FOR FUTURE:
 - Disallow multiple binds for the same button
@@ -38,9 +37,10 @@ scroll_value_mappings_region: float;
 scroll_value_new_profile: float;
 
 the_window: Window_Type;
+log_file: File;
 the_window_hidden := false;
 window_width := 900;
-window_height := 600;
+window_height := 750;
 
 current_theme: s32 = xx Default_Themes.Default;
 my_theme: Overall_Theme;  // This gets filled out by calling the Theme_Proc for current_theme.
@@ -61,6 +61,7 @@ Mapping_State :: enum {
 
 Program_State :: struct {
     active_state: Mapping_State;
+    next_state: Mapping_State;
     active_mapping: *Mapping;
     active_profile: *Profile;
     active_search: *Text_Input_State;
@@ -76,12 +77,8 @@ current_program_state: Program_State;
 dummy_bind := Mapping_Bind.{};
 get_key_mapping :: (source_scan_code: u32) -> Mapping_Bind {
     using current_program_state;
-    // destination, found := table_find(*active_profile.mappings, source_scan_code);
     destination := or_return(table_find(*active_profile.mappings, source_scan_code));
     return destination;
-
-    // if found return destination;
-    // return dummy_bind;
 }
 
 SETTINGS_VERSION :: 1;
@@ -145,6 +142,54 @@ CONFIG_HEADER :: #string HEADER
 
 HEADER
 
+
+my_logger :: (message: string, data: *void, info: Log_Info) {
+    now := current_time_consensus();
+    calendar_utc := to_calendar(now, .UTC);
+    date_s := calendar_to_string(calendar_utc);
+    formatted_message := tprint("%: %", date_s, message);
+
+    length, success := file_length(log_file);
+    if !success {
+
+        // Just one attempt to reopen the log file again.
+        log_file, success = file_open("./log.txt", for_writing=true, keep_existing_content=true);
+        if !success {
+            runtime_support_default_logger("Couldn't write to the log file: file_open\n", data, info);
+            return;
+        }
+
+        length, success = file_length(log_file);
+        if !success {
+            runtime_support_default_logger("Couldn't write to the log file: file_len\n", data, info);
+            return;
+        }
+
+    }
+    if length {
+        success := file_set_position(log_file, length);
+        if !success {
+            runtime_support_default_logger("Couldn't write to the log file: file_set_position\n", data, info);
+            return;
+        }
+    }
+
+    success = file_write(*log_file, xx formatted_message.data, formatted_message.count);
+    if !success {
+        runtime_support_default_logger("Couldn't write to the log file: file_write\n", data, info);
+        return;
+    }
+}
+
+
+push_my_context :: () #expand {
+    my_context: #Context;
+    my_context.logger = my_logger;
+
+    `push_context,defer_pop my_context;
+}
+
+
 init_settings :: () -> should_parse: bool, config: string, filename: string {
 
     found, exe_path, exe_name := split_from_right(get_path_of_running_executable(), #char "/");
@@ -158,7 +203,7 @@ init_settings :: () -> should_parse: bool, config: string, filename: string {
     // @leak - raw_settings never freed
     raw_settings, success := read_entire_file(settings_filename);
     if !success {
-        log("Coulnd't find settings.socd file, trying to create a new one");
+        log("Coulnd't find settings.socd file, trying to create a new one\n");
         written : = write_entire_file(settings_filename, tprint(CONFIG_HEADER, SETTINGS_VERSION));
         if !written {
             // TODO: Error detection
@@ -392,12 +437,26 @@ serialize_settings :: () -> succes: bool {
 
 finalize_state :: () {
     using current_program_state;
+    if active_state != .ADDING_NEW_PROFILE {
+        log("mappings after:\n");
+        for active_profile.mappings {
+            dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
+            log("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
+        }
+    }
     active_state = .NOTHING;
     serialize_settings();
 }
 
 main :: () {
-    current_program_state = .{active_state=.NOTHING, active_mapping=null, active_search=*dummy_input_text_state};
+    push_my_context();
+    log_file=, success := file_open("./log.txt", for_writing=true, keep_existing_content=true);
+    if !success {
+        log_error("Couldn't open the log file, your errors will not be logged\n");
+    }
+    defer file_close(*log_file);
+
+    current_program_state = .{active_state=.NOTHING, next_state=.NOTHING, active_mapping=null, active_search=*dummy_input_text_state};
     using current_program_state;
 
     success_init, init_reason := platform_init();
@@ -493,6 +552,10 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     proc := default_theme_procs[current_theme];
     my_theme = proc();
 
+    my_theme.label_theme.font = button_font;
+    my_theme.label_theme.alignment = .Left;
+    my_theme.label_theme.alignment_pad_ems = 0.0;
+
     my_theme.button_theme.font = button_font;
     my_theme.button_theme.enable_variable_frame_thickness = true;
     my_theme.button_theme.rectangle_shape.rounding_flags = 0;
@@ -508,6 +571,9 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     pulsating_button_theme.over_fade_in_speed = 20;
     pulsating_button_theme.frame_color = pulsating_button_theme.frame_color_flash;
     pulsating_button_theme.surface_color = pulsating_button_theme.surface_color_flash;
+
+    checkbox_theme := my_theme.checkbox_theme;
+    checkbox_theme.font = button_font; // @Cleanup: We have to manually set a font for now.
 
     button_height := default_button_height;
 
@@ -553,7 +619,6 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         pressed, state := our_button(program_rect, it.program, *theme, identifier=it_index, disable_press = active_state == .ADDING_NEW_PROFILE, pulsate=profile_pulsating);
 
         if pressed {
-            log("Profile % pressed\n", it.program);
             active_profile_index = it_index;
             finalize_state();
         }
@@ -596,36 +661,37 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         finalize_state();
     }
 
-    //
-    // Active profile settings
-    //
-    profile_start := profiles_width + 30;
-    profile_width := 500.0;
 
-    add_mapping_rect := get_rect(profile_start, 10, profile_width, button_height);
-    _, _, add_mapping_released := our_button(add_mapping_rect, "Add mapping", *my_theme.button_theme);
-    if add_mapping_released && active_state == .NOTHING {
-        active_state = .SETTING_SOURCE;
+    // Global settings
+    {
+        base_y := del_button_rect.y + del_button_rect.h + button_height / 1.5;
+        label_rect := get_rect(10, base_y, profiles_width, xx button_font.character_height);
+        theme := my_theme.label_theme;
+        theme.font = header_font;
+        label(label_rect, "Global settings", *theme);
 
-        source := Mapping_Bind.{code=KEY_RESERVED};
-        dest := Mapping_Bind.{code=KEY_RESERVED};
-        array_insert_at(*active_profile.mappings_array, .{source=source, destination=dest}, 0);
-        active_mapping = *active_profile.mappings_array[0];
-        table_set(*active_profile.mappings, source.code, dest);
-        set_key_mapping_hook(window);
-
-        // need_to_scroll_mappings_region = true;
+        base_y += xx button_font.character_height + 10;
+        r := get_rect(10, base_y, profiles_width, xx button_font.character_height);
+        changed, state := our_checkbox(r, "Close to tray", close_to_tray, *checkbox_theme);
+        if changed {
+            close_to_tray ^= changed;
+            finalize_state();
+        }
     }
 
     //
     // New Profile subwindow
     //
 
+    right_side_start := profiles_width + 30;
+    right_side_width := 500.0;
+
+    right_side_rect := get_rect(right_side_start, 10, right_side_width, button_height);
     {
         theme := my_theme.subwindow_theme;
         // r := profiles_region;
         if !subwindows_initted {
-            subwindow_info_new_profile.rect = add_mapping_rect;
+            subwindow_info_new_profile.rect = right_side_rect;
             subwindow_info_new_profile.rect.h = 500;
             subwindow_info_new_profile.title_text = "Select Program";
             subwindow_info_new_profile.draw = draw_new_profile_selector;
@@ -650,14 +716,48 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     }
 
     //
+    // Active profile settings
+    //
+    {
+        _, _, add_mapping_released := our_button(right_side_rect, "", *my_theme.button_theme);
+
+        // This is just to "center" the label on top of arrows, because otherwise a button label
+        // looks slightly off-center, because "Add mapping" button is wider than the scrollable area
+        label_theme := my_theme.label_theme;
+        label_theme.alignment = .Center;
+        label_width := (right_side_width - 48)/3;
+        label_rect := get_rect(right_side_rect.x + label_width, right_side_rect.y, label_width, right_side_rect.h);
+        label(label_rect, "Add mapping", *label_theme);
+
+        if add_mapping_released && active_state == .NOTHING {
+            log("mappings before:\n");
+            for active_profile.mappings {
+                dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
+                log("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
+            }
+            active_state = .SETTING_SOURCE;
+            next_state = .SETTING_DESTINATION;
+
+            source := Mapping_Bind.{code=KEY_RESERVED};
+            dest := Mapping_Bind.{code=KEY_RESERVED};
+            array_insert_at(*active_profile.mappings_array, .{source=source, destination=dest}, 0);
+            active_mapping = *active_profile.mappings_array[0];
+            table_set(*active_profile.mappings, source.code, dest);
+            set_key_mapping_hook(window);
+
+            // need_to_scroll_mappings_region = true;
+        }
+    }
+
+    //
     // EMERGENCY QUIT BUTTON. TODO: only enable it in debug mode
     //
-    close_start := add_mapping_rect.w + add_mapping_rect.x + 10;
-    close_rect := get_rect(close_start, 10, button_height, button_height);
-    _, _, close_released := our_button(close_rect, "X", *my_theme.button_theme);
-    if close_released {
-        exit(1);
-    }
+    // close_start := right_side_rect.w + right_side_rect.x + 10;
+    // close_rect := get_rect(close_start, 10, button_height, button_height);
+    // _, _, close_released := our_button(close_rect, "X", *my_theme.button_theme);
+    // if close_released {
+    //     exit(1);
+    // }
 
     //
     // Mappings
@@ -665,7 +765,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     mappings_theme := profiles_theme;
     mappings_theme.scrollbar_size = 0.01;
     mappings_height := 400.0;
-    mappings_rect := get_rect(profile_start, 10 + add_mapping_rect.h + 10, profile_width, mappings_height);
+    mappings_rect := get_rect(right_side_start, 10 + right_side_rect.h + 10, right_side_width, mappings_height);
 
     mappings_region, inside_mappings_region := begin_scrollable_region(mappings_rect, *mappings_theme);
     s := inside_mappings_region;
@@ -704,9 +804,13 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         // }
         if released_source {
             active_state = .SETTING_SOURCE;
+            log("mappings before:\n");
+            for active_profile.mappings {
+                dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
+                log("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
+            }
             active_mapping = mapping;
             set_key_mapping_hook(window);
-            print("Source pressed\n");
         }
 
         mode_rect := get_rect(s.x + source_rect.w + 1, s.y, button_width, button_height);
@@ -717,11 +821,6 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         if changed {
             active_mapping = mapping;
             new_mode := cast(Mapping_Mode, mode_state.current_value_pointer.*);
-            print("mappings before:\n");
-            for active_profile.mappings {
-                dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
-                print("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
-            }
             destination_ptr := table_find_pointer(*active_profile.mappings, mapping.source.code);
             old_mode := destination_ptr.mode;
             destination_ptr.*.mode = new_mode;
@@ -742,10 +841,8 @@ draw_one_frame :: (dt: float, window: Window_Type) {
                     if dest_to_source_ptr dest_to_source_ptr.mode = new_mode;
                 }
             }
-            print("mappings after:\n");
-            for active_profile.mappings {
-                dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
-                print("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
+            if next_state == .NOTHING {
+                finalize_state();
             }
         }
 
@@ -763,7 +860,6 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             active_state = .SETTING_DESTINATION;
             active_mapping = mapping;
             set_key_mapping_hook(window);
-            print("Dest pressed\n");
         }
 
         del_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1 + dest_rect.w + 1 + 1, s.y, 50, button_height);
@@ -836,8 +932,9 @@ draw_new_profile_selector :: (r: Rect, data: *void) {
     if !active_search.text {
         // +10 to offset for the text input caret.
         label_theme := my_theme.label_theme;
+        label_theme.font = small_label_font;
         label_theme.alignment = .Right;
-        label(searchbar_rect, "Type to narrow...", *label_theme);
+        label(searchbar_rect, "Type to narrow (Enter works too)...", *label_theme);
     }
 
     scrollable_rect := r;
@@ -885,13 +982,19 @@ init_fonts :: (window: Window_Type) {
 
     // Window height was here
     pixel_height := 600 / dpi / 26;
-    button_font = Simp.get_font_at_size("data", "OpenSans-Bold.ttf", cast(s64)(pixel_height * dpi));
+    header_height := 600 / dpi / 20;
+    small_height := 600 / dpi / 36;
+    button_font = Simp.get_font_at_size("data", "Hack-Regular.ttf", cast(s64)(pixel_height * dpi));
+    small_label_font = Simp.get_font_at_size("data", "Hack-Regular.ttf", cast(s64)(small_height * dpi));
+    header_font = Simp.get_font_at_size("data", "Hack-Bold.ttf", cast(s64)(header_height * dpi));
     assert(button_font != null);
 }
 
 UI_Font :: Simp.Dynamic_Font;
 
+small_label_font: *UI_Font;
 button_font: *UI_Font;
+header_font: *UI_Font;
 
 working_directory_set := false;
 mapping_resolving_hook_is_installed := false;
