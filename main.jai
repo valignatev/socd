@@ -49,6 +49,7 @@ subwindows_initted := false;
 subwindow_info_new_profile: Subwindow_Info;
 subwindow_new_profile_just_got_closed := false;
 searchbar_should_be_active := true;
+subwindow_info_presets_confirmation: Subwindow_Info;
 default_button_height := 50.0;
 default_padding := 10.0;
 
@@ -142,6 +143,13 @@ Preset :: enum {
     WASD;
     ARROWS;
 }
+
+Preset_Data :: struct {
+    preset: Preset;
+    mode: Mapping_Mode;
+}
+
+selected_preset: Preset_Data;
 
 set_preset :: (preset: Preset, mode: Mapping_Mode) {
     using current_program_state;
@@ -584,6 +592,7 @@ main :: () {
     ui_init();
 
     subwindow_info_new_profile.open = false;
+    subwindow_info_presets_confirmation.open = false;
 
     should_parse_config, raw_settings, settings_filename := init_settings();
     if should_parse_config {
@@ -668,6 +677,11 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     my_theme.text_input_theme.rectangle_shape.rounding_flags = 0;
     my_theme.text_input_theme.button_theme.font = button_font;
 
+    my_theme.subwindow_theme.title_bar.rectangle_shape.rounding_flags = 0;
+    my_theme.subwindow_theme.region_background.shape.rounding_flags = 0;
+    my_theme.subwindow_theme.resize_controls = 0;
+    my_theme.subwindow_theme.subwindow_flags ^= .VISIBLE_RESIZE_CORNER;
+
     header_theme := my_theme.label_theme;
     header_theme.font = header_font;
 
@@ -697,8 +711,38 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     left_side_height := xx window_height;
     {
         profiles_width := left_side_width;
-        profiles_height := 500.0;
-        r := get_rect(padding, padding, profiles_width, profiles_height);
+        profiles_height := 440.0;
+
+        add_button_rect := get_rect(padding, next_y + padding, profiles_width / 2 - 5, button_height);
+        del_button_rect := get_rect(padding + profiles_width / 2 + 5, next_y + padding, profiles_width / 2 - 5, button_height);
+
+        next_y = add_button_rect.y + add_button_rect.h;
+
+        _, _, add_profile_released := our_button(add_button_rect, "Add", *my_theme.button_theme, /*disable_press = (active_state != .NOTHING)*/);
+        if add_profile_released {
+            subwindow_info_new_profile.open = true;
+            new_profile := array_add(*profiles);
+            new_profile.platform = CURRENT_PLATFORM;
+            active_profile = new_profile;
+            active_profile_index = profiles.count - 1;
+            active_state = .ADDING_NEW_PROFILE;
+            need_to_scroll_profiles = true;
+        }
+
+        _, _, del_profile_released := our_button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_index < 0 || active_state != .NOTHING));
+        if del_profile_released {
+            array_ordered_remove_by_index(*profiles, active_profile_index);
+            if profiles.count {
+                active_profile = *profiles[profiles.count - 1];
+                active_profile_index = profiles.count - 1;;
+            } else {
+                active_profile = null;
+                active_profile_index = -1;
+            }
+            finalize_state();
+        }
+
+        r := get_rect(padding, next_y + padding, profiles_width, profiles_height);
         next_y = r.y + r.h;
 
         profiles_region, inside_profiles_region := begin_scrollable_region(r, *my_theme.scrollable_region_theme);
@@ -742,44 +786,15 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             scroll_scrollable_region(profiles_region, program_rect.y, *scroll_value_profiles_region);
             need_to_scroll_profiles = false;
         }
-
-        add_button_rect := get_rect(padding, next_y + padding, profiles_width / 2 - 5, button_height);
-        del_button_rect := get_rect(padding + profiles_width / 2 + 5, next_y + padding, profiles_width / 2 - 5, button_height);
-
-        next_y = add_button_rect.y + add_button_rect.h;
-
-        _, _, add_profile_released := our_button(add_button_rect, "Add", *my_theme.button_theme, /*disable_press = (active_state != .NOTHING)*/);
-        if add_profile_released {
-            subwindow_info_new_profile.open = true;
-            new_profile := array_add(*profiles);
-            new_profile.platform = CURRENT_PLATFORM;
-            active_profile = new_profile;
-            active_profile_index = profiles.count - 1;
-            active_state = .ADDING_NEW_PROFILE;
-            need_to_scroll_profiles = true;
-        }
-
-        _, _, del_profile_released := our_button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_index < 0 || active_state != .NOTHING));
-        if del_profile_released {
-            array_ordered_remove_by_index(*profiles, active_profile_index);
-            if profiles.count {
-                active_profile = *profiles[profiles.count - 1];
-                active_profile_index = profiles.count - 1;;
-            } else {
-                active_profile = null;
-                active_profile_index = -1;
-            }
-            finalize_state();
-        }
     }
 
     // Global settings
     {
-        label_rect := get_rect(10, next_y + padding, left_side_width, xx button_font.character_height);
+        label_rect := get_rect(10, next_y + padding, left_side_width, button_height);
         label(label_rect, "Global settings", *header_theme);
 
-        next_y += xx button_font.character_height + 10;
-        r := get_rect(10, next_y + padding, left_side_width, xx button_font.character_height);
+        next_y = label_rect.y + label_rect.h;
+        r := get_rect(10, next_y, left_side_width, button_height);
         changed, state := our_checkbox(r, "Close to tray", close_to_tray, *checkbox_theme);
         if changed {
             close_to_tray ^= changed;
@@ -787,40 +802,18 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         }
     }
 
-    //
-    // New Profile subwindow
-    //
+    // Scuffed separator
+    // Simp.immediate_quad(
+    //     left_side_width + padding + padding/2, padding,
+    //     left_side_width + padding + padding, xx window_height,
+    //     my_theme.button_theme.text_color,
+    // );
 
     right_side_start := left_side_width + 30;
     right_side_width := 500.0;
     next_y = padding;
 
     right_side_rect := get_rect(right_side_start, next_y, right_side_width, button_height);
-    {
-        theme := my_theme.subwindow_theme;
-        // r := profiles_region;
-        if !subwindows_initted {
-            subwindow_info_new_profile.rect = right_side_rect;
-            subwindow_info_new_profile.rect.h = xx window_height;
-            subwindow_info_new_profile.title_text = "Select Program";
-            subwindow_info_new_profile.draw = draw_new_profile_selector;
-            subwindows_initted = true;
-        }
-        if subwindow_info_new_profile.open {
-            subwindow_state := add_subwindow(*subwindow_info_new_profile, *theme);
-
-        } else if profiles.count && profiles[profiles.count -1].program == "" {
-            array_ordered_remove_by_index(*profiles, profiles.count - 1);
-            if profiles.count {
-                active_profile = *profiles[profiles.count - 1];
-                active_profile_index = profiles.count - 1;;
-            }
-
-            set_text(active_search, active_search.pre_modification_text, replace_pre_modification_text=false);
-            finalize_state();
-            searchbar_should_be_active = true;
-        }
-    }
 
     //
     // Active profile settings
@@ -873,7 +866,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     //
     mappings_theme := my_theme.scrollable_region_theme;
     mappings_theme.scrollbar_size = 0.01;
-    mappings_height := 400.0;
+    mappings_height := 440.0;
     mappings_rect := get_rect(right_side_start, next_y + padding, right_side_width, mappings_height);
 
     next_y = mappings_rect.y + mappings_rect.h;
@@ -989,48 +982,99 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     end_scrollable_region(mappings_region, s.x + s.w, s.y, *scroll_value_mappings_region);
 
     // Presets
+    presets_start_y := next_y + padding;
     {
-        r := get_rect(s.x, next_y + padding, s.w, button_height);
+        r := get_rect(s.x, presets_start_y, s.w, button_height);
         label(r, "Presets", *header_theme);
-
-        if active_profile.mappings_array.count > 0 {
-            r.y += button_height - padding;
-            hint_label_theme := my_theme.label_theme;
-            hint_label_theme.font = small_label_font;
-            label(r, "This will override your current mappings", *hint_label_theme);
-        }
 
         r.w = r.w / 2;
         r.y += button_height;
 
+        wasd_opposite_released: bool;
+        arrows_opposite_released: bool;
+        wasd_neutral_released: bool;
+        arrows_neutral_released: bool;
         {
-            _, _, wasd_released := our_button(r, "WASD Opposite", theme=*my_theme.button_theme);
-            if wasd_released {
-                set_preset(.WASD, .OPPOSITE);
+            _, _, wasd_opposite_released = our_button(r, "WASD Opposite", theme=*my_theme.button_theme);
+            if wasd_opposite_released {
+                selected_preset.preset = .WASD;
+                selected_preset.mode = .OPPOSITE;
             }
             r.x += r.w + padding;
-            _, _, arrows_released := our_button(r, "Arrows Opposite", theme=*my_theme.button_theme);
-            if arrows_released {
-                set_preset(.ARROWS, .OPPOSITE);
+            _, _, arrows_opposite_released = our_button(r, "Arrows Opposite", theme=*my_theme.button_theme);
+            if arrows_opposite_released {
+                selected_preset.preset = .ARROWS;
+                selected_preset.mode = .OPPOSITE;
             }
             r.x -= r.w + padding;
         }
 
         r.y += button_height + 1;
         {
-            _, _, wasd_released := our_button(r, "WASD Neutral", theme=*my_theme.button_theme);
-            if wasd_released {
-                set_preset(.WASD, .NEUTRAL);
+            _, _, wasd_neutral_released = our_button(r, "WASD Neutral", theme=*my_theme.button_theme);
+            if wasd_neutral_released {
+                selected_preset.preset = .WASD;
+                selected_preset.mode = .NEUTRAL;
             }
             r.x += r.w + padding;
-            _, _, arrows_released := our_button(r, "Arrows Neutral", theme=*my_theme.button_theme);
-            if arrows_released {
-                set_preset(.ARROWS, .NEUTRAL);
+            _, _, arrows_neutral_released = our_button(r, "Arrows Neutral", theme=*my_theme.button_theme);
+            if arrows_neutral_released {
+                selected_preset.preset = .ARROWS;
+                selected_preset.mode = .NEUTRAL;
             }
             r.x -= r.w + padding;
+
         }
+        if wasd_opposite_released || wasd_neutral_released || arrows_opposite_released || arrows_neutral_released {
+            if active_profile.mappings_array.count > 0 {
+                subwindow_info_presets_confirmation.open = true;
+            } else {
+                set_preset(selected_preset.preset, selected_preset.mode);
+            }
+        }
+        subwindow_info_presets_confirmation.user_data = xx *selected_preset;
 
         next_y = r.y + r.h;
+    }
+
+    //
+    // New Profile subwindow
+    //
+    {
+        theme := my_theme.subwindow_theme;
+        // r := profiles_region;
+        if !subwindows_initted {
+            subwindow_info_new_profile.rect = right_side_rect;
+            subwindow_info_new_profile.rect.h = xx window_height - padding * 2;
+            subwindow_info_new_profile.title_text = "Select Program";
+            subwindow_info_new_profile.draw = draw_new_profile_selector;
+
+            presets_confirm_rect := get_rect(right_side_rect.x, presets_start_y, right_side_rect.w, next_y - presets_start_y);
+            subwindow_info_presets_confirmation.rect = presets_confirm_rect;
+            // subwindow_info_presets_confirmation.rect.h = xx window_height - padding * 2;
+            subwindow_info_presets_confirmation.title_text = "Confirm";
+            subwindow_info_presets_confirmation.draw = draw_presets_confirmation;
+
+            subwindows_initted = true;
+        }
+        if subwindow_info_new_profile.open {
+            subwindow_state := add_subwindow(*subwindow_info_new_profile, *theme);
+
+        } else if profiles.count && profiles[profiles.count -1].program == "" {
+            array_ordered_remove_by_index(*profiles, profiles.count - 1);
+            if profiles.count {
+                active_profile = *profiles[profiles.count - 1];
+                active_profile_index = profiles.count - 1;;
+            }
+
+            set_text(active_search, active_search.pre_modification_text, replace_pre_modification_text=false);
+            finalize_state();
+            searchbar_should_be_active = true;
+        }
+
+        if subwindow_info_presets_confirmation.open {
+            add_subwindow(*subwindow_info_presets_confirmation, *theme);
+        }
     }
 
     // if need_to_scroll_mappings_region {
@@ -1119,6 +1163,36 @@ draw_new_profile_selector :: (r: Rect, data: *void) {
     }
 
     end_scrollable_region(region, s.x + s.w, s.y + s.h, *scroll_value_new_profile);
+}
+
+draw_presets_confirmation :: (base_r: Rect, data: *void) {
+    using current_program_state;
+    selected_preset := cast(*Preset_Data)data;
+
+    // r.y += button_height - padding;
+    r := base_r;
+    r.h = default_button_height;
+
+    label_theme := my_theme.label_theme;
+    label_theme.font = header_font;
+    label_theme.alignment = .Center;
+    label(r, "Override current bindings?", *label_theme);
+
+    button_theme := my_theme.button_theme;
+    button_theme.label_theme.alignment = .Center;
+    r.y += r.h + default_padding;
+    r.w = r.w/2;
+    _, _, ok_released := our_button(r, "Yes", theme=*button_theme);
+    if ok_released {
+        set_preset(selected_preset.preset, selected_preset.mode);
+    }
+    r.x += r.w;
+    _, _, no_released := our_button(r, "No", theme=*button_theme);
+
+    if ok_released || no_released {
+        subwindow_info_presets_confirmation.open = false;
+    }
+
 }
 
 scroll_scrollable_region :: (state: *Scrollable_Region_State, max_y: float, scroll_value: *float) {
