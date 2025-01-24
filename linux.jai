@@ -993,6 +993,14 @@ platform_deinit :: (window: u64) {
     XWithdrawWindow(x_global_display, window, 0);
 }
 
+platform_wait_for_message :: () {
+    //
+}
+
+platform_wake_up_main_thread :: () {
+    //
+}
+
 libc :: #system_library "libc";
 c_free :: (memory: *void) #foreign libc "free";
 
