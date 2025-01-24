@@ -2,6 +2,7 @@
 ~~TODOS~~
 FOR SHIPPING:
 - LINUX: Do not grab devices until we are able to create a virtual one. Otherwise we're really fucked
+- Make program selector have a proper height
 
 FOR FUTURE:
 - Disallow multiple binds for the same button
@@ -49,6 +50,7 @@ subwindow_info_new_profile: Subwindow_Info;
 subwindow_new_profile_just_got_closed := false;
 searchbar_should_be_active := true;
 default_button_height := 50.0;
+default_padding := 10.0;
 
 Mapping_State :: enum {
     NOTHING :: 0;
@@ -103,7 +105,6 @@ Bind_Kind :: enum u32 {
 Mapping_Bind :: struct {
     kind: Bind_Kind;
     mode: Mapping_Mode;
-    source: u32;
     code: u32;
 }
 
@@ -136,6 +137,104 @@ Profile :: struct {
 active_profile_index := -1;
 
 profiles: [..]Profile;
+
+Preset :: enum {
+    WASD;
+    ARROWS;
+}
+
+set_preset :: (preset: Preset, mode: Mapping_Mode) {
+    using current_program_state;
+
+    array_reset_keeping_memory(*active_profile.mappings_array);
+    table_reset(*active_profile.mappings);
+
+    mappings: [4]u32;
+    if preset == .WASD {
+        mappings[0] = 17; // W
+        mappings[1] = 31; // S
+        mappings[2] = 30; // A
+        mappings[3] = 32; // D
+    } else if preset == .ARROWS {
+        #if CURRENT_PLATFORM == .WINDOWS {
+            mappings[0] = 0xE148; // Up
+            mappings[1] = 0xE150; // Down
+            mappings[2] = 0xE14B; // Left
+            mappings[3] = 0xE14D; // Right
+            // mappings[0] = 0x0048; // Up
+            // mappings[1] = 0x0050; // Down
+            // mappings[2] = 0x004B; // Left
+            // mappings[3] = 0x004D; // Right
+        } else #if CURRENT_PLATFORM == .LINUX {
+            mappings[0] = KEY_UP; // Up
+            mappings[1] = KEY_DOWN; // Down
+            mappings[2] = KEY_LEFT; // Left
+            mappings[3] = KEY_RIGHT; // Right
+        }
+    }
+
+    mapping1 := Mapping.{
+        source=.{
+            kind=.KEYBOARD,
+            mode=mode,
+            code=mappings[0],
+        },
+        destination=.{
+            kind=.KEYBOARD,
+            mode=mode,
+            code=mappings[1],
+        },
+        mode=mode,
+    };
+    mapping2 := Mapping.{
+        source=.{
+            kind=.KEYBOARD,
+            mode=mode,
+            code=mappings[1],
+        },
+        destination=.{
+            kind=.KEYBOARD,
+            mode=mode,
+            code=mappings[0],
+        },
+        mode=mode,
+    };
+    mapping3 := Mapping.{
+        source=.{
+            kind=.KEYBOARD,
+            mode=mode,
+            code=mappings[2],
+        },
+        destination=.{
+            kind=.KEYBOARD,
+            mode=mode,
+            code=mappings[3],
+        },
+        mode=mode,
+    };
+    mapping4 := Mapping.{
+        source=.{
+            kind=.KEYBOARD,
+            mode=mode,
+            code=mappings[3],
+        },
+        destination=.{
+            kind=.KEYBOARD,
+            mode=mode,
+            code=mappings[2],
+        },
+        mode=mode,
+    };
+
+    table_set(*active_profile.mappings, mapping1.source.code, mapping1.destination);
+    table_set(*active_profile.mappings, mapping2.source.code, mapping2.destination);
+    table_set(*active_profile.mappings, mapping3.source.code, mapping3.destination);
+    table_set(*active_profile.mappings, mapping4.source.code, mapping4.destination);
+
+    array_add(*active_profile.mappings_array, mapping1);
+    array_add(*active_profile.mappings_array, mapping3);
+    finalize_state();
+}
 
 CONFIG_HEADER :: #string HEADER
 [%] # Config version, do not delete this!!! Actually, you're not supposed to modify this by hand at all! You will regret manually editing this file!
@@ -526,6 +625,7 @@ main :: () {
                     platform_hide_to_tray(the_window);
                 } else {
                     quit = true;
+                    platform_deinit(the_window);
                 }
             }
 
@@ -548,6 +648,7 @@ main :: () {
 draw_one_frame :: (dt: float, window: Window_Type) {
     using current_program_state;
 
+    next_y := 0.0;
     need_to_rerender = false;
     proc := default_theme_procs[current_theme];
     my_theme = proc();
@@ -567,6 +668,9 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     my_theme.text_input_theme.rectangle_shape.rounding_flags = 0;
     my_theme.text_input_theme.button_theme.font = button_font;
 
+    header_theme := my_theme.label_theme;
+    header_theme.font = header_font;
+
     pulsating_button_theme := my_theme.button_theme;
     pulsating_button_theme.over_fade_in_speed = 20;
     pulsating_button_theme.frame_color = pulsating_button_theme.frame_color_flash;
@@ -576,6 +680,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     checkbox_theme.font = button_font; // @Cleanup: We have to manually set a font for now.
 
     button_height := default_button_height;
+    padding := default_padding;
 
     set_default_theme(my_theme);  // Just in case we don't explicitly pass themes sometimes...!
 
@@ -588,90 +693,93 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     //
     // Profiles
     //
-    profiles_theme := my_theme.scrollable_region_theme;
-    profiles_width := 300.0;
-    profiles_height := 500.0;
-    r := get_rect(10, 10, profiles_width, profiles_height);
-    profiles_region, inside_profiles_region := begin_scrollable_region(r, *profiles_theme);
+    left_side_width := 300.0;
+    left_side_height := xx window_height;
+    {
+        profiles_width := left_side_width;
+        profiles_height := 500.0;
+        r := get_rect(padding, padding, profiles_width, profiles_height);
+        next_y = r.y + r.h;
 
-    program_rect := inside_profiles_region;
-    program_rect.h = button_height;
-    program_rect.y -= scroll_value_profiles_region;
+        profiles_region, inside_profiles_region := begin_scrollable_region(r, *my_theme.scrollable_region_theme);
 
-    profile_button_theme := my_theme.button_theme;
-    profile_button_theme.frame_color = profile_button_theme.surface_color;
-    rendered_profiles_count := 0;
-    for * profiles {
-        if it.platform != CURRENT_PLATFORM continue;
-        rendered_profiles_count += 1;
+        program_rect := inside_profiles_region;
+        program_rect.h = button_height;
+        program_rect.y -= scroll_value_profiles_region;
 
-        if it_index == active_profile_index {
-            active_profile = it;
+        profile_button_theme := my_theme.button_theme;
+        profile_button_theme.frame_color = profile_button_theme.surface_color;
+        rendered_profiles_count := 0;
+        for * profiles {
+            if it.platform != CURRENT_PLATFORM continue;
+            rendered_profiles_count += 1;
+
+            if it_index == active_profile_index {
+                active_profile = it;
+            }
+
+            profile_pulsating := active_profile && active_profile == it && active_state == .ADDING_NEW_PROFILE;
+            theme := ifx profile_pulsating pulsating_button_theme else profile_button_theme;
+            if it == active_profile && active_state != .ADDING_NEW_PROFILE {
+                theme.frame_color = theme.frame_color_over;
+                theme.surface_color = theme.surface_color_over;
+            }
+
+            pressed, state := our_button(program_rect, it.program, *theme, identifier=it_index, disable_press = active_state == .ADDING_NEW_PROFILE, pulsate=profile_pulsating);
+
+            if pressed {
+                active_profile_index = it_index;
+                finalize_state();
+            }
+
+            program_rect.y += floor(button_height * 1.1 + 1);
         }
 
-        profile_pulsating := active_profile && active_profile == it && active_state == .ADDING_NEW_PROFILE;
-        theme := ifx profile_pulsating pulsating_button_theme else profile_button_theme;
-        if it == active_profile && active_state != .ADDING_NEW_PROFILE {
-            theme.frame_color = theme.frame_color_over;
-            theme.surface_color = theme.surface_color_over;
+        end_scrollable_region(profiles_region, program_rect.x + program_rect.w, program_rect.y, *scroll_value_profiles_region);
+
+        // Is there a better way to snap scrollable region to the end?
+        if need_to_scroll_profiles {
+            scroll_scrollable_region(profiles_region, program_rect.y, *scroll_value_profiles_region);
+            need_to_scroll_profiles = false;
         }
 
-        pressed, state := our_button(program_rect, it.program, *theme, identifier=it_index, disable_press = active_state == .ADDING_NEW_PROFILE, pulsate=profile_pulsating);
+        add_button_rect := get_rect(padding, next_y + padding, profiles_width / 2 - 5, button_height);
+        del_button_rect := get_rect(padding + profiles_width / 2 + 5, next_y + padding, profiles_width / 2 - 5, button_height);
 
-        if pressed {
-            active_profile_index = it_index;
+        next_y = add_button_rect.y + add_button_rect.h;
+
+        _, _, add_profile_released := our_button(add_button_rect, "Add", *my_theme.button_theme, /*disable_press = (active_state != .NOTHING)*/);
+        if add_profile_released {
+            subwindow_info_new_profile.open = true;
+            new_profile := array_add(*profiles);
+            new_profile.platform = CURRENT_PLATFORM;
+            active_profile = new_profile;
+            active_profile_index = profiles.count - 1;
+            active_state = .ADDING_NEW_PROFILE;
+            need_to_scroll_profiles = true;
+        }
+
+        _, _, del_profile_released := our_button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_index < 0 || active_state != .NOTHING));
+        if del_profile_released {
+            array_ordered_remove_by_index(*profiles, active_profile_index);
+            if profiles.count {
+                active_profile = *profiles[profiles.count - 1];
+                active_profile_index = profiles.count - 1;;
+            } else {
+                active_profile = null;
+                active_profile_index = -1;
+            }
             finalize_state();
         }
-
-        program_rect.y += floor(button_height * 1.1 + 1);
     }
-
-    end_scrollable_region(profiles_region, program_rect.x + program_rect.w, program_rect.y, *scroll_value_profiles_region);
-
-    // Is there a better way to snap scrollable region to the end?
-    if need_to_scroll_profiles {
-        scroll_scrollable_region(profiles_region, program_rect.y, *scroll_value_profiles_region);
-        need_to_scroll_profiles = false;
-    }
-
-    add_button_rect := get_rect(10, profiles_height + 10 + 5, profiles_width / 2 - 5, button_height);
-    del_button_rect := get_rect(10 + profiles_width / 2 + 5, profiles_height + 10 + 5, profiles_width / 2 - 5, button_height);
-
-    _, _, add_profile_released := our_button(add_button_rect, "Add", *my_theme.button_theme, /*disable_press = (active_state != .NOTHING)*/);
-    if add_profile_released {
-        subwindow_info_new_profile.open = true;
-        new_profile := array_add(*profiles);
-        new_profile.platform = CURRENT_PLATFORM;
-        active_profile = new_profile;
-        active_profile_index = profiles.count - 1;
-        active_state = .ADDING_NEW_PROFILE;
-        need_to_scroll_profiles = true;
-    }
-
-    _, _, del_profile_released := our_button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_index < 0 || active_state != .NOTHING));
-    if del_profile_released {
-        array_ordered_remove_by_index(*profiles, active_profile_index);
-        if profiles.count {
-            active_profile = *profiles[profiles.count - 1];
-            active_profile_index = profiles.count - 1;;
-        } else {
-            active_profile = null;
-            active_profile_index = -1;
-        }
-        finalize_state();
-    }
-
 
     // Global settings
     {
-        base_y := del_button_rect.y + del_button_rect.h + button_height / 1.5;
-        label_rect := get_rect(10, base_y, profiles_width, xx button_font.character_height);
-        theme := my_theme.label_theme;
-        theme.font = header_font;
-        label(label_rect, "Global settings", *theme);
+        label_rect := get_rect(10, next_y + padding, left_side_width, xx button_font.character_height);
+        label(label_rect, "Global settings", *header_theme);
 
-        base_y += xx button_font.character_height + 10;
-        r := get_rect(10, base_y, profiles_width, xx button_font.character_height);
+        next_y += xx button_font.character_height + 10;
+        r := get_rect(10, next_y + padding, left_side_width, xx button_font.character_height);
         changed, state := our_checkbox(r, "Close to tray", close_to_tray, *checkbox_theme);
         if changed {
             close_to_tray ^= changed;
@@ -683,16 +791,17 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     // New Profile subwindow
     //
 
-    right_side_start := profiles_width + 30;
+    right_side_start := left_side_width + 30;
     right_side_width := 500.0;
+    next_y = padding;
 
-    right_side_rect := get_rect(right_side_start, 10, right_side_width, button_height);
+    right_side_rect := get_rect(right_side_start, next_y, right_side_width, button_height);
     {
         theme := my_theme.subwindow_theme;
         // r := profiles_region;
         if !subwindows_initted {
             subwindow_info_new_profile.rect = right_side_rect;
-            subwindow_info_new_profile.rect.h = 500;
+            subwindow_info_new_profile.rect.h = xx window_height;
             subwindow_info_new_profile.title_text = "Select Program";
             subwindow_info_new_profile.draw = draw_new_profile_selector;
             subwindows_initted = true;
@@ -708,8 +817,6 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             }
 
             set_text(active_search, active_search.pre_modification_text, replace_pre_modification_text=false);
-            // active_widget_remove(active_search);
-            // active_search.pending_result_actions |= .TEXT_MODIFIED;
             finalize_state();
             searchbar_should_be_active = true;
         }
@@ -725,9 +832,11 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         // looks slightly off-center, because "Add mapping" button is wider than the scrollable area
         label_theme := my_theme.label_theme;
         label_theme.alignment = .Center;
-        label_width := (right_side_width - 48)/3;
-        label_rect := get_rect(right_side_rect.x + label_width, right_side_rect.y, label_width, right_side_rect.h);
+        label_width := (right_side_width - 50);
+        label_rect := get_rect(right_side_rect.x, right_side_rect.y, label_width, right_side_rect.h);
         label(label_rect, "Add mapping", *label_theme);
+
+        next_y = label_rect.y + label_rect.h;
 
         if add_mapping_released && active_state == .NOTHING {
             log("mappings before:\n");
@@ -762,10 +871,12 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     //
     // Mappings
     //
-    mappings_theme := profiles_theme;
+    mappings_theme := my_theme.scrollable_region_theme;
     mappings_theme.scrollbar_size = 0.01;
     mappings_height := 400.0;
-    mappings_rect := get_rect(right_side_start, 10 + right_side_rect.h + 10, right_side_width, mappings_height);
+    mappings_rect := get_rect(right_side_start, next_y + padding, right_side_width, mappings_height);
+
+    next_y = mappings_rect.y + mappings_rect.h;
 
     mappings_region, inside_mappings_region := begin_scrollable_region(mappings_rect, *mappings_theme);
     s := inside_mappings_region;
@@ -862,7 +973,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             set_key_mapping_hook(window);
         }
 
-        del_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1 + dest_rect.w + 1 + 1, s.y, 50, button_height);
+        del_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1 + dest_rect.w + 1 + 1, s.y, button_height, button_height);
         _, _, del_released := our_button(del_rect, "X", *mappings_button_theme, identifier=it_index);
 
         // Delete mapping
@@ -876,6 +987,51 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     }
 
     end_scrollable_region(mappings_region, s.x + s.w, s.y, *scroll_value_mappings_region);
+
+    // Presets
+    {
+        r := get_rect(s.x, next_y + padding, s.w, button_height);
+        label(r, "Presets", *header_theme);
+
+        if active_profile.mappings_array.count > 0 {
+            r.y += button_height - padding;
+            hint_label_theme := my_theme.label_theme;
+            hint_label_theme.font = small_label_font;
+            label(r, "This will override your current mappings", *hint_label_theme);
+        }
+
+        r.w = r.w / 2;
+        r.y += button_height;
+
+        {
+            _, _, wasd_released := our_button(r, "WASD Opposite", theme=*my_theme.button_theme);
+            if wasd_released {
+                set_preset(.WASD, .OPPOSITE);
+            }
+            r.x += r.w + padding;
+            _, _, arrows_released := our_button(r, "Arrows Opposite", theme=*my_theme.button_theme);
+            if arrows_released {
+                set_preset(.ARROWS, .OPPOSITE);
+            }
+            r.x -= r.w + padding;
+        }
+
+        r.y += button_height + 1;
+        {
+            _, _, wasd_released := our_button(r, "WASD Neutral", theme=*my_theme.button_theme);
+            if wasd_released {
+                set_preset(.WASD, .NEUTRAL);
+            }
+            r.x += r.w + padding;
+            _, _, arrows_released := our_button(r, "Arrows Neutral", theme=*my_theme.button_theme);
+            if arrows_released {
+                set_preset(.ARROWS, .NEUTRAL);
+            }
+            r.x -= r.w + padding;
+        }
+
+        next_y = r.y + r.h;
+    }
 
     // if need_to_scroll_mappings_region {
     //     scroll_scrollable_region(mappings_region, s.y, *scroll_value_mappings_region);

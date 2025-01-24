@@ -408,38 +408,6 @@ update_window_events :: () {
         result := PeekMessageW(*msg, null, 0, 0, PM_REMOVE);
         if !result break;
 
-        // This is how we used to handle Alt+Enter on The Witness:
-        // Alt+Enter is not delivered through WM_INPUT, so the combination was handled through WM_(SYS)KEYDOWN messages.
-        /*if msg.message == WM_SYSKEYDOWN {
-            if msg.wParam == VK_RETURN {
-
-                // Toggle full screen upon alt-enter
-                dwMask :: (1 << 29);
-                if (msg.lParam & dwMask) != 0 { // Alt is down also
-                    //display->toggle_fullscreen();
-
-                    event: Event;
-                    event.type = .KEYBOARD;
-                    event.key_pressed = 1;
-                    event.key_code = get_key_code(msg.wParam);
-                    event.packed = 0;  // @Temporary: Unions not currently initialized.
-                    event.shift_pressed = shift_state;
-                    event.ctrl_pressed = ctrl_state;
-                    event.alt_pressed = true;
-
-                    array_add(*events_this_frame, event);
-
-                    // Do not send this message to the window proc, because that produces beep sound.
-                    continue;
-                }
-            }
-        }*/
-
-        // Doing that was also useful to avoid the beeping sound when pressing Alt+key combinations. However, to avoid that
-        // we only need to avoid TranslateMessage. Turns out TranslateMessage enqueues a WM_SYSCHAR message which is the actual
-        // culprit of the beeping sound. Handling WM_SYSCHAR in the message handler and returning 0 prevents the default handling
-        // of the message and avoids the beep.
-
         TranslateMessage(*msg);
         DispatchMessageW(*msg);
     }

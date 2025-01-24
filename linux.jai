@@ -4,7 +4,7 @@
 #load "./libinput.jai";
 #load "./libudev.jai";
 
-CURRENT_PLATFORM := Platform.LINUX;
+CURRENT_PLATFORM :: Platform.LINUX;
 
 // This might backfire, because this is configurable on Linux
 // Might want to allocate it at runtime instead

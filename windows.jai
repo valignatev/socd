@@ -18,7 +18,7 @@ If you interrupt a repeating numpad key with some key not on a numpad, they rece
 after you release the numpad key. So you have to assume that initial numlock only applies to the key code that immediately follows it.
 And any other key code is not numlocked. And non-numlocked key can have extended key flags on it.
 */
-CURRENT_PLATFORM := Platform.WINDOWS;
+CURRENT_PLATFORM :: Platform.WINDOWS;
 
 // TODO: input exposes the same names.
 KEY_RESERVED : u32 : 0;
@@ -134,7 +134,7 @@ low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 
     }
     if bind.mode == .OPPOSITE || bind.mode == .NEUTRAL {
         // Get the state of the opposite key
-        opposite_is_down := kb_real_state[bind_scan];
+        opposite_is_down := kb_real_state[bind.code];
 
         if is_down {
             if opposite_is_down {
@@ -587,7 +587,12 @@ platform_wake_up_main_thread :: () {
 
 
 platform_deinit :: (window: HWND) {
-    Shell_NotifyIconW(.NIM_DELETE, *tray_info);
+    result := Shell_NotifyIconW(.NIM_DELETE, *tray_info);
+    if !result {
+        #import "System";
+        error_code, error_string := get_error_value_and_string();
+        log_error("Coulnd't clean up the tray icon. Error code: %, message: %\n", error_code, error_string);
+    }
 }
 
 
