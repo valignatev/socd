@@ -566,7 +566,8 @@ platform_after_window_created :: (window: HWND) -> success: bool #must {
 platform_init :: () -> success: bool #must, reason: string {
     array_reserve(*_list_of_process_ids, 1000);
     _list_of_process_ids.count = 1000;
-    the_window = FindWindowW(null, utf8_to_wide("Hitboxer",, temp));
+    // TODO: come up with better window class to distinguish us
+    the_window = FindWindowW(utf8_to_wide("Default Window Class"), utf8_to_wide("Hitboxer",, temp));
     if the_window {
         ShowWindow(the_window, SW_SHOW);
         SetForegroundWindow(the_window);

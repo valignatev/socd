@@ -169,10 +169,6 @@ set_preset :: (preset: Preset, mode: Mapping_Mode) {
             mappings[1] = 0xE150; // Down
             mappings[2] = 0xE14B; // Left
             mappings[3] = 0xE14D; // Right
-            // mappings[0] = 0x0048; // Up
-            // mappings[1] = 0x0050; // Down
-            // mappings[2] = 0x004B; // Left
-            // mappings[3] = 0x004D; // Right
         } else #if CURRENT_PLATFORM == .LINUX {
             mappings[0] = KEY_UP; // Up
             mappings[1] = KEY_DOWN; // Down
@@ -544,7 +540,7 @@ serialize_settings :: () -> succes: bool {
 
 finalize_state :: () {
     using current_program_state;
-    if active_state != .ADDING_NEW_PROFILE {
+    if active_state != .ADDING_NEW_PROFILE && active_profile {
         log("mappings after:\n");
         for active_profile.mappings {
             dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));

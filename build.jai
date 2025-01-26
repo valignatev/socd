@@ -6,15 +6,35 @@ build :: () {
         print("Workspace creation failed\n");
         return;
     }
+    optimized := false;
 
     target_options := get_build_options(w);
-
     target_options.output_executable_name = "hitboxer";
-    set_build_options(target_options, w);
-    set_build_options_dc(.{do_output=false});
+    target_options.arithmetic_overflow_check = .FATAL;
+    set_optimization(*target_options, .DEBUG);
 
+    args := target_options.compile_time_command_line;
+
+    set_build_options_dc(.{do_output=false});
     modules_dir := join(#filepath, "modules/Input");
+
+    for arg: args {
+        if arg == {
+            case "release";
+            optimized = true;
+            set_optimization(*target_options, .VERY_OPTIMIZED);
+        }
+    }
+
     remap_import(w, "", "Input", "");
+    set_build_options(target_options, w);
+
+    #if OS == .WINDOWS {
+        if optimized {
+            // This disables runtime console
+            set_build_options_dc(.{append_linker_arguments=.["/SUBSYSTEM:windows", "/ENTRY:mainCRTStartup"]}, w);
+        }
+    }
 
     compiler_begin_intercept(w);
     add_build_file("./main.jai", w);
