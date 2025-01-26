@@ -46,9 +46,9 @@ Presets for WASD and Arrows
 An ability to close the window to tray (highly requested!)
 
 
-## Antivirus situation
+## Windows version, permissions and antiviruses
 
-Yep, functionality of this program is similar to those evil keyloggers that steal your passwords, so antiviruses might not like it. Well, this is a matter of you trusting me, as for any program that you download and run from the Internet.
+Yep, functionality of this program is similar to those evil keyloggers that steal your passwords, so antiviruses might not like it. Well, this is a matter of you trusting me, as for any program that you download and run from the Internet. Also, for some people and some games it only works when run as admin, so try that if it doesn't work otherwise.
 
 
 ## Linux support
