@@ -107,6 +107,7 @@ low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 
     kb_real_state[key_scan_code] = is_down;
 
     bind := get_key_mapping(key_scan_code);
+
     if bind == dummy_bind {
         return CallNextHookEx(null, n_code, wparam, lparam);
     }
@@ -258,10 +259,12 @@ detect_focused_program :: (
     id_event_thread: u32,
     dwms_event_time: u32
 ) #c_call {
+    push_my_context();
     using current_program_state;
     inspected_window := GetForegroundWindow();
     process_id: u32 = 0;
     GetWindowThreadProcessId(inspected_window, *process_id);
+    unset_kb_hook();
 
     if !process_id {
         // Sometimes when you minimize a window nothing is focused for a brief moment,
@@ -271,7 +274,6 @@ detect_focused_program :: (
     }
     focused_program_buffer: [MAX_PATH]u16;
     foreground_process := OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, 0, process_id);
-    push_my_context();
     if !foreground_process {
         // Sometimes we can't open a process (#5 "access denied"). Ignore it I guess.
         if (GetLastError() == 5) {
@@ -292,20 +294,19 @@ detect_focused_program :: (
 
     for profile: profiles {
         if profile.program == focused_program_name && profile.platform == CURRENT_PLATFORM {
-            active_profile_index == it_index;
+            active_profile_index = xx it_index;
             active_profile = *profile;
             set_kb_hook(program_handle);
             return;
         }
     }
-    global_profile := profiles[0];
-    if global_profile.mappings_array.count > 0 {
+    if profiles[0].mappings_array.count > 0 {
         active_profile_index = 0;
-        active_profile = *global_profile;
-        set_kb_hook();
+        active_profile = *profiles[0];
+
+        set_kb_hook(program_handle);
         return;
     }
-    unset_kb_hook();
 }
 
 _list_of_process_ids: [..]u32;

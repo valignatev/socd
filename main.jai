@@ -89,6 +89,7 @@ current_program_state: Program_State;
 dummy_bind := Mapping_Bind.{};
 get_key_mapping :: (source_scan_code: u32) -> Mapping_Bind {
     using current_program_state;
+
     destination := or_return(table_find(*active_profile.mappings, source_scan_code));
     return destination;
 }
@@ -649,6 +650,8 @@ main :: () {
         parse_settings(raw_settings, settings_filename);
     }
     maybe_fixup_settings();
+    active_profile_in_ui = *profiles[active_profile_in_ui_index];
+    active_profile = active_profile_in_ui;
 
     quit := false;
     while !quit {

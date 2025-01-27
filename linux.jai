@@ -119,6 +119,8 @@ detect_focused_program :: () {
                     }
                 }
                 if !hook_is_set_by_profile {
+                    // This is likely a pointer on a stack, I have no idea how it worked,
+                    // Because on Linux it literally dies lmao
                     global_profile := profiles[0];
                     if global_profile.mappings_array.count > 0 {
                         active_profile_index = 0;
