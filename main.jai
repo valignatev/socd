@@ -3,6 +3,7 @@
 FOR SHIPPING:
 - LINUX: Do not grab devices until we are able to create a virtual one. Otherwise we're really fucked
 - Make program selector have a proper height
+- Finalize settings when the program quits
 
 FOR FUTURE:
 - Disallow multiple binds for the same button
@@ -499,6 +500,46 @@ Ignoring the line and trying to continue parsing. Config line was `%`
     }
 }
 
+maybe_fixup_settings :: () {
+    using current_program_state;
+    rewrite_settings := false;
+
+    defer if rewrite_settings {
+        ok := serialize_settings();
+        if !ok {
+            log_error("Coulnd't migrate settings\n");
+        }
+    }
+    // For now, we just check if settings have default profile in it, and if not - add it;
+    default_found := false;
+    default_index := 0;
+    for profiles {
+        if it.program == "Hitboxer Global" {
+            default_found = true;
+            default_index = it_index;
+            break;
+        }
+    }
+
+    default_mappings: Mappings;
+    if !default_found {
+        array_insert_at(*profiles, .{
+            platform=CURRENT_PLATFORM,
+            program="Hitboxer Global",
+        }, 0);
+        rewrite_settings = true;
+    } else if default_index != 0 {
+        profiles[0], profiles[default_index] = profiles[default_index], profiles[0];
+        rewrite_settings = true;
+    }
+
+    if active_profile_index == -1 {
+        active_profile_index = 0;
+        rewrite_settings = true;
+    }
+
+}
+
 serialize_settings :: () -> succes: bool {
     using current_program_state;
     success := false;
@@ -546,7 +587,7 @@ serialize_settings :: () -> succes: bool {
 
 finalize_state :: () {
     using current_program_state;
-    if active_state != .ADDING_NEW_PROFILE && active_profile {
+    if active_state != .ADDING_NEW_PROFILE {
         log("mappings after:\n");
         for active_profile.mappings {
             dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
@@ -600,6 +641,7 @@ main :: () {
     if should_parse_config {
         parse_settings(raw_settings, settings_filename);
     }
+    maybe_fixup_settings();
 
     quit := false;
     while !quit {
@@ -731,16 +773,11 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             need_to_scroll_profiles = true;
         }
 
-        _, _, del_profile_released := our_button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_index < 0 || active_state != .NOTHING));
+        _, _, del_profile_released := our_button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_index <= 0 || active_state != .NOTHING));
         if del_profile_released {
             array_ordered_remove_by_index(*profiles, active_profile_index);
-            if profiles.count {
-                active_profile = *profiles[profiles.count - 1];
-                active_profile_index = profiles.count - 1;;
-            } else {
-                active_profile = null;
-                active_profile_index = -1;
-            }
+            active_profile = *profiles[profiles.count - 1];
+            active_profile_index = profiles.count - 1;;
             finalize_state();
         }
 
@@ -764,7 +801,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
                 active_profile = it;
             }
 
-            profile_pulsating := active_profile && active_profile == it && active_state == .ADDING_NEW_PROFILE;
+            profile_pulsating := active_profile == it && active_state == .ADDING_NEW_PROFILE;
             theme := ifx profile_pulsating pulsating_button_theme else profile_button_theme;
             if it == active_profile && active_state != .ADDING_NEW_PROFILE {
                 theme.frame_color = theme.frame_color_over;
@@ -895,9 +932,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     index_to_remove: s64 = -1;
     dropdown_state_to_clean_up: Dropdown_State;
 
-    // HACK: make dummy active profile instead of this awful null check
-    mappings := ifx active_profile cast([]Mapping) active_profile.mappings_array else Mapping.[];
-    for * mapping: mappings {
+    for * mapping: active_profile.mappings_array {
         button_width := (s.w - 50)/3 - 1;
         source_rect := get_rect(s.x, s.y, button_width, button_height);
         source_name := get_key_name(mapping.source.code);

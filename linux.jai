@@ -39,6 +39,7 @@ NET_NAME_ATOM: xcb_atom_t;
 NET_NAME := "_NET_WM_NAME";
 
 detect_focused_program :: () {
+    using current_program_state;
     // @TODO: Might be useful to detect currently focused program at the start.
     // Theoretically, it would always be us, but there's actually a possibility
     // to click on the icon and switch to other program faster than socd starts.
@@ -61,6 +62,7 @@ detect_focused_program :: () {
     }
 
     net_active_atom = active_reply.atom;
+    defer c_free(active_reply);
 
     screen := xcb_setup_roots_iterator(xcb_get_setup(con)).data;
     root_window := screen.root;
@@ -106,18 +108,32 @@ detect_focused_program :: () {
                 xcb_flush(con);
                 // TODO: Better way to handle the title name, contains is probably not very
                 // robust. Also it's case-sensitive for now :(
+                hook_is_set_by_profile := false;
                 for profile: profiles {
                     if contains(profile.program, name) {
+                        active_profile_index = it_index;
+                        active_profile = *profile;
                         set_kb_hook();
-                    } else {
-                        unset_kb_hook();
+                        hook_is_set_by_profile = true;
+                        break;
                     }
                 }
+                if !hook_is_set_by_profile {
+                    global_profile := profiles[0];
+                    if global_profile.mappings_array.count > 0 {
+                        active_profile_index = 0;
+                        active_profile = *global_profile;
+                        set_kb_hook();
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+
+                unset_kb_hook();
             }
         }
     }
-    c_free(active_reply);
-    return;
 }
 
 _opened_programs: [..]string;
@@ -136,6 +152,10 @@ get_x11_window_name :: (window: u32) -> string {
     name_reply := xcb_get_property_reply(con, name_cookie, *name_error);
     name_old_reply := xcb_get_property_reply(con, name_old_cookie, *name_old_error);
 
+    defer {
+        c_free(name_reply);
+        c_free(name_old_reply);
+    }
 
     // On Sway, I get no reply when the X11 window loses focus and it switches
     // to a Wayland-native application. So I let it be...
@@ -155,9 +175,6 @@ get_x11_window_name :: (window: u32) -> string {
         result.count = name_len;
         result.data = xcb_get_property_value(name_reply);
     }
-
-    c_free(name_reply);
-    c_free(name_old_reply);
 
     return result;
 }
@@ -658,7 +675,7 @@ get_key_name :: (key_scan_code: u32) -> string {
 create_window :: (window_x := 0, window_y := 0, parent: Window_Type = None, background_color_rgb := WC.DEFAULT_WINDOW_CREATION_COLOR, wanted_msaa: s32 = WC.DEFAULT_MSAA) -> Window {
     width := window_width;
     height := window_height;
-    window_name := "Hitboxer";
+    window_name := "Hitboxer v0.10";
     if !x_global_display
         init_global_display();
 

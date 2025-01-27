@@ -258,6 +258,7 @@ detect_focused_program :: (
     id_event_thread: u32,
     dwms_event_time: u32
 ) #c_call {
+    using current_program_state;
     inspected_window := GetForegroundWindow();
     process_id: u32 = 0;
     GetWindowThreadProcessId(inspected_window, *process_id);
@@ -291,9 +292,18 @@ detect_focused_program :: (
 
     for profile: profiles {
         if profile.program == focused_program_name && profile.platform == CURRENT_PLATFORM {
+            active_profile_index == it_index;
+            active_profile = *profile;
             set_kb_hook(program_handle);
             return;
         }
+    }
+    global_profile := profiles[0];
+    if global_profile.mappings_array.count > 0 {
+        active_profile_index = 0;
+        active_profile = *global_profile;
+        set_kb_hook();
+        return;
     }
     unset_kb_hook();
 }
@@ -443,7 +453,7 @@ get_dpi_scale :: (window: Window_Type) -> float {
 create_window :: () -> Window_Type {
     // Windows is very bad at thread-switching by default unless you do this. Sad.
     timeBeginPeriod(1);
-    the_window := create_window(window_width, window_height, "Hitboxer");
+    the_window := create_window(window_width, window_height, "Hitboxer v0.10");
     // We can't specify style in create_window, so change it afterwards.
     // TLDR is that we want a regular window but without an ability to maximize and resize it.
     // SetWindowLongPtrW(the_window, GWL_STYLE, WS_VISIBLE | WS_OVERLAPPED | WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU);
