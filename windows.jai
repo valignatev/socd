@@ -214,26 +214,26 @@ mapping_setting_hook_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s6
                 old_source_code := active_mapping.source.code;
                 // if old_source_code == KEY_RESERVED next_state = .SETTING_DESTINATION;
 
-                old_binding_from_old_source, found := table_find(*active_profile.mappings, old_source_code);
+                old_binding_from_old_source, found := table_find(*active_profile_in_ui.mappings, old_source_code);
                 active_mapping.*.source.code = key_scan_code;
-                table_set(*active_profile.mappings, active_mapping.source.code, active_mapping.destination);
+                table_set(*active_profile_in_ui.mappings, active_mapping.source.code, active_mapping.destination);
 
                 if active_mapping.mode == .OPPOSITE || active_mapping.mode == .NEUTRAL {
-                    table_remove(*active_profile.mappings, active_mapping.destination.code);
-                    table_set(*active_profile.mappings, active_mapping.destination.code, active_mapping.source);
+                    table_remove(*active_profile_in_ui.mappings, active_mapping.destination.code);
+                    table_set(*active_profile_in_ui.mappings, active_mapping.destination.code, active_mapping.source);
                 }
                 // I don't think it matters whether we found it.
-                table_remove(*active_profile.mappings, old_source_code);
+                table_remove(*active_profile_in_ui.mappings, old_source_code);
 
             } else if active_state == .SETTING_DESTINATION {
                 next_state = .NOTHING;
                 old_destination_code := active_mapping.destination.code;
                 active_mapping.*.destination.code = key_scan_code;
 
-                table_set(*active_profile.mappings, active_mapping.source.code, active_mapping.destination);
+                table_set(*active_profile_in_ui.mappings, active_mapping.source.code, active_mapping.destination);
                 if active_mapping.mode == .OPPOSITE || active_mapping.mode == .NEUTRAL {
-                    table_remove(*active_profile.mappings, old_destination_code);
-                    table_set(*active_profile.mappings, active_mapping.destination.code, active_mapping.source);
+                    table_remove(*active_profile_in_ui.mappings, old_destination_code);
+                    table_set(*active_profile_in_ui.mappings, active_mapping.destination.code, active_mapping.source);
                 }
             }
 

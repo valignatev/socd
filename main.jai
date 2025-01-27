@@ -67,7 +67,15 @@ Program_State :: struct {
     active_state: Mapping_State;
     next_state: Mapping_State;
     active_mapping: *Mapping;
+
+    // Profile that's active in the system
+    active_profile_index: s32 = -1;
     active_profile: *Profile;
+
+    // Profile that's selected in the UI
+    active_profile_in_ui_index: s32 = -1;
+    active_profile_in_ui: *Profile;
+
     active_search: *Text_Input_State;
     need_to_scroll_profiles: bool;
     need_to_rerender := false;
@@ -136,8 +144,6 @@ Profile :: struct {
     mappings_array: [..]Mapping;
 }
 
-active_profile_index := -1;
-
 profiles: [..]Profile;
 
 Preset :: enum {
@@ -155,8 +161,8 @@ selected_preset: Preset_Data;
 set_preset :: (preset: Preset, mode: Mapping_Mode) {
     using current_program_state;
 
-    array_reset_keeping_memory(*active_profile.mappings_array);
-    table_reset(*active_profile.mappings);
+    array_reset_keeping_memory(*active_profile_in_ui.mappings_array);
+    table_reset(*active_profile_in_ui.mappings);
 
     mappings: [4]u32;
     if preset == .WASD {
@@ -231,13 +237,13 @@ set_preset :: (preset: Preset, mode: Mapping_Mode) {
         mode=mode,
     };
 
-    table_set(*active_profile.mappings, mapping1.source.code, mapping1.destination);
-    table_set(*active_profile.mappings, mapping2.source.code, mapping2.destination);
-    table_set(*active_profile.mappings, mapping3.source.code, mapping3.destination);
-    table_set(*active_profile.mappings, mapping4.source.code, mapping4.destination);
+    table_set(*active_profile_in_ui.mappings, mapping1.source.code, mapping1.destination);
+    table_set(*active_profile_in_ui.mappings, mapping2.source.code, mapping2.destination);
+    table_set(*active_profile_in_ui.mappings, mapping3.source.code, mapping3.destination);
+    table_set(*active_profile_in_ui.mappings, mapping4.source.code, mapping4.destination);
 
-    array_add(*active_profile.mappings_array, mapping1);
-    array_add(*active_profile.mappings_array, mapping3);
+    array_add(*active_profile_in_ui.mappings_array, mapping1);
+    array_add(*active_profile_in_ui.mappings_array, mapping3);
     finalize_state();
 }
 
@@ -327,6 +333,7 @@ init_settings :: () -> should_parse: bool, config: string, filename: string {
 
 // TODO: Actually write a test for this lol
 parse_settings :: (raw_settings: string, settings_filename: string) {
+    using current_program_state;
     handler: tfh.Text_File_Handler;
     defer tfh.deinit(*handler);
 
@@ -387,7 +394,7 @@ parse_settings :: (raw_settings: string, settings_filename: string) {
                     log("Profile parsed successfully\n");
                     array_add(*profiles, profile);
                     if active {
-                        active_profile_index = profiles.count - 1;
+                        active_profile_in_ui_index = xx (profiles.count - 1);
                     }
                     profile_parsed = true;
                 } else {
@@ -533,8 +540,8 @@ maybe_fixup_settings :: () {
         rewrite_settings = true;
     }
 
-    if active_profile_index == -1 {
-        active_profile_index = 0;
+    if active_profile_in_ui_index == -1 {
+        active_profile_in_ui_index = 0;
         rewrite_settings = true;
     }
 
@@ -565,7 +572,7 @@ serialize_settings :: () -> succes: bool {
             allowed_to_write = true;
         }
 
-        if it_index == active_profile_index append(*b, "active: true\n");
+        if it_index == active_profile_in_ui_index append(*b, "active: true\n");
 
         print_to_builder(*b, "program: %\n", profile.program);
         print_to_builder(*b, "platform: %\n", enum_value_to_name(profile.platform));
@@ -589,7 +596,7 @@ finalize_state :: () {
     using current_program_state;
     if active_state != .ADDING_NEW_PROFILE {
         log("mappings after:\n");
-        for active_profile.mappings {
+        for active_profile_in_ui.mappings {
             dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
             log("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
         }
@@ -767,17 +774,17 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             subwindow_info_new_profile.open = true;
             new_profile := array_add(*profiles);
             new_profile.platform = CURRENT_PLATFORM;
-            active_profile = new_profile;
-            active_profile_index = profiles.count - 1;
+            active_profile_in_ui = new_profile;
+            active_profile_in_ui_index = xx (profiles.count - 1);
             active_state = .ADDING_NEW_PROFILE;
             need_to_scroll_profiles = true;
         }
 
-        _, _, del_profile_released := our_button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_index <= 0 || active_state != .NOTHING));
+        _, _, del_profile_released := our_button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_in_ui_index <= 0 || active_state != .NOTHING));
         if del_profile_released {
-            array_ordered_remove_by_index(*profiles, active_profile_index);
-            active_profile = *profiles[profiles.count - 1];
-            active_profile_index = profiles.count - 1;;
+            array_ordered_remove_by_index(*profiles, active_profile_in_ui_index);
+            active_profile_in_ui = *profiles[profiles.count - 1];
+            active_profile_in_ui_index = xx (profiles.count - 1);
             finalize_state();
         }
 
@@ -797,13 +804,13 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             if it.platform != CURRENT_PLATFORM continue;
             rendered_profiles_count += 1;
 
-            if it_index == active_profile_index {
-                active_profile = it;
+            if it_index == active_profile_in_ui_index {
+                active_profile_in_ui = it;
             }
 
-            profile_pulsating := active_profile == it && active_state == .ADDING_NEW_PROFILE;
+            profile_pulsating := active_profile_in_ui == it && active_state == .ADDING_NEW_PROFILE;
             theme := ifx profile_pulsating pulsating_button_theme else profile_button_theme;
-            if it == active_profile && active_state != .ADDING_NEW_PROFILE {
+            if it == active_profile_in_ui && active_state != .ADDING_NEW_PROFILE {
                 theme.frame_color = theme.frame_color_over;
                 theme.surface_color = theme.surface_color_over;
             }
@@ -811,7 +818,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             pressed, state := our_button(program_rect, it.program, *theme, identifier=it_index, disable_press = active_state == .ADDING_NEW_PROFILE, pulsate=profile_pulsating);
 
             if pressed {
-                active_profile_index = it_index;
+                active_profile_in_ui_index = xx it_index;
                 finalize_state();
             }
 
@@ -872,7 +879,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
         if add_mapping_released && active_state == .NOTHING {
             log("mappings before:\n");
-            for active_profile.mappings {
+            for active_profile_in_ui.mappings {
                 dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
                 log("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
             }
@@ -881,9 +888,9 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
             source := Mapping_Bind.{code=KEY_RESERVED};
             dest := Mapping_Bind.{code=KEY_RESERVED};
-            array_insert_at(*active_profile.mappings_array, .{source=source, destination=dest}, 0);
-            active_mapping = *active_profile.mappings_array[0];
-            table_set(*active_profile.mappings, source.code, dest);
+            array_insert_at(*active_profile_in_ui.mappings_array, .{source=source, destination=dest}, 0);
+            active_mapping = *active_profile_in_ui.mappings_array[0];
+            table_set(*active_profile_in_ui.mappings, source.code, dest);
             set_key_mapping_hook(window);
 
             // need_to_scroll_mappings_region = true;
@@ -932,7 +939,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     index_to_remove: s64 = -1;
     dropdown_state_to_clean_up: Dropdown_State;
 
-    for * mapping: active_profile.mappings_array {
+    for * mapping: active_profile_in_ui.mappings_array {
         button_width := (s.w - 50)/3 - 1;
         source_rect := get_rect(s.x, s.y, button_width, button_height);
         source_name := get_key_name(mapping.source.code);
@@ -948,7 +955,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         if released_source {
             active_state = .SETTING_SOURCE;
             log("mappings before:\n");
-            for active_profile.mappings {
+            for active_profile_in_ui.mappings {
                 dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
                 log("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
             }
@@ -964,7 +971,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         if changed {
             active_mapping = mapping;
             new_mode := cast(Mapping_Mode, mode_state.current_value_pointer.*);
-            destination_ptr := table_find_pointer(*active_profile.mappings, mapping.source.code);
+            destination_ptr := table_find_pointer(*active_profile_in_ui.mappings, mapping.source.code);
             old_mode := destination_ptr.mode;
             destination_ptr.*.mode = new_mode;
             active_mapping.*.source.mode = new_mode;
@@ -973,14 +980,14 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
             if new_mode == .REMAP {
                 if old_mode == .OPPOSITE || old_mode == .NEUTRAL {
-                    table_remove(*active_profile.mappings, destination_ptr.code);
+                    table_remove(*active_profile_in_ui.mappings, destination_ptr.code);
                 }
 
             } else if new_mode == .OPPOSITE || new_mode == .NEUTRAL {
                 if old_mode == .REMAP {
-                    table_set(*active_profile.mappings, destination_ptr.code, .{mode=new_mode, code=mapping.source.code, kind=mapping.source.kind});
+                    table_set(*active_profile_in_ui.mappings, destination_ptr.code, .{mode=new_mode, code=mapping.source.code, kind=mapping.source.kind});
                 } else {
-                    dest_to_source_ptr := table_find_pointer(*active_profile.mappings, destination_ptr.code);
+                    dest_to_source_ptr := table_find_pointer(*active_profile_in_ui.mappings, destination_ptr.code);
                     if dest_to_source_ptr dest_to_source_ptr.mode = new_mode;
                 }
             }
@@ -1065,7 +1072,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
         }
         if wasd_opposite_released || wasd_neutral_released || arrows_opposite_released || arrows_neutral_released {
-            if active_profile.mappings_array.count > 0 {
+            if active_profile_in_ui.mappings_array.count > 0 {
                 subwindow_info_presets_confirmation.open = true;
             } else {
                 set_preset(selected_preset.preset, selected_preset.mode);
@@ -1102,8 +1109,8 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         } else if profiles.count && profiles[profiles.count -1].program == "" {
             array_ordered_remove_by_index(*profiles, profiles.count - 1);
             if profiles.count {
-                active_profile = *profiles[profiles.count - 1];
-                active_profile_index = profiles.count - 1;;
+                active_profile_in_ui = *profiles[profiles.count - 1];
+                active_profile_in_ui_index = xx (profiles.count - 1);
             }
 
             set_text(active_search, active_search.pre_modification_text, replace_pre_modification_text=false);
@@ -1125,12 +1132,12 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     Simp.swap_buffers(window);
 
     if index_to_remove >= 0 {
-        mapping_to_remove := active_profile.mappings_array[index_to_remove];
-        table_remove(*active_profile.mappings, mapping_to_remove.source.code);
+        mapping_to_remove := active_profile_in_ui.mappings_array[index_to_remove];
+        table_remove(*active_profile_in_ui.mappings, mapping_to_remove.source.code);
         if mapping_to_remove.mode == .OPPOSITE || mapping_to_remove.mode == .NEUTRAL {
-            table_remove(*active_profile.mappings, mapping_to_remove.destination.code);
+            table_remove(*active_profile_in_ui.mappings, mapping_to_remove.destination.code);
         }
-        array_ordered_remove_by_index(*active_profile.mappings_array, index_to_remove);
+        array_ordered_remove_by_index(*active_profile_in_ui.mappings_array, index_to_remove);
         table_remove(*state_table, dropdown_state_to_clean_up.hash);
 
         index_to_remove = -1;

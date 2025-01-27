@@ -111,7 +111,7 @@ detect_focused_program :: () {
                 hook_is_set_by_profile := false;
                 for profile: profiles {
                     if contains(profile.program, name) {
-                        active_profile_index = it_index;
+                        active_profile_index = xx it_index;
                         active_profile = *profile;
                         set_kb_hook();
                         hook_is_set_by_profile = true;
@@ -429,7 +429,7 @@ handle_libinput_event :: (event: *libinput_event, uinput_fd: s32) {
             if ev.value == IS_DOWN && ev.type == EV_KEY {
                 if active_state == .SETTING_SOURCE {
                     print("mappings before:\n");
-                    for active_profile.mappings {
+                    for active_profile_in_ui.mappings {
                         dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
                         print("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
                     }
@@ -437,21 +437,21 @@ handle_libinput_event :: (event: *libinput_event, uinput_fd: s32) {
                     old_source_code := active_mapping.source.code;
                     if old_source_code == KEY_RESERVED next_state = .SETTING_DESTINATION;
 
-                    old_binding_from_old_source, found := table_find(*active_profile.mappings, old_source_code);
+                    old_binding_from_old_source, found := table_find(*active_profile_in_ui.mappings, old_source_code);
                     print("Old source is %\n", old_binding_from_old_source);
 
                     active_mapping.*.source.code = ev.code;
-                    table_set(*active_profile.mappings, active_mapping.source.code, active_mapping.destination);
+                    table_set(*active_profile_in_ui.mappings, active_mapping.source.code, active_mapping.destination);
 
                     if active_mapping.mode == .OPPOSITE || active_mapping.mode == .NEUTRAL {
-                        table_remove(*active_profile.mappings, active_mapping.destination.code);
-                        table_set(*active_profile.mappings, active_mapping.destination.code, active_mapping.source);
+                        table_remove(*active_profile_in_ui.mappings, active_mapping.destination.code);
+                        table_set(*active_profile_in_ui.mappings, active_mapping.destination.code, active_mapping.source);
                     }
                     // I don't think it matters whether we found it.
-                    table_remove(*active_profile.mappings, old_source_code);
+                    table_remove(*active_profile_in_ui.mappings, old_source_code);
 
                     print("mappings after:\n");
-                    for active_profile.mappings {
+                    for active_profile_in_ui.mappings {
                         dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
                         print("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
                     }
@@ -462,10 +462,10 @@ handle_libinput_event :: (event: *libinput_event, uinput_fd: s32) {
                     old_destination_code := active_mapping.destination.code;
                     active_mapping.*.destination.code = ev.code;
 
-                    table_set(*active_profile.mappings, active_mapping.source.code, active_mapping.destination);
+                    table_set(*active_profile_in_ui.mappings, active_mapping.source.code, active_mapping.destination);
                     if active_mapping.mode == .OPPOSITE || active_mapping.mode == .NEUTRAL {
-                        table_remove(*active_profile.mappings, old_destination_code);
-                        table_set(*active_profile.mappings, active_mapping.destination.code, active_mapping.source);
+                        table_remove(*active_profile_in_ui.mappings, old_destination_code);
+                        table_set(*active_profile_in_ui.mappings, active_mapping.destination.code, active_mapping.source);
                     }
                     log("Set destination %\n", ev.code);
                 }
