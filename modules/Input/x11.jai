@@ -1,3 +1,4 @@
+
 #import "X11";
 #import "String";  // @Cleanup: Remove this dependency on String?
 
@@ -10,93 +11,84 @@ get_key_code :: (key: KeySym) -> Key_Code {
     // Modified get_key_code() by Vladislav Morozov,
     // subject to CC0 1.0 Universal.
 
-     using Key_Code;
-     // non-ascii ordered as in ./module.jai/Key_Code
-     if key == XK_BackSpace
-         return BACKSPACE;
-     if key == XK_Tab
-         return TAB;
-     if key == XK_Return
-         return ENTER;
-     if key == XK_Escape
-         return ESCAPE;
+    using Key_Code;
+
+    // non-ascii ordered as in ./module.jai/Key_Code
+    if key == XK_BackSpace
+        return BACKSPACE;
+    if key == XK_Tab || key == XK_KP_Tab || key == XK_ISO_Left_Tab
+        return TAB;
+    if key == XK_Return
+        return ENTER;
+    if key == XK_Escape
+        return ESCAPE;
 
 
-     if key == XK_Delete
-         return DELETE;
+    if key == XK_Delete || key == XK_KP_Delete
+        return DELETE;
 
 
-     if key == XK_Up
-         return ARROW_UP;
-     if key == XK_Down
-         return ARROW_DOWN;
-     if key == XK_Left
-         return ARROW_LEFT;
-     if key == XK_Right
-         return ARROW_RIGHT;
+    if key == XK_Up || key == XK_KP_Up
+        return ARROW_UP;
+    if key == XK_Down || key == XK_KP_Down
+        return ARROW_DOWN;
+    if key == XK_Left || key == XK_KP_Left
+        return ARROW_LEFT;
+    if key == XK_Right || key == XK_KP_Right
+        return ARROW_RIGHT;
 
 
-     if key == XK_Page_Up
-         return PAGE_UP;
-     if key == XK_Page_Down
-         return PAGE_DOWN;
+    if key == XK_Page_Up || key == XK_KP_Page_Up
+        return PAGE_UP;
+    if key == XK_Page_Down || key == XK_KP_Page_Down
+        return PAGE_DOWN;
 
 
-     if key == XK_Home
-         return HOME;
-     if key == XK_End
-         return END;
+    if key == XK_Home || key == XK_KP_Home
+        return HOME;
+    if key == XK_End || key == XK_KP_End
+        return END;
 
 
-     if key == 0xff63 // XK_Insert @Cleanup add to modules/X11/module.jai
-         return INSERT;
+    if key == XK_Insert || key == XK_KP_Insert
+        return INSERT;
 
 
-     if key == XK_Pause
-         return PAUSE;
-     if key == XK_Scroll_Lock
-         return SCROLL_LOCK;
+    if key == XK_Pause
+        return PAUSE;
+    if key == XK_Scroll_Lock
+        return SCROLL_LOCK;
 
 
-     if (key == XK_Alt_L) || (key == XK_Alt_R)
-     || (key == 0xfe03) // AltGr #on_my_machine @Cleanup
-         return ALT;
-     if (key == XK_Control_L) || (key == XK_Control_R)
-         return CTRL;
-     if (key == XK_Shift_L) || (key == XK_Shift_R)
-         return SHIFT;
-     if (key == XK_Meta_L) || (key == XK_Meta_R)
-     || (key == XK_Super_L) || (key == XK_Super_R)
-     || (key == XK_Hyper_L) || (key == XK_Hyper_R)
-         return META;
+    if (key == XK_Alt_L) || (key == XK_Alt_R) || (key == XK_ISO_Level3_Shift)
+        return ALT;
+    if (key == XK_Control_L) || (key == XK_Control_R)
+        return CTRL;
+    if (key == XK_Shift_L) || (key == XK_Shift_R)
+        return SHIFT;
+    if (key == XK_Meta_L) || (key == XK_Meta_R)
+    || (key == XK_Super_L) || (key == XK_Super_R)
+    || (key == XK_Hyper_L) || (key == XK_Hyper_R)
+        return META;
 
 
-     if key >= XK_F1 && key <= XK_F24
-         return (cast(Key_Code) (key - XK_F1))+F1;
+    if key >= XK_F1 && key <= XK_F24
+        return (cast(Key_Code) (key - XK_F1))+F1;
 
 
-     if key == 0xff61 // XK_Print_Screen @Cleanup add to modules/X11/module.jai
-         return PRINT_SCREEN;
+    if key == XK_Print
+        return PRINT_SCREEN;
 
 
-     if key == 0xff67 // XK_Menu @Cleanup add to modules/X11/module.jai
-         return UNKNOWN;
+    if key == XK_Menu
+        return UNKNOWN;
 
-     key = key & 0xFF; // @Cleanup Why is this here? (It mapped Menu to "G". What else?)
+    key = key & 0xFF; // @Cleanup Why is this here? (It mapped Menu to "G". What else?)
 
-     gen_ascii_LUT :: () -> [0xFF] Key_Code {
-         lut : [0xFF] Key_Code; // Filled with UNKNOWN (=0)
-         for (#char "a")..(#char "z") lut[it] = cast(Key_Code) (it - 0x20);
-         for (#char "0")..(#char "9") lut[it] = cast(Key_Code) it;
-         for cast([]u8)"`;'\\[]-=.,/+ \n" lut[it] = cast(Key_Code) it;
-         //print("\n\n%\n\n", FormatArray.{value=cast([]u32)lut,stop_printing_after_this_many_elements=-1}); @Cleanup do this once it's fixed
-         //assert(false, "Copypaste the LUT into this file and comment out this #run");
-         return lut;
-     }
+    if (key >= #char "a") && (key <= #char "z") return cast(Key_Code) (key - 0x20);
+    if key > 32 && key < 127 return cast(Key_Code) key;
 
-     LUT : [0xFF] Key_Code : #run gen_ascii_LUT();
-
-     return LUT[key];
+    return UNKNOWN;
 }
 
 #scope_file
@@ -501,6 +493,8 @@ update_x11_window_events :: () {
         xev: XEvent;
         XNextEvent(display, *xev);
 
+        if XFilterEvent(*xev, None) continue;
+
         if xev.type == {
 
           case ClientMessage;
@@ -534,25 +528,58 @@ update_x11_window_events :: () {
             if xev.xkey.state & Mod1Mask
                 event.alt_pressed = true;
 
-            keysym := XkbKeycodeToKeysym(display, xx xev.xkey.keycode, 0, 0 /* English lowercase group*/);
-            event.type = .KEYBOARD;
-            event.key_pressed = 1;
-            event.key_code = get_key_code(keysym);
+            status: Status;
+            keysym: KeySym;
+            text: [16]u32;
+            lookup_count := XwcLookupString(x_global_input_context, *xev.xkey, xx text.data, xx text.count, *keysym, *status);
+
+            has_keysym := (status == XLookupKeySym || status == XLookupBoth);
+            has_text := (status == XLookupChars || status == XLookupBoth);
+
+
+            if has_keysym {
+                if xev.xkey.state & ShiftMask   event.shift_pressed = true;
+                if xev.xkey.state & ControlMask event.ctrl_pressed = true;
+                if xev.xkey.state & Mod1Mask    event.alt_pressed = true;
+                if xev.xkey.state & Mod4Mask    event.cmd_meta_pressed = true;
+
+                event.type = .KEYBOARD;
+                event.key_pressed = 1;
+                event.key_code = get_key_code(keysym);
+
+                for 0..lookup_count - 1 {
+                    utf32 := text[it];
+                    if utf32 >= 32 && utf32 != 127 event.text_input_count += 1;
+                }
+
+                if event.key_code == {
+                    case .SHIFT; event.shift_pressed = true;
+                    case .CTRL;  event.ctrl_pressed = true;
+                    case .ALT;   event.alt_pressed = true;
+                    case .META;  event.cmd_meta_pressed = true;
+                }
+
+                array_add(*events_this_frame, event);
+                input_button_states[event.key_code] = (Key_Current_State.START | Key_Current_State.DOWN);
+            }
+            
             event.shift_pressed = cast(bool) shift;
 
-            input_button_states[event.key_code] = (Key_Current_State.START | Key_Current_State.DOWN);
+            if has_text {
+                for 0..lookup_count - 1 {
+                    utf32 := text[it];
+                    if utf32 < 32 || utf32 == 127 continue;
 
-            array_add(*events_this_frame, event);
+                    char_event: Event;
+                    char_event.type = .TEXT_INPUT;
+                    char_event.key_pressed = 1;
+                    char_event.key_code = get_key_code(keysym);
+                    char_event.utf32 = utf32;
 
-            keysym = XkbKeycodeToKeysym(display, xx xev.xkey.keycode, 0, shift);
-            if (keysym < XK_BackSpace || keysym > XK_Hyper_R) && !event.ctrl_pressed {
-                //WM_CHAR equivalent
-                char_event: Event;
-                char_event.type = .TEXT_INPUT;
-                char_event.utf32 = xx keysym; // luckily most Xkb keys are directly mapped to Unicode characters @FixME which keys dont map to utf32 ??
-
-                array_add(*events_this_frame, char_event);
+                    array_add(*events_this_frame, char_event);
+                }
             }
+
         case KeyRelease;
             // For some odd reason X11 generates KeyRelease followed by a near identical KeyPress to simulate repeat events so we have to filter that out
             if XEventsQueued(display, QueuedAfterReading) {

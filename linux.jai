@@ -6,6 +6,8 @@
 
 CURRENT_PLATFORM :: Platform.LINUX;
 
+uinput_fd: s32 = -1;
+
 // This might backfire, because this is configurable on Linux
 // Might want to allocate it at runtime instead
 MAX_PATH_LENGTH :: 4096;
@@ -245,8 +247,6 @@ close_descriptors :: (raw_descriptors: *void) -> *void #c_call {
             if !it break;
             error := close(it);
             if error {
-                System :: #import "System";
-
                 code, s := System.get_error_value_and_string();
                 log_error("Closing file descriptor '%' failed: code %, '%'.\n", it, code, s);
             } else {
@@ -292,12 +292,21 @@ is_virtual_device :: (path: string) -> bool {
     defer array_free(devices_raw);
     devices_str : string = xx devices_raw;
 
+    // This should never fail
+    _, _, target_event := split_from_right(path, "/");
+
     devices := split(devices_str, "\n\n");
+    get_handlers := false;
     for devices {
         device_props := split(it, "\n");
         for prop: device_props {
             if prop == "N: Name=\"SOCD keyboard\"" {
-                return true;
+                get_handlers = true;
+            }
+            if get_handlers && begins_with(prop, "H: Handlers=") {
+                handlers := split(slice(prop, 12, prop.count), " ",, temp);
+                result := array_find(handlers, target_event);
+                return result;
             }
         }
     }
@@ -305,93 +314,26 @@ is_virtual_device :: (path: string) -> bool {
 }
 
 start_logging_keys_in_a_thread :: (arg: *void) -> *void #c_call {
-    push_context {
-
-        uinput_fd := open("/dev/uinput", O_RDWR | O_NONBLOCK);
-
-        if uinput_fd < 0 {
-
-            System :: #import "System";
-
-            code, s := System.get_error_value_and_string();
-            log_error("Could not open \"/dev/uinput\" for creating a virtual keyboard, error: %\n", s);
-            log_error("Reopen the program with root privileges, or configure required udev rules\n");
-            return null;
+    push_my_context();
+    fd := libinput_get_fd(libinput);
+    // TODO: apparently, libinput doesn't handle gamepads. So I need to open and add them to
+    // this descriptor set myself. Sadge.
+    fds := pollfd.{
+        fd,
+        POLLIN,
+        0
+    };
+    while true {
+        poll_result := poll(*fds, 1, -1);
+        if poll_result <= 0 {
+            log_error("libinput is cooked: % (ERROR REASON HERE)\n", errno());
         }
 
-        result := ioctl(uinput_fd, UI_SET_EVBIT, EV_KEY);
-        if result == -1 {
-            System :: #import "System";
-
-            code, s := System.get_error_value_and_string();
-            log_error("Coulnd't initialize virtual keyboard: %, %\n", code, s);
-            return null;
+        libinput_dispatch(libinput);
+        while event := libinput_get_event(libinput) {
+            handle_libinput_event(event, uinput_fd);
+            libinput_event_destroy(event);
         }
-
-        // Here I'm just trying to create a virtual keyboard with enough keys to hopefully
-        // cover most usecases. It would be more reliable to first accumulate the union of all
-        // available keys in open_restricted, and then use those keys here. But this is ok for now.
-        // Inclusive intentionally
-        for KEY_ESC..cast(u32)KEY_MICMUTE {
-            result := ioctl(uinput_fd, UI_SET_KEYBIT, it);
-            if result == -1 {
-                log_error("Couldn't set keybit: %\n", it);
-            }
-        }
-        for KEY_FN..cast(u32)KEY_FN_RIGHT_SHIFT {
-            result := ioctl(uinput_fd, UI_SET_KEYBIT, it);
-            if result == -1 {
-                log_error("Couldn't set keybit: %\n", it);
-            }
-        }
-
-        usetup: uinput_setup;
-        usetup.id.bustype = BUS_USB;
-        usetup.id.vendor = 0x6666;
-        usetup.id.product = 0x6665;
-        usetup.name = xx "SOCD keyboard".data;
-
-        result = ioctl(uinput_fd, UI_DEV_SETUP, *usetup);
-        if result == -1 {
-            System :: #import "System";
-
-            code, s := System.get_error_value_and_string();
-            log_error("Couldn't setup a virtual keyboard: %, %\n", code, s);
-            return null;
-        }
-        // Should I really call destroy? Seems like Linux destroys my virtual keyboard anyway
-        // defer ioctl(uinput_fd, UI_DEV_DESTROY);
-        result = ioctl(uinput_fd, UI_DEV_CREATE);
-        if result == -1 {
-            System :: #import "System";
-
-            code, s := System.get_error_value_and_string();
-            log_error("Couldn't create a virtual keyboard: %, %\n", code, s);
-            return null;
-        }
-
-        fd := libinput_get_fd(libinput);
-        // TODO: apparently, libinput doesn't handle gamepads. So I need to open and add them to
-        // this descriptor set myself. Sadge.
-        fds := pollfd.{
-            fd,
-            POLLIN,
-            0
-        };
-        while true {
-            poll_result := poll(*fds, 1, -1);
-            if poll_result <= 0 {
-                log_error("libinput is cooked: % (ERROR REASON HERE)\n", errno());
-            }
-
-            libinput_dispatch(libinput);
-            while event := libinput_get_event(libinput) {
-                handle_libinput_event(event, uinput_fd);
-                libinput_event_destroy(event);
-            }
-        }
-        // It's not necessary, OS should do that anyway
-        close(uinput_fd);
     }
 
     return null;
@@ -802,7 +744,7 @@ create_window :: (window_x := 0, window_y := 0, parent: Window_Type = None, back
         null,
     );
 
-    if x_global_input_context {
+    if !x_global_input_context {
         log_error("Could not create X11 input context\n");
     }
 
@@ -869,32 +811,31 @@ uinput_device_created := false;
 virtual_device_path: string;
 
 open_restricted :: (path_raw: *u8, flags: s32, user_data: *void) -> s32 #c_call {
-    push_context {
-        path := to_string(path_raw);
+    push_my_context();
+    path := to_string(path_raw);
 
-        if !uinput_device_created && is_virtual_device(path) {
-            uinput_device_created = true;
-            virtual_device_path = path;
+    if !uinput_device_created && is_virtual_device(path) {
+        uinput_device_created = true;
+        virtual_device_path = path;
 
-            print("Bailed out of multiplexing a virtual keyboard %\n", path);
-            return -1;
-        }
-
-        fd := open(path_raw, flags);
-
-        table_add(*libinput_opened_devices, path, fd);
-        if is_keyboard(fd, path) {
-            print("%\n", path);
-            grab_result := ioctl(fd, EVIOCGRAB, 1);
-            if grab_result < 0 {
-                log_error("Could not grab % for controlling its inputs\n", path);
-            }
-            return fd;
-        }
-        // TODO: port device closing shenanigans that offload it into a separate thread.
-        // close(fd);
+        print("Bailed out of multiplexing a virtual keyboard %\n", path);
         return -1;
     }
+
+    fd := open(path_raw, flags);
+
+    table_add(*libinput_opened_devices, path, fd);
+    if is_keyboard(fd, path) && uinput_fd > 0 {
+        print("%\n", path);
+        grab_result := ioctl(fd, EVIOCGRAB, 1);
+        if grab_result < 0 {
+            log_error("Could not grab % for controlling its inputs\n", path);
+        }
+        return fd;
+    }
+    // TODO: port device closing shenanigans that offload it into a separate thread.
+    // close(fd);
+    return -1;
 }
 
 close_restricted :: (fd: s32, user_data: *void) #c_call {
@@ -905,6 +846,62 @@ interface_: libinput_interface = .{open_restricted, close_restricted};
 
 
 platform_init :: () -> success: bool #must, init_reason: string {
+    {
+        uinput_fd = open("/dev/uinput", O_RDWR | O_NONBLOCK);
+
+        if uinput_fd < 0 {
+            code, s := System.get_error_value_and_string();
+            // TODO: better error - hint the user at which exactly they need to configure in udev
+            error_string := tprint("Could not open \"/dev/uinput\" for creating a virtual keyboard, error: %\n", s);
+            error_string = tprint("% Reopen the program with root privileges, or configure required udev rules\n", error_string);
+            return false, error_string;
+        }
+
+        result := ioctl(uinput_fd, UI_SET_EVBIT, EV_KEY);
+        if result == -1 {
+            code, s := System.get_error_value_and_string();
+            error_string := tprint("Coulnd't initialize virtual keyboard: %, %\n", code, s);
+            return false, error_string;
+        }
+
+        // Here I'm just trying to create a virtual keyboard with enough keys to hopefully
+        // cover most usecases. It would be more reliable to first accumulate the union of all
+        // available keys in open_restricted, and then use those keys here. But this is ok for now.
+        // Inclusive intentionally
+        for KEY_ESC..cast(u32)KEY_MICMUTE {
+            result := ioctl(uinput_fd, UI_SET_KEYBIT, it);
+            if result == -1 {
+                log_error("Couldn't set keybit: %\n", it);
+            }
+        }
+        for KEY_FN..cast(u32)KEY_FN_RIGHT_SHIFT {
+            result := ioctl(uinput_fd, UI_SET_KEYBIT, it);
+            if result == -1 {
+                log_error("Couldn't set keybit: %\n", it);
+            }
+        }
+
+        usetup: uinput_setup;
+        usetup.id.bustype = BUS_USB;
+        usetup.id.vendor = 0x6666;
+        usetup.id.product = 0x6665;
+        usetup.name = xx "SOCD keyboard".data;
+
+        result = ioctl(uinput_fd, UI_DEV_SETUP, *usetup);
+        if result == -1 {
+            code, s := System.get_error_value_and_string();
+            error_string := tprint("Couldn't setup a virtual keyboard: %, %\n", code, s);
+            return false, error_string;
+        }
+        // Should I really call destroy? Seems like Linux destroys my virtual keyboard anyway
+        result = ioctl(uinput_fd, UI_DEV_CREATE);
+        if result == -1 {
+            code, s := System.get_error_value_and_string();
+            error_string := tprint("Couldn't create a virtual keyboard: %, %\n", code, s);
+            return false, error_string;
+        }
+    }
+
 
     // x11 and libxkbcommon
     {
@@ -988,9 +985,8 @@ platform_after_window_created :: (window: Window_Type) -> bool #must {
 }
 
 platform_deinit :: (window: u64) {
-    // A funny "pretend to be fast" hack. On Linux, closing a lot of file descriptors
-    // takes a while, so we can close the window instantly as if our program was very fast!
-    XWithdrawWindow(x_global_display, window, 0);
+    // If I don't destroy the virtual keyboard manually, I get stuck inputs when the program quits.
+    ioctl(uinput_fd, UI_DEV_DESTROY);
 }
 
 platform_wait_for_message :: () {
@@ -1007,6 +1003,7 @@ c_free :: (memory: *void) #foreign libc "free";
 #import "Memory";
 #import "POSIX";
 #import "Sort";
+#import "String";
 #import "X11";
 // To expose module-scoped WC.DEFAULT_WINDOW_CREATION_COLOR and WC.DEFAULT_MSAA
 WC :: #import "Window_Creation";

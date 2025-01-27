@@ -247,6 +247,12 @@ HEADER
 
 
 my_logger :: (message: string, data: *void, info: Log_Info) {
+
+#if DEBUG {
+    runtime_support_default_logger(message, data, info);
+    return;
+}
+
     now := current_time_consensus();
     calendar_utc := to_calendar(now, .UTC);
     date_s := calendar_to_string(calendar_utc);
@@ -295,7 +301,7 @@ push_my_context :: () #expand {
 
 init_settings :: () -> should_parse: bool, config: string, filename: string {
 
-    found, exe_path, exe_name := split_from_right(get_path_of_running_executable(), #char "/");
+    found, exe_path, exe_name := split_from_right(System.get_path_of_running_executable(), #char "/");
     if !found {
         log_error("Error: unable to find path to the executable to find the config file next to it. Your settings won't be saved!\n");
         return false, "", "";
@@ -498,7 +504,7 @@ serialize_settings :: () -> succes: bool {
     success := false;
     allowed_to_write := false;
 
-    found, exe_path, exe_name := split_from_right(get_path_of_running_executable(), #char "/");
+    found, exe_path, exe_name := split_from_right(System.get_path_of_running_executable(), #char "/");
     if !found {
         log_error("Error: unable to find path to the executable to find the config file next to it. Your settings changes won't be saved!\n");
         return success;
@@ -850,12 +856,14 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     //
     // EMERGENCY QUIT BUTTON. TODO: only enable it in debug mode
     //
-    // close_start := right_side_rect.w + right_side_rect.x + 10;
-    // close_rect := get_rect(close_start, 10, button_height, button_height);
-    // _, _, close_released := our_button(close_rect, "X", *my_theme.button_theme);
-    // if close_released {
-    //     exit(1);
-    // }
+    if DEBUG {
+        close_start := right_side_rect.w + right_side_rect.x + 10;
+        close_rect := get_rect(close_start, 10, button_height, button_height);
+        _, _, close_released := our_button(close_rect, "X", *my_theme.button_theme);
+        if close_released {
+            exit(1);
+        }
+    }
 
     //
     // Mappings
@@ -1199,7 +1207,7 @@ scroll_scrollable_region :: (state: *Scrollable_Region_State, max_y: float, scro
 
 init_fonts :: (window: Window_Type) {
     if !working_directory_set {
-        path := path_strip_filename(get_path_of_running_executable());
+        path := path_strip_filename(System.get_path_of_running_executable());
         set_working_directory(path);
         working_directory_set = true;
     }
@@ -1233,7 +1241,7 @@ Simp :: #import "Simp";
 using GetRect :: #import "GetRect_LeftHanded";
 #import "Math";
 #import "String";
-#import "System";
+System :: #import "System";
 #import "Window_Creation";
 tfh :: #import "Text_File_Handler";
 #import "Reflection";

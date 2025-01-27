@@ -39,6 +39,7 @@ build :: () {
     compiler_begin_intercept(w);
     add_build_file("./main.jai", w);
 
+    add_build_string(tprint("DEBUG :: %;", ifx !optimized then "true" else "false"), w);
     or_return_add_source(w);
 
     while true {
