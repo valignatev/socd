@@ -719,7 +719,7 @@ create_window :: (window_x := 0, window_y := 0, parent: Window_Type = None, back
 
     swa: XSetWindowAttributes;
     swa.colormap = cmap;
-    swa.event_mask = ExposureMask | KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | StructureNotifyMask | FocusChangeMask | EnterWindowMask | LeaveWindowMask | PointerMotionHintMask | PointerMotionMask;
+    swa.event_mask = ExposureMask | KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | StructureNotifyMask | FocusChangeMask | EnterWindowMask | LeaveWindowMask | PointerMotionMask;
     swa.background_pixel = background_color.pixel;
     win := XCreateWindow(d, parent, xx window_x, xx window_y, xx width, xx height, 0, vi.depth, InputOutput, vi.visual, cast(u64) (CWColormap | CWEventMask), *swa);
 
@@ -1009,7 +1009,7 @@ platform_deinit :: (window: u64) {
 }
 
 platform_wait_for_message :: () {
-    //
+    x11_wait_for_events();
 }
 
 platform_wake_up_main_thread :: () {
@@ -1024,5 +1024,6 @@ c_free :: (memory: *void) #foreign libc "free";
 #import "Sort";
 #import "String";
 #import "X11";
+#import "Input";
 // To expose module-scoped WC.DEFAULT_WINDOW_CREATION_COLOR and WC.DEFAULT_MSAA
 WC :: #import "Window_Creation";

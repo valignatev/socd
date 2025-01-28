@@ -1,5 +1,6 @@
 
 #import "X11";
+#import "POSIX";
 #import "String";  // @Cleanup: Remove this dependency on String?
 
 set_custom_cursor_handling :: (is_custom: bool) {
@@ -90,6 +91,62 @@ get_key_code :: (key: KeySym) -> Key_Code {
 
     return UNKNOWN;
 }
+
+
+x11_wait_for_events :: () {
+
+    x11_file_descriptor := XConnectionNumber(x_global_display);
+    xev: XEvent;
+    needs_flush := true;
+    while true {
+        // If this returns non-zero, we already know for a fact that there are some
+        // events that we need to handle, so just don't bother with a poll
+        if XQLength(x_global_display) {
+            break;
+        }
+
+        if needs_flush XFlush(x_global_display);
+
+        pfd: [1]pollfd;
+        pfd[0].fd = x11_file_descriptor;
+        pfd[0].events = POLLIN;
+        result := poll(pfd.data, xx pfd.count, -1);
+
+        if result < 0 {
+            error := errno();
+            if error == EINTR {
+                // A signal occurred before any event, retry
+                continue;
+            }
+            // Returning on other errors. If one of these happens the application
+            // is most likely to crash anyway
+            if error == EINVAL {
+                log_error("Can't poll on X11 file descriptor. Max amount of opened file descriptors (RLIMIT_NOFILE) exceeded.\n");
+            } else if error == ENOMEM {
+                log_error("poll(2) failed with ENOMEM - it is unable to allocate memory for its internal use\n");
+            } else if error == EFAULT {
+                log_error("X11 poll is configured incorrectly - file descriptors are outside of the accessible address space\n");
+            } else {
+                log_error("Unknown error happened while waiting on X11 file descriptor. Error code: %\n", error);
+            }
+            return;
+        }
+
+        if pfd[0].revents & POLLIN {
+            queue_length := XPending(x_global_display);
+
+            if queue_length == 0 {
+                // We don't need to do XFlush at the start of the next wait iteration
+                // because XPending does one if the queue is empty
+                needs_flush = false;
+                continue;
+            }
+            break;
+        }
+        needs_flush = true;
+    }
+}
+
 
 #scope_file
 
@@ -479,7 +536,6 @@ maybe_handle_xdnd_drop_events :: (display: *Display, xevent: *XEvent, drop_info:
 
     return false;
 }
-
 
 update_x11_window_events :: () {
     using Key_Code;

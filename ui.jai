@@ -10,7 +10,6 @@ our_button :: (r: GR.Rect, text: string, theme: *GR.Button_Theme = null, identif
 
     if pulsate {
         need_to_rerender = true;
-        // GR.update_production_value_button(r, false, state, .OVER, *pulsating_button_theme);
         GR.update_production_value_button(r, false, state, .OVER, theme);
     }
 

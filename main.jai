@@ -660,7 +660,9 @@ main :: () {
         Clamp(*dt, 0, 0.1);
         last_time = current_time;
 
-        platform_wait_for_message();
+        if !need_to_rerender {
+            platform_wait_for_message();
+        }
         Input.update_window_events();
 
         for Input.get_window_resizes() {
@@ -1086,12 +1088,27 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         next_y = r.y + r.h;
     }
 
+#if DEBUG {
+    // Debug view to see if we're rerendering.
+    {
+        pulse_rect := get_rect(padding, next_y + padding, 100, button_height);
+        theme := pulsating_button_theme;
+        _, state, _ := button(pulse_rect, "", *theme);
+
+        // Updating production value 3 times a frame so that it pulsates really fast!
+        update_production_value_button(pulse_rect, false, state, .OVER, *theme);
+        update_production_value_button(pulse_rect, false, state, .OVER, *theme);
+        update_production_value_button(pulse_rect, false, state, .OVER, *theme);
+
+        next_y = pulse_rect.y + pulse_rect.h;
+    }
+}
+
     //
     // New Profile subwindow
     //
     {
         theme := my_theme.subwindow_theme;
-        // r := profiles_region;
         if !subwindows_initted {
             subwindow_info_new_profile.rect = right_side_rect;
             subwindow_info_new_profile.rect.h = xx window_height - padding * 2;
@@ -1100,7 +1117,6 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
             presets_confirm_rect := get_rect(right_side_rect.x, presets_start_y, right_side_rect.w, next_y - presets_start_y);
             subwindow_info_presets_confirmation.rect = presets_confirm_rect;
-            // subwindow_info_presets_confirmation.rect.h = xx window_height - padding * 2;
             subwindow_info_presets_confirmation.title_text = "Confirm";
             subwindow_info_presets_confirmation.draw = draw_presets_confirmation;
 
@@ -1146,9 +1162,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         index_to_remove = -1;
         finalize_state();
     }
-    if need_to_rerender || GetRect.active_widget {
-        platform_wake_up_main_thread();
-    }
+    if GetRect.active_widget need_to_rerender = true;
 }
 
 draw_new_profile_selector :: (r: Rect, data: *void) {
