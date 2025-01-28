@@ -1,15 +1,13 @@
 /*
 ~~TODOS~~
 FOR SHIPPING:
-- LINUX: Do not grab devices until we are able to create a virtual one. Otherwise we're really fucked
-- Make program selector have a proper height
 - Finalize settings when the program quits
 
 FOR FUTURE:
+- Add configurable delay before overriding an input
 - Disallow multiple binds for the same button
 - Disallow to bind a button to itself
 - Better focused program recognition. Now it's just case-sensitive string contains.
-- Global Profile that is always active unless some other profile kicks in. Good for testing.
 - Debug UI. Showing stuff like currently pressed key, when mappings kick in, list of mappings.
 - Mouse bindings
 - Controller bindings
@@ -69,11 +67,9 @@ Program_State :: struct {
     active_mapping: *Mapping;
 
     // Profile that's active in the system
-    active_profile_index: s32 = -1;
     active_profile: *Profile;
 
     // Profile that's selected in the UI
-    active_profile_in_ui_index: s32 = -1;
     active_profile_in_ui: *Profile;
 
     active_search: *Text_Input_State;
@@ -395,7 +391,7 @@ parse_settings :: (raw_settings: string, settings_filename: string) {
                     log("Profile parsed successfully\n");
                     array_add(*profiles, profile);
                     if active {
-                        active_profile_in_ui_index = xx (profiles.count - 1);
+                        active_profile_in_ui = *profiles[profiles.count - 1];
                     }
                     profile_parsed = true;
                 } else {
@@ -541,8 +537,8 @@ maybe_fixup_settings :: () {
         rewrite_settings = true;
     }
 
-    if active_profile_in_ui_index == -1 {
-        active_profile_in_ui_index = 0;
+    if !active_profile_in_ui {
+        active_profile_in_ui = *profiles[0];
         rewrite_settings = true;
     }
 
@@ -566,14 +562,14 @@ serialize_settings :: () -> succes: bool {
 
     print_to_builder(*b, "close_to_tray: %\n", close_to_tray);
 
-    for profile: profiles {
+    for * profile: profiles {
         append(*b, "PROFILE_START\n");
         defer {
             append(*b, "PROFILE_END\n");
             allowed_to_write = true;
         }
 
-        if it_index == active_profile_in_ui_index append(*b, "active: true\n");
+        if profile == active_profile_in_ui append(*b, "active: true\n");
 
         print_to_builder(*b, "program: %\n", profile.program);
         print_to_builder(*b, "platform: %\n", enum_value_to_name(profile.platform));
@@ -650,7 +646,6 @@ main :: () {
         parse_settings(raw_settings, settings_filename);
     }
     maybe_fixup_settings();
-    active_profile_in_ui = *profiles[active_profile_in_ui_index];
     active_profile = active_profile_in_ui;
 
     quit := false;
@@ -780,16 +775,14 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             new_profile := array_add(*profiles);
             new_profile.platform = CURRENT_PLATFORM;
             active_profile_in_ui = new_profile;
-            active_profile_in_ui_index = xx (profiles.count - 1);
             active_state = .ADDING_NEW_PROFILE;
             need_to_scroll_profiles = true;
         }
 
-        _, _, del_profile_released := our_button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_in_ui_index <= 0 || active_state != .NOTHING));
-        if del_profile_released {
-            array_ordered_remove_by_index(*profiles, active_profile_in_ui_index);
+        _, _, del_released := our_button(del_button_rect, "Delete", *my_theme.button_theme, disable_press = (active_profile_in_ui.program == "Hitboxer Global" || active_state != .NOTHING));
+        if del_released {
+            array_ordered_remove_by_pointer(*profiles, active_profile_in_ui);
             active_profile_in_ui = *profiles[profiles.count - 1];
-            active_profile_in_ui_index = xx (profiles.count - 1);
             finalize_state();
         }
 
@@ -809,10 +802,6 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             if it.platform != CURRENT_PLATFORM continue;
             rendered_profiles_count += 1;
 
-            if it_index == active_profile_in_ui_index {
-                active_profile_in_ui = it;
-            }
-
             profile_pulsating := active_profile_in_ui == it && active_state == .ADDING_NEW_PROFILE;
             theme := ifx profile_pulsating pulsating_button_theme else profile_button_theme;
             if it == active_profile_in_ui && active_state != .ADDING_NEW_PROFILE {
@@ -823,7 +812,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             pressed, state := our_button(program_rect, it.program, *theme, identifier=it_index, disable_press = active_state == .ADDING_NEW_PROFILE, pulsate=profile_pulsating);
 
             if pressed {
-                active_profile_in_ui_index = xx it_index;
+                active_profile_in_ui = xx it;
                 finalize_state();
             }
 
@@ -1129,7 +1118,6 @@ draw_one_frame :: (dt: float, window: Window_Type) {
             array_ordered_remove_by_index(*profiles, profiles.count - 1);
             if profiles.count {
                 active_profile_in_ui = *profiles[profiles.count - 1];
-                active_profile_in_ui_index = xx (profiles.count - 1);
             }
 
             set_text(active_search, active_search.pre_modification_text, replace_pre_modification_text=false);
@@ -1281,6 +1269,21 @@ init_fonts :: (window: Window_Type) {
     small_label_font = Simp.get_font_at_size("data", "Hack-Regular.ttf", cast(s64)(small_height * dpi));
     header_font = Simp.get_font_at_size("data", "Hack-Bold.ttf", cast(s64)(header_height * dpi));
     assert(button_font != null);
+}
+
+array_ordered_remove_by_pointer :: (array_pointer: *[]$T, item: *T) {
+    index: s64 = -1;
+    array := array_pointer.*;
+    for * array {
+        if it == item {
+            index = it_index;
+            break;
+        }
+    }
+
+    if index > -1 {
+        array_ordered_remove_by_index(array_pointer, index);
+    }
 }
 
 UI_Font :: Simp.Dynamic_Font;

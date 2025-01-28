@@ -111,7 +111,6 @@ detect_focused_program :: () {
                 hook_is_set_by_profile := false;
                 for profile: profiles {
                     if contains(profile.program, name) {
-                        active_profile_index = xx it_index;
                         active_profile = *profile;
                         set_kb_hook();
                         hook_is_set_by_profile = true;
@@ -123,7 +122,6 @@ detect_focused_program :: () {
                     // Because on Linux it literally dies lmao
                     global_profile := profiles[0];
                     if global_profile.mappings_array.count > 0 {
-                        active_profile_index = 0;
                         active_profile = *global_profile;
                         set_kb_hook();
                         continue;
@@ -410,6 +408,7 @@ handle_libinput_event :: (event: *libinput_event, uinput_fd: s32) {
         // Pass the real event into our virtual device.
         defer if write_original {
 
+            // print("writing_original: %\n", key);
             written := write(uinput_fd, input_events.data, size_of(input_event) * output_events.count);
             if written < 0 {
                 log_error("Could not pass the event on\n");
@@ -1006,6 +1005,7 @@ platform_after_window_created :: (window: Window_Type) -> bool #must {
 platform_deinit :: (window: u64) {
     // If I don't destroy the virtual keyboard manually, I get stuck inputs when the program quits.
     ioctl(uinput_fd, UI_DEV_DESTROY);
+    close(uinput_fd);
 }
 
 platform_wait_for_message :: () {

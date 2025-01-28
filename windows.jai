@@ -294,14 +294,12 @@ detect_focused_program :: (
 
     for profile: profiles {
         if profile.program == focused_program_name && profile.platform == CURRENT_PLATFORM {
-            active_profile_index = xx it_index;
             active_profile = *profile;
             set_kb_hook(program_handle);
             return;
         }
     }
     if profiles[0].mappings_array.count > 0 {
-        active_profile_index = 0;
         active_profile = *profiles[0];
 
         set_kb_hook(program_handle);
