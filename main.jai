@@ -769,7 +769,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
         next_y = add_button_rect.y + add_button_rect.h;
 
-        _, _, add_profile_released := our_button(add_button_rect, "Add", *my_theme.button_theme, /*disable_press = (active_state != .NOTHING)*/);
+        _, _, add_profile_released := our_button(add_button_rect, "Add", *my_theme.button_theme, disable_press = (active_state != .NOTHING));
         if add_profile_released {
             subwindow_info_new_profile.open = true;
             new_profile := array_add(*profiles);
@@ -859,7 +859,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     // Active profile settings
     //
     {
-        _, _, add_mapping_released := our_button(right_side_rect, "", *my_theme.button_theme);
+        _, _, add_mapping_released := our_button(right_side_rect, "", *my_theme.button_theme, disable_press=active_state != .NOTHING);
 
         // This is just to "center" the label on top of arrows, because otherwise a button label
         // looks slightly off-center, because "Add mapping" button is wider than the scrollable area
@@ -940,12 +940,9 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
         source_pulsating := active_mapping && active_mapping == mapping && active_state == .SETTING_SOURCE;
         source_theme := ifx source_pulsating pulsating_button_theme else mappings_button_theme;
-        _, source_state, released_source := our_button(source_rect, source_name, *source_theme, identifier=it_index, disable_press = active_state == .SETTING_DESTINATION, pulsate = source_pulsating);
+        _, source_state, released_source := our_button(source_rect, source_name, *source_theme, identifier=it_index, disable_press = active_state != .NOTHING, pulsate = source_pulsating);
 
         // Making a button pulsating
-        // if source_pulsating {
-        //     update_production_value_button(source_rect, false, source_state, .OVER, *pulsating_button_theme);
-        // }
         if released_source {
             active_state = .SETTING_SOURCE;
             log("mappings before:\n");
@@ -958,7 +955,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         }
 
         mode_rect := get_rect(s.x + source_rect.w + 1, s.y, button_width, button_height);
-        changed, mode_state := dropdown(mode_rect, type_info_mapping_mode.names, xx *mapping.mode, dropdown_theme, identifier=mapping.source.code);
+        changed, mode_state := our_dropdown(mode_rect, type_info_mapping_mode.names, xx *mapping.mode, dropdown_theme, identifier=mapping.source.code, disable_press=(active_mapping != mapping && active_state != .NOTHING));
 
         // HACK: we might be reusing the leaked dropdown state with the same hash, left after removing a mapping with the same code
         // so test for null pointer. Need a better way to clear stale states, or remove current_value_pointer from it
@@ -998,7 +995,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
         dest_pulsating := active_mapping && active_mapping == mapping && active_state == .SETTING_DESTINATION;
         dest_theme := ifx dest_pulsating pulsating_button_theme else mappings_button_theme;
-        _, dest_state, released_dest := our_button(dest_rect, dest_name, *dest_theme, identifier=it_index, disable_press = active_state == .SETTING_DESTINATION, pulsate = dest_pulsating);
+        _, dest_state, released_dest := our_button(dest_rect, dest_name, *dest_theme, identifier=it_index, disable_press = active_state != .NOTHING, pulsate = dest_pulsating);
 
         if released_dest {
             active_state = .SETTING_DESTINATION;
@@ -1007,7 +1004,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         }
 
         del_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1 + dest_rect.w + 1 + 1, s.y, button_height, button_height);
-        _, _, del_released := our_button(del_rect, "X", *mappings_button_theme, identifier=it_index);
+        _, _, del_released := our_button(del_rect, "X", *mappings_button_theme, identifier=it_index, disable_press=(active_mapping != mapping && active_state != .NOTHING));
 
         // Delete mapping
         if del_released {

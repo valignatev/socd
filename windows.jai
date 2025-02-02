@@ -75,6 +75,7 @@ start_logging_keys :: () {
 // TODO: Try to find a way to be more optimal (like bailing out earlier) on key repeats:
 // https://learn.microsoft.com/en-us/windows/win32/winmsg/lowlevelkeyboardproc
 low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 #c_call {
+    push_my_context();
     kb_input := cast(*KBDLLHOOKSTRUCT)lparam;
 
     // We ignore injected events so we don't mess with the inputs
@@ -88,7 +89,6 @@ low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 
     key_virtual_code := kb_input.vkCode;
     key_scan_code := kb_input.scanCode;
 
-    push_my_context();
     // 69 is numlock, just swallow it. Depend on LLKF_EXTENDED instead,
     // because numlocked keys don't have it set...
     if key_scan_code == 69 {
@@ -116,8 +116,6 @@ low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 
     bind_scan := bind.code & 0x00FF;
 
     if bind.mode == .REMAP {
-        bind_name := get_key_name(bind.code);
-
         flags : KEYBDINPUT_Flags = ifx is_down then xx 0 else .KEYEVENTF_KEYUP;
         flags |= ifx extended then .KEYEVENTF_EXTENDEDKEY else xx 0;
         flags |= .KEYEVENTF_SCANCODE;
@@ -213,9 +211,13 @@ mapping_setting_hook_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s6
         if is_down {
             if active_state == .SETTING_SOURCE {
                 old_source_code := active_mapping.source.code;
-                // if old_source_code == KEY_RESERVED next_state = .SETTING_DESTINATION;
+                current_destination_code := active_mapping.destination.code;
 
-                old_binding_from_old_source, found := table_find(*active_profile_in_ui.mappings, old_source_code);
+                // We ban setting the key to itself.
+                if key_scan_code == current_destination_code {
+                    return CallNextHookEx(null, n_code, wparam, lparam);
+                }
+
                 active_mapping.*.source.code = key_scan_code;
                 table_set(*active_profile_in_ui.mappings, active_mapping.source.code, active_mapping.destination);
 
@@ -223,12 +225,23 @@ mapping_setting_hook_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s6
                     table_remove(*active_profile_in_ui.mappings, active_mapping.destination.code);
                     table_set(*active_profile_in_ui.mappings, active_mapping.destination.code, active_mapping.source);
                 }
-                // I don't think it matters whether we found it.
-                table_remove(*active_profile_in_ui.mappings, old_source_code);
+                // We don't want to delete a mapping if the new code is the same as the old one. For example,
+                // if the user reconsidered the change
+                if key_scan_code != old_source_code {
+                    table_remove(*active_profile_in_ui.mappings, old_source_code);
+                }
 
             } else if active_state == .SETTING_DESTINATION {
-                next_state = .NOTHING;
+                current_source_code := active_mapping.source.code;
                 old_destination_code := active_mapping.destination.code;
+
+                // We ban setting the key to itself.
+                if key_scan_code == current_source_code {
+                    return CallNextHookEx(null, n_code, wparam, lparam);
+                }
+
+                next_state = .NOTHING;
+
                 active_mapping.*.destination.code = key_scan_code;
 
                 table_set(*active_profile_in_ui.mappings, active_mapping.source.code, active_mapping.destination);
