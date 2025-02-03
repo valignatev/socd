@@ -493,7 +493,7 @@ get_dpi_scale :: (window: Window_Type) -> float {
 create_window :: () -> Window_Type {
     // Windows is very bad at thread-switching by default unless you do this. Sad.
     timeBeginPeriod(1);
-    the_window := create_window(window_width, window_height, "Hitboxer v0.10");
+    the_window := create_window(window_width, window_height, "Hitboxer v0.11");
     // We can't specify style in create_window, so change it afterwards.
     // TLDR is that we want a regular window but without an ability to maximize and resize it.
     // SetWindowLongPtrW(the_window, GWL_STYLE, WS_VISIBLE | WS_OVERLAPPED | WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU);
@@ -617,7 +617,7 @@ platform_init :: () -> success: bool #must, reason: string {
     array_reserve(*_list_of_process_ids, 1000);
     _list_of_process_ids.count = 1000;
     // TODO: come up with better window class to distinguish us
-    the_window = FindWindowW(utf8_to_wide("Default Window Class"), utf8_to_wide("Hitboxer",, temp));
+    the_window = FindWindowW(utf8_to_wide("Default Window Class"), utf8_to_wide("Hitboxer v0.11",, temp));
     if the_window {
         ShowWindow(the_window, SW_SHOW);
         SetForegroundWindow(the_window);
