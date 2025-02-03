@@ -103,11 +103,22 @@ low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 
         key_scan_code |= 0xE100;
     }
 
+    recorded_state := kb_real_state[key_scan_code];
+
+#if DEBUG {
     key_name := get_key_name(key_scan_code);
+    if is_down {
+        log("Pressed: %\n", key_name);
+    } else {
+        log("Released: %\n", key_name);
+    }
+}
+
+    is_repeat := recorded_state && is_down;
+
     kb_real_state[key_scan_code] = is_down;
 
     bind := get_key_mapping(key_scan_code);
-
     if bind == dummy_bind {
         return CallNextHookEx(null, n_code, wparam, lparam);
     }
@@ -137,18 +148,27 @@ low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 
 
         if is_down {
             if opposite_is_down {
-                flags : KEYBDINPUT_Flags = .KEYEVENTF_KEYUP;
-                flags |= ifx extended then .KEYEVENTF_EXTENDEDKEY else xx 0;
-                flags |= .KEYEVENTF_SCANCODE;
+                if !is_repeat {
+#if DEBUG {
+                    log("Releasing opposite: %\n", get_key_name(bind_scan));
+}
+                    flags : KEYBDINPUT_Flags = .KEYEVENTF_KEYUP;
+                    flags |= ifx extended then .KEYEVENTF_EXTENDEDKEY else xx 0;
+                    flags |= .KEYEVENTF_SCANCODE;
 
-                input: INPUT;
-                input.type = .INPUT_KEYBOARD;
-                input.ki = KEYBDINPUT.{0, cast(u16)bind_scan, flags, 0, null};
-                events_count := SendInput(1, *input, size_of(INPUT));
+                    input: INPUT;
+                    input.type = .INPUT_KEYBOARD;
+                    input.ki = KEYBDINPUT.{0, cast(u16)bind_scan, flags, 0, null};
+                    events_count := SendInput(1, *input, size_of(INPUT));
 
-                if events_count == 0 {
-                    error := GetLastError();
-                    log_error("SendInput failed with error: %\n", error);
+                    if events_count == 0 {
+                        error := GetLastError();
+                        log_error("SendInput failed with error: %\n", error);
+                    }
+                } else {
+#if DEBUG {
+                    log("Detected repeat event for %\n", key_name);
+}
                 }
 
                 if bind.mode == .NEUTRAL {
@@ -159,6 +179,9 @@ low_level_keyboard_proc :: (n_code: s32, wparam: WPARAM, lparam: LPARAM) -> s64 
             }
         } else {
             if opposite_is_down {
+#if DEBUG {
+                log("Pressing opposite: %\n", get_key_name(bind_scan));
+}
                 flags : KEYBDINPUT_Flags = 0;
                 flags |= ifx extended then .KEYEVENTF_EXTENDEDKEY else xx 0;
                 flags |= .KEYEVENTF_SCANCODE;
@@ -277,7 +300,7 @@ detect_focused_program :: (
     inspected_window := GetForegroundWindow();
     process_id: u32 = 0;
     GetWindowThreadProcessId(inspected_window, *process_id);
-    unset_kb_hook();
+    unset_mapping_resolving_hook();
 
     if !process_id {
         // Sometimes when you minimize a window nothing is focused for a brief moment,
@@ -301,21 +324,23 @@ detect_focused_program :: (
     CloseHandle(foreground_process);
     PathStripPathW(focused_program_buffer.data);
     focused_program_name, ok := wide_to_utf8(focused_program_buffer.data);
-    // log("Window activated: %\n", focused_program_name);
+#if DEBUG {
+        log("Window activated: %\n", focused_program_name);
+}
 
     program_handle := GetModuleHandleW(null);
 
     for profile: profiles {
         if profile.program == focused_program_name && profile.platform == CURRENT_PLATFORM {
             active_profile = *profile;
-            set_kb_hook(program_handle);
+            set_mapping_resolving_hook(program_handle);
             return;
         }
     }
     if profiles[0].mappings_array.count > 0 {
         active_profile = *profiles[0];
 
-        set_kb_hook(program_handle);
+        set_mapping_resolving_hook(program_handle);
         return;
     }
 }
@@ -409,37 +434,40 @@ start_detecting_focused_program :: () {
     );
 }
 
-set_kb_hook :: (instance: HINSTANCE) {
+set_mapping_resolving_hook :: (instance: HINSTANCE) {
     if !mapping_resolving_hook_is_installed {
-        // log("hooking this shit\n");
+        log("Installing the mapping resolving hook\n");
         mapping_resolving_hook = SetWindowsHookExW(WH_KEYBOARD_LL, cast(HOOKPROC)low_level_keyboard_proc, instance, 0);
         if (mapping_resolving_hook != null) {
             mapping_resolving_hook_is_installed = true;
         } else {
-            log_error("hook failed oopsie\n");
+            log_error("Failed to set mapping resolving hook\n");
         }
     }
 }
 
 set_key_mapping_hook :: (window: Window_Type) {
+    using current_program_state;
+
     if !mapping_setting_hook_is_installed {
+        memset(kb_real_state.data, 0, kb_real_state.count);
         // null as instance and GetCurrentThreadId() instead of zero to hook into inputs when focusing this program.
         // Otherwise, the hook will only listen to keyboard from all other programs except this one!
         mapping_setting_hook = SetWindowsHookExW(WH_KEYBOARD, cast(HOOKPROC)mapping_setting_hook_proc, null, GetCurrentThreadId());
         if (mapping_setting_hook != null) {
             mapping_setting_hook_is_installed = true;
-            // log("listening for new mapping\n");
+            log("Listening for new mapping: %\n", active_state);
         } else {
             error := GetLastError();
-            log_error("mapping setting hook initialization failed: %\n", error);
+            log_error("Mapping setting hook initialization failed: %\n", error);
         }
     }
 }
 
-unset_kb_hook :: () {
+unset_mapping_resolving_hook :: () {
     if !mapping_resolving_hook_is_installed return;
 
-    // log("unhooking this shit\n");
+    log("Unhooking mapping resolving hook\n");
     UnhookWindowsHookEx(mapping_resolving_hook);
     // Forget buttons that are pressed before unhooking from the keyboard
     // So that when we hook again we don't end up in a dirty state where one
@@ -450,7 +478,7 @@ unset_kb_hook :: () {
 
 unset_mapping_setting_hook :: () {
     if !mapping_setting_hook_is_installed return;
-    // log("unhooking mapping setting hook\n");
+    log("Unhooking mapping setting hook\n");
     UnhookWindowsHookEx(mapping_setting_hook);
     mapping_setting_hook_is_installed = false;
 }
