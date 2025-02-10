@@ -296,8 +296,8 @@ my_logger :: (message: string, data: *void, info: Log_Info) {
 
 
 push_my_context :: () #expand {
-    my_context: #Context;
-    my_context.logger = my_logger;
+    `my_context: #Context;
+    `my_context.logger = my_logger;
 
     `push_context,defer_pop my_context;
 }
@@ -313,7 +313,6 @@ init_settings :: () -> should_parse: bool, config: string, filename: string {
 
     settings_filename := tprint("%/%", exe_path, "settings.socd");
 
-    // @leak - raw_settings never freed
     raw_settings, success := read_entire_file(settings_filename);
     if !success {
         log("Coulnd't find settings.socd file, trying to create a new one\n");
@@ -432,7 +431,7 @@ Ignoring the line and trying to continue parsing. Config line was `%`
                     mapping: Mapping;
                     mapping_bind: Mapping_Bind;
                     source: u32;
-                    mapping_config := split(trim(right), separator=" ");
+                    mapping_config := split(trim(right), separator=" ",, temp);
                     if mapping_config.count != 3 {
                         tfh.error(*handler, "Incorrect mapping configuration, ignoring it. Expected MODE:source_bind:destination_bind, got %\n", right);
                         continue;
@@ -603,8 +602,9 @@ finalize_state :: () {
 }
 
 main :: () {
-    push_my_context();
+    context.logger = my_logger;
     log_file=, success := file_open("./log.txt", for_writing=true, keep_existing_content=true);
+
     if !success {
         log_error("Couldn't open the log file, your errors will not be logged\n");
     }
@@ -641,6 +641,8 @@ main :: () {
     subwindow_info_new_profile.open = false;
     subwindow_info_presets_confirmation.open = false;
 
+    // @note: Parsed settings are baked by the memory from raw_settings. So I just don't free it
+    // to avoid corruptions. A bit of a silly optimizations, but why not lmao.
     should_parse_config, raw_settings, settings_filename := init_settings();
     if should_parse_config {
         parse_settings(raw_settings, settings_filename);
@@ -650,6 +652,7 @@ main :: () {
 
     quit := false;
     while !quit {
+        // memory_visualizer_per_frame_update();
         current_time = seconds_since_init();
         dt := cast(float)(current_time - last_time);
         Clamp(*dt, 0, 0.1);
@@ -690,8 +693,6 @@ main :: () {
             }
 
             getrect_handle_event(event);
-
-            // TODO: handle alt+f4
         }
         if active_state == .NOTHING {
             unset_mapping_setting_hook();
@@ -700,8 +701,6 @@ main :: () {
         draw_one_frame(dt, the_window);
 
         reset_temporary_storage();
-        // TODO handle proper waiting for input
-        sleep_milliseconds(10);
     }
 }
 
@@ -712,15 +711,19 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     need_to_rerender = false;
     proc := default_theme_procs[current_theme];
     my_theme = proc();
-
-    my_theme.label_theme.font = button_font;
-    my_theme.label_theme.alignment = .Left;
-    my_theme.label_theme.alignment_pad_ems = 0.0;
-
     my_theme.button_theme.font = button_font;
     my_theme.button_theme.enable_variable_frame_thickness = true;
     my_theme.button_theme.rectangle_shape.rounding_flags = 0;
     my_theme.button_theme.label_theme.alignment = .Left;
+
+    set_default_theme(my_theme);  // Just in case we don't explicitly pass themes sometimes...!
+
+    bg_col := my_theme.background_color;
+    Simp.clear_render_target(bg_col.x, bg_col.y, bg_col.z, 1);
+
+    my_theme.label_theme.font = button_font;
+    my_theme.label_theme.alignment = .Left;
+    my_theme.label_theme.alignment_pad_ems = 0.0;
 
     my_theme.scrollable_region_theme.region_background.shape.rounding_flags = 0;
     my_theme.scrollable_region_theme.scrollbar_size = 0.01;
@@ -746,11 +749,6 @@ draw_one_frame :: (dt: float, window: Window_Type) {
 
     button_height := default_button_height;
     padding := default_padding;
-
-    set_default_theme(my_theme);  // Just in case we don't explicitly pass themes sometimes...!
-
-    bg_col := my_theme.background_color;
-    Simp.clear_render_target(bg_col.x, bg_col.y, bg_col.z, 1);
 
     x:, y:, window_width, window_height = get_dimensions(window, true);
     ui_per_frame_update(window, 800, 800, current_time);
@@ -898,6 +896,7 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         close_start := right_side_rect.w + right_side_rect.x + 10;
         close_rect := get_rect(close_start, 10, button_height, button_height);
         _, _, close_released := our_button(close_rect, "X", *my_theme.button_theme);
+
         if close_released {
             exit(1);
         }
@@ -906,122 +905,124 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     //
     // Mappings
     //
-    mappings_theme := my_theme.scrollable_region_theme;
-    mappings_theme.scrollbar_size = 0.01;
-    mappings_height := 440.0;
-    mappings_rect := get_rect(right_side_start, next_y + padding, right_side_width, mappings_height);
-
-    next_y = mappings_rect.y + mappings_rect.h;
-
-    mappings_region, inside_mappings_region := begin_scrollable_region(mappings_rect, *mappings_theme);
-    s := inside_mappings_region;
-    s.y -= scroll_value_mappings_region;
-
-    mappings_button_theme := my_theme.button_theme;
-    mappings_button_theme.label_theme.alignment = .Center;
-    pulsating_button_theme.label_theme.alignment = .Center;
-
-    dropdown_theme := *my_theme.dropdown_theme;
-    dropdown_theme.theme_for_current_value = my_theme.button_theme;
-    dropdown_theme.theme_for_each_choice.rectangle_shape.rounding_flags = 0;
-    dropdown_theme.theme_for_each_choice.font = my_theme.button_theme.font;
-    dropdown_theme.theme_for_current_choice.font = my_theme.button_theme.font;
-    dropdown_theme.theme_for_current_choice.rectangle_shape.rounding_flags = 0;
-    dropdown_theme.theme_for_current_value.text_color = my_theme.button_theme.surface_color;
-
-    type_info_mapping_mode := type_info(Mapping_Mode);
     index_to_remove: s64 = -1;
     dropdown_state_to_clean_up: Dropdown_State;
+    {
+        mappings_theme := my_theme.scrollable_region_theme;
+        mappings_theme.scrollbar_size = 0.01;
+        mappings_height := 440.0;
+        mappings_rect := get_rect(right_side_start, next_y + padding, right_side_width, mappings_height);
 
-    for * mapping: active_profile_in_ui.mappings_array {
-        button_width := (s.w - 50)/3 - 1;
-        source_rect := get_rect(s.x, s.y, button_width, button_height);
-        source_name := get_key_name(mapping.source.code);
+        next_y = mappings_rect.y + mappings_rect.h;
 
-        source_pulsating := active_mapping && active_mapping == mapping && active_state == .SETTING_SOURCE;
-        source_theme := ifx source_pulsating pulsating_button_theme else mappings_button_theme;
-        _, source_state, released_source := our_button(source_rect, source_name, *source_theme, identifier=it_index, disable_press = active_state != .NOTHING, pulsate = source_pulsating);
+        mappings_region, inside_mappings_region := begin_scrollable_region(mappings_rect, *mappings_theme);
+        s := inside_mappings_region;
+        s.y -= scroll_value_mappings_region;
 
-        // Making a button pulsating
-        if released_source {
-            active_state = .SETTING_SOURCE;
-            log("mappings before:\n");
-            for active_profile_in_ui.mappings {
-                dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
-                log("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
-            }
-            active_mapping = mapping;
-            set_key_mapping_hook(window);
-        }
+        mappings_button_theme := my_theme.button_theme;
+        mappings_button_theme.label_theme.alignment = .Center;
+        pulsating_button_theme.label_theme.alignment = .Center;
 
-        mode_rect := get_rect(s.x + source_rect.w + 1, s.y, button_width, button_height);
-        changed, mode_state := our_dropdown(mode_rect, type_info_mapping_mode.names, xx *mapping.mode, dropdown_theme, identifier=mapping.source.code, disable_press=(active_mapping != mapping && active_state != .NOTHING));
+        dropdown_theme := *my_theme.dropdown_theme;
+        dropdown_theme.theme_for_current_value = my_theme.button_theme;
+        dropdown_theme.theme_for_each_choice.rectangle_shape.rounding_flags = 0;
+        dropdown_theme.theme_for_each_choice.font = my_theme.button_theme.font;
+        dropdown_theme.theme_for_current_choice.font = my_theme.button_theme.font;
+        dropdown_theme.theme_for_current_choice.rectangle_shape.rounding_flags = 0;
+        dropdown_theme.theme_for_current_value.text_color = my_theme.button_theme.surface_color;
 
-        // HACK: we might be reusing the leaked dropdown state with the same hash, left after removing a mapping with the same code
-        // so test for null pointer. Need a better way to clear stale states, or remove current_value_pointer from it
-        if changed {
-            active_mapping = mapping;
-            new_mode := cast(Mapping_Mode, mode_state.current_value_pointer.*);
-            destination_ptr := table_find_pointer(*active_profile_in_ui.mappings, mapping.source.code);
-            old_mode := destination_ptr.mode;
-            destination_ptr.*.mode = new_mode;
-            active_mapping.*.source.mode = new_mode;
-            // We really rely on this one
-            active_mapping.*.destination.mode = new_mode;
+        type_info_mapping_mode := type_info(Mapping_Mode);
 
-            if new_mode == .REMAP {
-                if old_mode == .OPPOSITE || old_mode == .NEUTRAL {
-                    table_remove(*active_profile_in_ui.mappings, destination_ptr.code);
+        for * mapping: active_profile_in_ui.mappings_array {
+            button_width := (s.w - 50)/3 - 1;
+            source_rect := get_rect(s.x, s.y, button_width, button_height);
+            source_name := get_key_name(mapping.source.code);
+
+            source_pulsating := active_mapping && active_mapping == mapping && active_state == .SETTING_SOURCE;
+            source_theme := ifx source_pulsating pulsating_button_theme else mappings_button_theme;
+            _, source_state, released_source := our_button(source_rect, source_name, *source_theme, identifier=it_index, disable_press = active_state != .NOTHING, pulsate = source_pulsating);
+
+            // Making a button pulsating
+            if released_source {
+                active_state = .SETTING_SOURCE;
+                log("mappings before:\n");
+                for active_profile_in_ui.mappings {
+                    dest_formatted := tprint("mode: %, kind: %, code: %", it.mode, it.kind, get_key_name(it.code));
+                    log("source: %, dest: %\n", get_key_name(it_index), dest_formatted);
                 }
+                active_mapping = mapping;
+                set_key_mapping_hook(window);
+            }
 
-            } else if new_mode == .OPPOSITE || new_mode == .NEUTRAL {
-                if old_mode == .REMAP {
-                    table_set(*active_profile_in_ui.mappings, destination_ptr.code, .{mode=new_mode, code=mapping.source.code, kind=mapping.source.kind});
-                } else {
-                    dest_to_source_ptr := table_find_pointer(*active_profile_in_ui.mappings, destination_ptr.code);
-                    if dest_to_source_ptr dest_to_source_ptr.mode = new_mode;
+            mode_rect := get_rect(s.x + source_rect.w + 1, s.y, button_width, button_height);
+            changed, mode_state := our_dropdown(mode_rect, type_info_mapping_mode.names, xx *mapping.mode, dropdown_theme, identifier=mapping.source.code, disable_press=(active_mapping != mapping && active_state != .NOTHING));
+
+            // HACK: we might be reusing the leaked dropdown state with the same hash, left after removing a mapping with the same code
+            // so test for null pointer. Need a better way to clear stale states, or remove current_value_pointer from it
+            if changed {
+                active_mapping = mapping;
+                new_mode := cast(Mapping_Mode, mode_state.current_value_pointer.*);
+                destination_ptr := table_find_pointer(*active_profile_in_ui.mappings, mapping.source.code);
+                old_mode := destination_ptr.mode;
+                destination_ptr.*.mode = new_mode;
+                active_mapping.*.source.mode = new_mode;
+                // We really rely on this one
+                active_mapping.*.destination.mode = new_mode;
+
+                if new_mode == .REMAP {
+                    if old_mode == .OPPOSITE || old_mode == .NEUTRAL {
+                        table_remove(*active_profile_in_ui.mappings, destination_ptr.code);
+                    }
+
+                } else if new_mode == .OPPOSITE || new_mode == .NEUTRAL {
+                    if old_mode == .REMAP {
+                        table_set(*active_profile_in_ui.mappings, destination_ptr.code, .{mode=new_mode, code=mapping.source.code, kind=mapping.source.kind});
+                    } else {
+                        dest_to_source_ptr := table_find_pointer(*active_profile_in_ui.mappings, destination_ptr.code);
+                        if dest_to_source_ptr dest_to_source_ptr.mode = new_mode;
+                    }
+                }
+                if next_state == .NOTHING {
+                    finalize_state();
                 }
             }
-            if next_state == .NOTHING {
-                finalize_state();
+
+            mode_r := get_rect(s.x + source_rect.w + 1, s.y, button_width, button_height);
+            arrow(mode_r, *mode_state, dropdown_theme, mapping.mode);
+
+            dest_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1, s.y, button_width, button_height);
+            dest_name := get_key_name(mapping.destination.code);
+
+            dest_pulsating := active_mapping && active_mapping == mapping && active_state == .SETTING_DESTINATION;
+            dest_theme := ifx dest_pulsating pulsating_button_theme else mappings_button_theme;
+            _, dest_state, released_dest := our_button(dest_rect, dest_name, *dest_theme, identifier=it_index, disable_press = active_state != .NOTHING, pulsate = dest_pulsating);
+
+            if released_dest {
+                active_state = .SETTING_DESTINATION;
+                active_mapping = mapping;
+                set_key_mapping_hook(window);
             }
+
+            del_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1 + dest_rect.w + 1 + 1, s.y, button_height, button_height);
+            _, _, del_released := our_button(del_rect, "X", *mappings_button_theme, identifier=it_index, disable_press=(active_mapping != mapping && active_state != .NOTHING));
+
+            // Delete mapping
+            if del_released {
+                index_to_remove = it_index;
+                dropdown_state_to_clean_up = mode_state;
+            }
+
+            s.y += floor(button_height * 1.1 + 1);
+
         }
 
-        mode_r := get_rect(s.x + source_rect.w + 1, s.y, button_width, button_height);
-        arrow(mode_r, *mode_state, dropdown_theme, mapping.mode);
-
-        dest_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1, s.y, button_width, button_height);
-        dest_name := get_key_name(mapping.destination.code);
-
-        dest_pulsating := active_mapping && active_mapping == mapping && active_state == .SETTING_DESTINATION;
-        dest_theme := ifx dest_pulsating pulsating_button_theme else mappings_button_theme;
-        _, dest_state, released_dest := our_button(dest_rect, dest_name, *dest_theme, identifier=it_index, disable_press = active_state != .NOTHING, pulsate = dest_pulsating);
-
-        if released_dest {
-            active_state = .SETTING_DESTINATION;
-            active_mapping = mapping;
-            set_key_mapping_hook(window);
-        }
-
-        del_rect := get_rect(s.x + source_rect.w + 1 + mode_rect.w + 1 + dest_rect.w + 1 + 1, s.y, button_height, button_height);
-        _, _, del_released := our_button(del_rect, "X", *mappings_button_theme, identifier=it_index, disable_press=(active_mapping != mapping && active_state != .NOTHING));
-
-        // Delete mapping
-        if del_released {
-            index_to_remove = it_index;
-            dropdown_state_to_clean_up = mode_state;
-        }
-
-        s.y += floor(button_height * 1.1 + 1);
-
+        end_scrollable_region(mappings_region, s.x + s.w, s.y, *scroll_value_mappings_region);
     }
-
-    end_scrollable_region(mappings_region, s.x + s.w, s.y, *scroll_value_mappings_region);
 
     // Presets
     presets_start_y := next_y + padding;
     {
-        r := get_rect(s.x, presets_start_y, s.w, button_height);
+        r := get_rect(right_side_start, presets_start_y, right_side_width, button_height);
         label(r, "Presets", *header_theme);
 
         r.w = r.w / 2;
@@ -1147,7 +1148,11 @@ draw_one_frame :: (dt: float, window: Window_Type) {
         index_to_remove = -1;
         finalize_state();
     }
-    if GetRect.active_widget need_to_rerender = true;
+    if GetRect.active_widget {
+        w := GetRect.active_widget;
+        print("%\n", w.*);
+        need_to_rerender = true;
+    }
 }
 
 draw_new_profile_selector :: (r: Rect, data: *void) {
@@ -1293,7 +1298,7 @@ working_directory_set := false;
 mapping_resolving_hook_is_installed := false;
 mapping_setting_hook_is_installed := false;
 
-#import "Basic"()(TEMP_ALLOCATOR_POISON_FREED_MEMORY=true);
+#import "Basic"()(TEMP_ALLOCATOR_POISON_FREED_MEMORY=DEBUG, MEMORY_DEBUGGER=false, VISUALIZE_MEMORY_DEBUGGER=false);
 #import "Hash_Table";
 Input :: #import "Input";
 Simp :: #import "Simp";

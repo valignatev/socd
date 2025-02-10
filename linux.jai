@@ -676,7 +676,7 @@ get_key_name :: (key_scan_code: u32) -> string {
 create_window :: (window_x := 0, window_y := 0, parent: Window_Type = None, background_color_rgb := WC.DEFAULT_WINDOW_CREATION_COLOR, wanted_msaa: s32 = WC.DEFAULT_MSAA) -> Window {
     width := window_width;
     height := window_height;
-    window_name := "Hitboxer v0.11";
+    window_name := "Hitboxer v0.12";
     if !x_global_display
         init_global_display();
 

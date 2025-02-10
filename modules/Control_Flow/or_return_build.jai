@@ -106,14 +106,14 @@ or_return :: ($code: Code, $outer_proc_header: Code = (#code dummy), $declared_n
 
     return_values := header.returns.count;
     if return_values != %4 {
-        return false, tprint("Procedure should have exactly %% return values, but it has %%", %4, return_values);
+        return false, tprint("Procedure should have exactly %5 return values, but it has %5", %4, return_values);
     }
 
     last_return := header.returns[return_values-1].type_inst;
     last_return_type := Compiler.get_type(last_return.result);
     ti := cast(*Type_Info)last_return_type;
     if ti.type == .STRUCT {
-        return false, tprint("The last return value of the procedure `%%` passed to or_return is a struct `%%`.\nStructs can't be evaluated as booleans, so or_return doesn't support them.", header.name, last_return_type);
+        return false, tprint("The last return value of the procedure `%5` passed to or_return is a struct `%5`.\nStructs can't be evaluated as booleans, so or_return doesn't support them.", header.name, last_return_type);
     }
 
     %2
@@ -150,7 +150,7 @@ or_return_add_source :: (w: Workspace) {
         returns = join(..returns_array, ", ");
         defaults = tprint("% = bool;", join(..defaults_array, ", "));
         designators = join(..designators_array, "\n        ");
-        add_build_string(tprint(OR_RETURN_TEMPLATE, returns, defaults, designators, it), w);
+        add_build_string(tprint(OR_RETURN_TEMPLATE, returns, defaults, designators, it, "%"), w);
     }
     add_build_string("Compiler :: #import \"Compiler\";", w);
 }

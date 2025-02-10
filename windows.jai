@@ -353,6 +353,7 @@ get_list_of_programs :: () -> [..]string {
     defer table_reset(*_opened_programs);
 
     result: [..]string;
+    result.allocator = temp;
     enum_processes();
     for process_id: _list_of_process_ids {
         if process_id == 0 continue;
@@ -367,7 +368,7 @@ get_list_of_programs :: () -> [..]string {
         QueryFullProcessImageNameW(foreground_process, 0, focused_program_buffer.data, *filename_size);
         CloseHandle(foreground_process);
         PathStripPathW(focused_program_buffer.data);
-        name, ok := wide_to_utf8(focused_program_buffer.data);
+        name, ok := wide_to_utf8(focused_program_buffer.data,, temp);
 
         // Idk if this ever happens
         if !ok {
@@ -379,13 +380,14 @@ get_list_of_programs :: () -> [..]string {
         if (active_search.text.count && contains(name_lower, search_lower)) || !active_search.text.count {
             _, found := table_find(*_opened_programs, name);
             if !found {
-                copied_string := copy_string(name);
+                copied_string := copy_string(name,, temp);
                 table_set(*_opened_programs, copied_string, true);
                 array_add(*result, copied_string);
             }
         }
     }
 
+    array_reset_keeping_memory(*_list_of_process_ids);
     return result;
 }
 
@@ -493,7 +495,7 @@ get_dpi_scale :: (window: Window_Type) -> float {
 create_window :: () -> Window_Type {
     // Windows is very bad at thread-switching by default unless you do this. Sad.
     timeBeginPeriod(1);
-    the_window := create_window(window_width, window_height, "Hitboxer v0.11");
+    the_window := create_window(window_width, window_height, "Hitboxer v0.12");
     // We can't specify style in create_window, so change it afterwards.
     // TLDR is that we want a regular window but without an ability to maximize and resize it.
     // SetWindowLongPtrW(the_window, GWL_STYLE, WS_VISIBLE | WS_OVERLAPPED | WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU);
@@ -589,7 +591,6 @@ create_hidden_window :: (window_name: string, parent: Window_Type = null) -> HWN
     return hwnd;
 }
 
-
 platform_after_window_created :: (window: HWND) -> success: bool #must {
     tray_window := create_hidden_window("hidden_tray_window", window);
     if !tray_window {
@@ -617,7 +618,7 @@ platform_init :: () -> success: bool #must, reason: string {
     array_reserve(*_list_of_process_ids, 1000);
     _list_of_process_ids.count = 1000;
     // TODO: come up with better window class to distinguish us
-    the_window = FindWindowW(utf8_to_wide("Default Window Class"), utf8_to_wide("Hitboxer v0.11",, temp));
+    the_window = FindWindowW(utf8_to_wide("Default Window Class",, temp), utf8_to_wide("Hitboxer v0.12",, temp));
     if the_window {
         ShowWindow(the_window, SW_SHOW);
         SetForegroundWindow(the_window);

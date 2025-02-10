@@ -95,7 +95,9 @@ our_checkbox :: (_r: Rect, text: string, selected: bool, theme: *Checkbox_Theme 
     using current_program_state;
 
     changed, state := GR.base_checkbox(_r, text, selected, theme, identifier, loc);
-    if state.selected_t need_to_rerender = true;
+    if state.base.action_duration_2 != -1 {
+        need_to_rerender = true;
+    }
 
     return changed, state;
 }
