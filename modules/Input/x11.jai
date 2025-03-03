@@ -1,5 +1,5 @@
 
-#import "X11";
+// #import "X11";
 #import "POSIX";
 #import "String";  // @Cleanup: Remove this dependency on String?
 
@@ -826,7 +826,7 @@ add_resize_record :: (hwnd: Window, width: s32, height: s32) {
         record = array_add(*pending_resizes);
     }
 
-    record.window = hwnd;
+    record.window = xx hwnd;
     record.width = width;
     record.height = height;
 }

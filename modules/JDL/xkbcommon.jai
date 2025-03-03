@@ -142,7 +142,7 @@ xkb_keymap_format :: enum u32 {
     XKB_KEYMAP_FORMAT_TEXT_V1 :: 1;
 }
 
-xkb_keymap_new_from_file :: (_context: *xkb_context, file: *FILE, format: xkb_keymap_format, flags: xkb_keymap_compile_flags) -> *xkb_keymap #foreign libxkbcommon;
+// xkb_keymap_new_from_file :: (_context: *xkb_context, file: *FILE, format: xkb_keymap_format, flags: xkb_keymap_compile_flags) -> *xkb_keymap #foreign libxkbcommon;
 
 xkb_keymap_new_from_string :: (_context: *xkb_context, _string: *u8, format: xkb_keymap_format, flags: xkb_keymap_compile_flags) -> *xkb_keymap #foreign libxkbcommon;
 

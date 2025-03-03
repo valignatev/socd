@@ -1,10 +1,11 @@
-#load "./xcb.jai";
+// #import,file "./modules/JDL/xcb.jai";
 #load "./uinput.jai";
-#load "./xkbcommon.jai";
 #load "./libinput.jai";
 #load "./libudev.jai";
 
 CURRENT_PLATFORM :: Platform.LINUX;
+DEFAULT_WINDOW_CREATION_COLOR :: float.[.15,.15,.2];
+DEFAULT_MSAA: s32 : 4;
 
 uinput_fd: s32 = -1;
 
@@ -14,12 +15,6 @@ MAX_PATH_LENGTH :: 4096;
 XKB_EVDEV_OFFSET : u32 : 8;
 
 KB_HOOK_SET := false;
-
-global_xcb_connection: *xcb_connection_t;
-// I genuinely don't know how bad it is to make libxkbcommon stuff global. Seems working idk...
-global_xkb_context: *xkb_context;
-global_xkb_keymap: *xkb_keymap;
-global_xkb_state: *xkb_state;
 
 // major and minor are straight from Linux kernel
 major :: inline (dev: u64) -> u64 {
@@ -35,9 +30,6 @@ get_dpi_scale :: (window: Window_Type) -> float {
     return 1;
 }
 
-NET_NAME_ATOM: xcb_atom_t;
-NET_NAME := "_NET_WM_NAME";
-
 detect_focused_program :: () {
     using current_program_state;
     // @TODO: Might be useful to detect currently focused program at the start.
@@ -47,14 +39,14 @@ detect_focused_program :: () {
     // and then quickly switch back to the game within like 500 milliseconds.
     // I haven't been able to pull this off on Linux, but Windows is too slow
     // to attach all needed hooks.
-    con := global_xcb_connection;
-    net_active_atom: xcb_atom_t;
-    net_name_old_atom: xcb_atom_t;
+    con := JDL.main_display.xcb.handle;
+    net_active_atom: xcb.xcb_atom_t;
+    net_name_old_atom: xcb.xcb_atom_t;
     active := "_NET_ACTIVE_WINDOW";
-    active_cookie := xcb_intern_atom(con, cast(u8)false, cast(u8)active.count, active.data);
+    active_cookie := xcb.xcb_intern_atom(con, cast(u8)false, cast(u8)active.count, active.data);
 
-    active_error: *xcb_generic_error_t;
-    active_reply := xcb_intern_atom_reply(con, active_cookie, *active_error);
+    active_error: *xcb.xcb_generic_error_t;
+    active_reply := xcb.xcb_intern_atom_reply(con, active_cookie, *active_error);
 
     if !active_reply {
         log_error("Can't get _NET_ACTIVE_WINDOW atom, error is: %\n", active_error.*);
@@ -64,29 +56,29 @@ detect_focused_program :: () {
     net_active_atom = active_reply.atom;
     defer c_free(active_reply);
 
-    screen := xcb_setup_roots_iterator(xcb_get_setup(con)).data;
+    screen := xcb.xcb_setup_roots_iterator(xcb.xcb_get_setup(con)).data;
     root_window := screen.root;
 
-    attrs: xcb_change_window_attributes_value_list_t;
-    attrs.event_mask = cast(u32)xcb_event_mask_t.PROPERTY_CHANGE;
+    attrs: xcb.xcb_change_window_attributes_value_list_t;
+    attrs.event_mask = cast(u32)xcb.xcb_event_mask_t.PROPERTY_CHANGE;
 
-    change_cookie := xcb_change_window_attributes_aux_checked(con, root_window, .EVENT_MASK, *attrs);
-    change_error := xcb_request_check(con, change_cookie);
+    change_cookie := xcb.xcb_change_window_attributes_aux_checked(con, root_window, .EVENT_MASK, *attrs);
+    change_error := xcb.xcb_request_check(con, change_cookie);
     if change_error {
         log_error("Failed to listen to window focus events, error is %\n", change_error.*);
     }
 
-    xcb_flush(con);
+    xcb.xcb_flush(con);
 
     while true {
-        event := xcb_wait_for_event(con);
+        event := xcb.xcb_wait_for_event(con);
         if !event {
             log_error("I/O error while getting a window focused event");
             break;
         }
         response_type := event.response_type & ~0x80;
-        if response_type == XCB_PROPERTY_NOTIFY {
-            notify_event := cast(*xcb_property_notify_event_t)event;
+        if response_type == xcb.XCB_PROPERTY_NOTIFY {
+            notify_event := cast(*xcb.xcb_property_notify_event_t)event;
             // 0 is NewState, 1 is Deleted. NewState is probably when a window gets focus
             if notify_event.atom == net_active_atom && notify_event.state == 0 {
                 // On Sway, I get two focus events for the same window when switching from
@@ -98,14 +90,14 @@ detect_focused_program :: () {
                 // while we're fetching its options, which isn't a hard requirements for us.
                 // So maybe we don't need to grab the server and just handle the situation where we get bogus
                 // properties instead. Most likely, we'll get xcb_window_error_t
-                xcb_grab_server(con);
-                input_focus_reply := xcb_get_input_focus_reply(con, xcb_get_input_focus(con), null);
+                xcb.xcb_grab_server(con);
+                input_focus_reply := xcb.xcb_get_input_focus_reply(con, xcb.xcb_get_input_focus(con), null);
                 focused_window := input_focus_reply.focus;
 
                 name := get_x11_window_name(focused_window);
                 log("Name: %\n", name);
-                xcb_ungrab_server(con);
-                xcb_flush(con);
+                xcb.xcb_ungrab_server(con);
+                xcb.xcb_flush(con);
                 // TODO: Better way to handle the title name, contains is probably not very
                 // robust. Also it's case-sensitive for now :(
                 hook_is_set_by_profile := false;
@@ -141,16 +133,17 @@ _opened_programs: [..]string;
 get_x11_window_name :: (window: u32) -> string {
     result: string;
 
-    con := global_xcb_connection;
-    name_error: *xcb_generic_error_t;
-    name_old_error: *xcb_generic_error_t;
+    xd := *JDL.main_display.xcb;
+    con := xd.handle;
+    name_error: *xcb.xcb_generic_error_t;
+    name_old_error: *xcb.xcb_generic_error_t;
 
     // Some programs don't comply with EWMH and set old WM_NAME instead, try to get it as well
-    name_cookie := xcb_get_property(con, 0, window, NET_NAME_ATOM, xx xcb_get_property_type_t.XCB_GET_PROPERTY_TYPE_ANY, 0, U32_MAX);
-    name_old_cookie := xcb_get_property(con, 0, window, xx xcb_atom_enum_t.WM_NAME, xx xcb_atom_enum_t.STRING, 0, U32_MAX);
+    name_cookie := xcb.xcb_get_property(con, 0, window, xd.atoms._NET_WM_NAME, xx xcb.xcb_get_property_type_t.XCB_GET_PROPERTY_TYPE_ANY, 0, U32_MAX);
+    name_old_cookie := xcb.xcb_get_property(con, 0, window, xx xcb.xcb_atom_enum_t.WM_NAME, xx xcb.xcb_atom_enum_t.STRING, 0, U32_MAX);
 
-    name_reply := xcb_get_property_reply(con, name_cookie, *name_error);
-    name_old_reply := xcb_get_property_reply(con, name_old_cookie, *name_old_error);
+    name_reply := xcb.xcb_get_property_reply(con, name_cookie, *name_error);
+    name_old_reply := xcb.xcb_get_property_reply(con, name_old_cookie, *name_old_error);
 
     defer {
         c_free(name_reply);
@@ -161,19 +154,19 @@ get_x11_window_name :: (window: u32) -> string {
     // to a Wayland-native application. So I let it be...
     if !name_reply && !name_old_reply {
         // Maybe socd unhook logic here
-        xcb_ungrab_server(con);
-        xcb_flush(con);
+        xcb.xcb_ungrab_server(con);
+        xcb.xcb_flush(con);
         return "";
     }
 
-    name_len := xcb_get_property_value_length(name_reply);
-    name_old_len := xcb_get_property_value_length(name_old_reply);
+    name_len := xcb.xcb_get_property_value_length(name_reply);
+    name_old_len := xcb.xcb_get_property_value_length(name_old_reply);
     if !name_len {
         result.count = name_old_len;
-        result.data = xcb_get_property_value(name_old_reply);
+        result.data = xcb.xcb_get_property_value(name_old_reply);
     } else {
         result.count = name_len;
-        result.data = xcb_get_property_value(name_reply);
+        result.data = xcb.xcb_get_property_value(name_reply);
     }
 
     return result;
@@ -181,19 +174,18 @@ get_x11_window_name :: (window: u32) -> string {
 
 get_list_of_programs :: () -> []string {
     using current_program_state;
-    con := global_xcb_connection;
+    con := JDL.main_display.xcb.handle;
     result := _opened_programs;
 
-
-    screen := xcb_setup_roots_iterator(xcb_get_setup(con)).data;
+    screen := xcb.xcb_setup_roots_iterator(xcb.xcb_get_setup(con)).data;
     root_window := screen.root;
 
-    tree_cookie := xcb_query_tree(con, root_window);
-    tree_reply := xcb_query_tree_reply(con, tree_cookie, null);
+    tree_cookie := xcb.xcb_query_tree(con, root_window);
+    tree_reply := xcb.xcb_query_tree_reply(con, tree_cookie, null);
 
     if (tree_reply) {
-        children_data := xcb_query_tree_children(tree_reply);
-        children_count := xcb_query_tree_children_length(tree_reply);
+        children_data := xcb.xcb_query_tree_children(tree_reply);
+        children_count := xcb.xcb_query_tree_children_length(tree_reply);
 
         children: []u32;
         children.data = children_data;
@@ -201,9 +193,9 @@ get_list_of_programs :: () -> []string {
 
         for children {
 
-            attrs_error: *xcb_generic_error_t;
-            attrs_cookie := xcb_get_window_attributes(con, it);
-            attrs_reply := xcb_get_window_attributes_reply(con, attrs_cookie, *attrs_error);
+            attrs_error: *xcb.xcb_generic_error_t;
+            attrs_cookie := xcb.xcb_get_window_attributes(con, it);
+            attrs_reply := xcb.xcb_get_window_attributes_reply(con, attrs_cookie, *attrs_error);
 
             registered_events := attrs_reply.all_event_masks;
             if registered_events & (.KEY_PRESS | .KEY_RELEASE | .BUTTON_PRESS | .BUTTON_RELEASE | .EXPOSURE | .VISIBILITY_CHANGE | .FOCUS_CHANGE) == 0 {
@@ -418,8 +410,8 @@ handle_libinput_event :: (event: *libinput_event, uinput_fd: s32) {
             // even take advantage of that, because numpad keys are specialcased in get_key_name anyway
             // So maybe we don't even need to update the state at all. At least until we have a proper
             // keyboard layouts/localization support.
-            xkb_keycode: xkb_keycode_t = XKB_EVDEV_OFFSET + key;
-            xkb_state_update_key(global_xkb_state, xkb_keycode, xx state);
+            xkb_keycode: xkb.xkb_keycode_t = XKB_EVDEV_OFFSET + key;
+            xkb.xkb_state_update_key(JDL.main_display.xcb.xkb_state, xkb_keycode, xx state);
         }
 
         if key == KEY_NUMLOCK return;
@@ -639,25 +631,25 @@ get_key_name :: (key_scan_code: u32) -> string {
 
     key_name: string;
 
-    xkb_keycode: xkb_keycode_t = XKB_EVDEV_OFFSET + key_scan_code;
-    keysym := xkb_state_key_get_one_sym(global_xkb_state, xkb_keycode);
+    xkb_keycode: xkb.xkb_keycode_t = XKB_EVDEV_OFFSET + key_scan_code;
+    keysym := xkb.xkb_state_key_get_one_sym(JDL.main_display.xkb_state, xkb_keycode);
     // This doesn't do anything for some reason
-    keysym = xkb_keysym_to_upper(keysym);
+    keysym = xkb.xkb_keysym_to_upper(keysym);
 
     // First is a dummy call just to get a length of the string
-    length := xkb_state_key_get_utf8(global_xkb_state, xkb_keycode, null, 0);
+    length := xkb.xkb_state_key_get_utf8(JDL.main_display.xcb.xkb_state, xkb_keycode, null, 0);
     if length {
         // Allocate one more for that sweet null terminator. We'll subtract the count later
         key_name = alloc_string(length + 1);
-        xkb_state_key_get_utf8(global_xkb_state, xkb_keycode, key_name.data, xx (key_name.count));
+        xkb.xkb_state_key_get_utf8(JDL.main_display.xcb.xkb_state, xkb_keycode, key_name.data, xx (key_name.count));
 
     // If the key doesn't have utf8 representation in libxkbcommon (or it's a whitespace character) - get its keysym name instead.
     }
     // -1 to account for trailing null character
     if !length || !(trim(key_name).count - 1) {
-        length := xkb_keysym_get_name(keysym, null, 0);
+        length := xkb.xkb_keysym_get_name(keysym, null, 0);
         key_name = alloc_string(length + 1);
-        xkb_keysym_get_name(keysym, key_name.data, xx key_name.count);
+        xkb.xkb_keysym_get_name(keysym, key_name.data, xx key_name.count);
     }
 
     key_name.count -= 1;
@@ -671,107 +663,6 @@ get_key_name :: (key_scan_code: u32) -> string {
     KEY_NAMES[key_scan_code] = key_name;
     return key_name;
 }
-
-// Mostly a copy from Window_Creation module with some custom window hints.
-create_window :: (window_x := 0, window_y := 0, parent: Window_Type = None, background_color_rgb := WC.DEFAULT_WINDOW_CREATION_COLOR, wanted_msaa: s32 = WC.DEFAULT_MSAA) -> Window {
-    width := window_width;
-    height := window_height;
-    window_name := "Hitboxer v0.12";
-    if !x_global_display
-        init_global_display();
-
-    d := x_global_display;
-
-    XLockDisplay(d);
-    root := DefaultRootWindow(d);
-    if parent == None then parent = root;
-
-    screen := DefaultScreen(d);
-
-    attr := s32.[
-        GLX_RGBA,
-        GLX_DEPTH_SIZE, 24,
-        GLX_DOUBLEBUFFER,
-        GLX_RED_SIZE, 8,
-        GLX_GREEN_SIZE, 8,
-        GLX_BLUE_SIZE, 8,
-        GLX_STENCIL_SIZE, 8,
-        GLX_SAMPLE_BUFFERS, cast(s32) ifx wanted_msaa then 1 else 0,
-        GLX_SAMPLES,        wanted_msaa,
-        None
-    ];
-
-    vi := glXChooseVisual(d, screen, attr.data);
-    cmap := XCreateColormap(d, parent, vi.visual, AllocNone);
-
-    to_u16 :: (f: float) -> u16 #expand {
-        u := clamp(cast(s32)(f * 65535), 0, 65535);
-        return cast(u16) u;
-    }
-
-    background_color: XColor;
-    background_color.flags |= DoRed | DoGreen | DoBlue;
-    background_color.red     = to_u16(background_color_rgb[0]);
-    background_color.green   = to_u16(background_color_rgb[1]);
-    background_color.blue    = to_u16(background_color_rgb[2]);
-    XAllocColor(d, cmap, *background_color);
-
-    swa: XSetWindowAttributes;
-    swa.colormap = cmap;
-    swa.event_mask = ExposureMask | KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | StructureNotifyMask | FocusChangeMask | EnterWindowMask | LeaveWindowMask | PointerMotionMask;
-    swa.background_pixel = background_color.pixel;
-    win := XCreateWindow(d, parent, xx window_x, xx window_y, xx width, xx height, 0, vi.depth, InputOutput, vi.visual, cast(u64) (CWColormap | CWEventMask), *swa);
-
-    win_name := temp_c_string(window_name);
-    if window_name then XStoreName(d, win, win_name);
-
-    class_hints := XAllocClassHint();
-    if class_hints {
-        // this changes the application name for now (not the window title)
-        // unset, gnome3 will just display "Unknown" in the activity bar and the dock
-        if window_name {
-            class_hints.res_name = win_name;
-            class_hints.res_class = win_name;
-        } else {
-            class_hints.res_name = "jai-application";
-            class_hints.res_class = "JAI-Application";
-        }
-        XSetClassHint(d, win, class_hints);
-    }
-
-    // My changes to set window type to force it into floating mode on
-    // tiling window managers like i3wm
-    // @cleanup: It's probably better to set max width and max height hints instead...
-    props: [2]Atom;
-
-    props[1] = XInternAtom(d, "_NET_WM_WINDOW_TYPE", False);
-    props[0] = XInternAtom(d, "_NET_WM_WINDOW_TYPE_UTILITY", False);
-
-    XChangeProperty(d, win, props[1], XA_ATOM, 32, PropModeReplace, cast(*u8)*props[0], 1);
-    XMapWindow(d, win);
-
-    XSetWMProtocols(d, win, *x_global_wm_delete_window, 1);
-
-
-    // TODO: global
-    x_global_input_context = XCreateIC(
-        x_global_input_method,
-        XNClientWindow, win,
-        XNFocusWindow, win,
-        XNInputStyle, XIMPreeditNothing | XIMStatusNothing,
-        null,
-    );
-
-    if !x_global_input_context {
-        log_error("Could not create X11 input context\n");
-    }
-
-    array_add(*x_global_windows, win);
-
-    XUnlockDisplay(d);
-    return win;
-}
-
 
 udev: *udev_context;
 libinput: *libinput_context;
@@ -845,10 +736,10 @@ open_restricted :: (path_raw: *u8, flags: s32, user_data: *void) -> s32 #c_call 
     table_add(*libinput_opened_devices, path, fd);
     if is_keyboard(fd, path) && uinput_fd > 0 {
         print("%\n", path);
-        grab_result := ioctl(fd, EVIOCGRAB, 1);
-        if grab_result < 0 {
-            log_error("Could not grab % for controlling its inputs\n", path);
-        }
+        // grab_result := ioctl(fd, EVIOCGRAB, 1);
+        // if grab_result < 0 {
+        //     log_error("Could not grab % for controlling its inputs\n", path);
+        // }
         return fd;
     }
     // TODO: port device closing shenanigans that offload it into a separate thread.
@@ -861,7 +752,6 @@ close_restricted :: (fd: s32, user_data: *void) #c_call {
 }
 
 interface_: libinput_interface = .{open_restricted, close_restricted};
-
 
 platform_init :: () -> success: bool #must, init_reason: string {
     {
@@ -920,61 +810,6 @@ platform_init :: () -> success: bool #must, init_reason: string {
         }
     }
 
-
-    // x11 and libxkbcommon
-    {
-        // xcb X11 connection
-        global_xcb_connection = xcb_connect(null, null);
-        con_errors := xcb_connection_has_error(global_xcb_connection);
-
-        if con_errors {
-            return false, tprint("Can't connect to X11 with xcb, error code is: %\n", con_errors);
-        }
-
-        // Atoms
-        name_error: *xcb_generic_error_t;
-        name_cookie := xcb_intern_atom(global_xcb_connection, cast(u8)false, cast(u8)NET_NAME.count, NET_NAME.data);
-        name_reply := xcb_intern_atom_reply(global_xcb_connection, name_cookie, *name_error);
-
-        if !name_reply {
-            return false, tprint("Can't get _NET_WM_NAME atom, error is: %\n", name_error.*);
-        }
-        NET_NAME_ATOM = name_reply.atom;
-
-        // and libxkbcommon
-        base_xkb_event: u8;
-
-        major: u16 = 1;
-        minor: u16 = 0;
-        ret := xkb_x11_setup_xkb_extension(
-            global_xcb_connection,
-            major,
-            minor,
-            0,
-            *major, *minor, *base_xkb_event, null,
-        );
-
-        if (!ret) {
-            return false, "Couldn't setup XKB extension\n";
-        }
-
-        global_xkb_context = xkb_context_new(.NO_FLAGS);
-
-        core_kbd_device_id := xkb_x11_get_core_keyboard_device_id(global_xcb_connection);
-        if (core_kbd_device_id == -1) {
-            return false, "Couldn't find core keyboard device\n";
-        } else {
-            log("Core keyboard device is %\n", core_kbd_device_id);
-        }
-
-        global_xkb_keymap = xkb_x11_keymap_new_from_device(global_xkb_context, global_xcb_connection, core_kbd_device_id, 0);
-
-        global_xkb_state = xkb_x11_state_new_from_device(global_xkb_keymap, global_xcb_connection, core_kbd_device_id);
-        if (!global_xkb_state) {
-            return false, "Couldn't create xkb state for device\n";
-        }
-    }
-
     // TODO: This should be in a separate thread, it affects startup times GREATLY!!!!
     // udev and libinput
     {
@@ -1002,14 +837,10 @@ platform_after_window_created :: (window: Window_Type) -> bool #must {
     return true;
 }
 
-platform_deinit :: (window: u64) {
+platform_deinit :: (window: Window_Type) {
     // If I don't destroy the virtual keyboard manually, I get stuck inputs when the program quits.
     ioctl(uinput_fd, UI_DEV_DESTROY);
     close(uinput_fd);
-}
-
-platform_wait_for_message :: () {
-    x11_wait_for_events();
 }
 
 platform_wake_up_main_thread :: () {
@@ -1023,7 +854,5 @@ c_free :: (memory: *void) #foreign libc "free";
 #import "POSIX";
 #import "Sort";
 #import "String";
-#import "X11";
+using JDL :: #import "JDL";
 #import "Input";
-// To expose module-scoped WC.DEFAULT_WINDOW_CREATION_COLOR and WC.DEFAULT_MSAA
-WC :: #import "Window_Creation";

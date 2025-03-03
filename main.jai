@@ -6,7 +6,6 @@ FOR SHIPPING:
 FOR FUTURE:
 - Add configurable delay before overriding an input
 - Disallow multiple binds for the same button
-- Disallow to bind a button to itself
 - Better focused program recognition. Now it's just case-sensitive string contains.
 - Debug UI. Showing stuff like currently pressed key, when mappings kick in, list of mappings.
 - Mouse bindings
@@ -36,11 +35,11 @@ scroll_value_profiles_region: float;
 scroll_value_mappings_region: float;
 scroll_value_new_profile: float;
 
-the_window: Window_Type;
+the_window: *Window;
 log_file: File;
 the_window_hidden := false;
-window_width := 900;
-window_height := 750;
+window_width: s32 = 900;
+window_height: s32 = 750;
 
 current_theme: s32 = xx Default_Themes.Default;
 my_theme: Overall_Theme;  // This gets filled out by calling the Theme_Proc for current_theme.
@@ -619,7 +618,13 @@ main :: () {
         exit(1);
     }
 
-    the_window = create_window();
+    success = JDL_init();
+    if !success {
+        log_error("Couldn't initialize SDL at Home\n");
+        return;
+    }
+
+    the_window = create_window(window_width, window_height, "Hitboxer v0.12");
 
     // I want to init everything after the Window, because if there's an error, I want to potentially
     // show it in the window, instead of yelling in the terminal like some pussy ass Linux nerd.
@@ -628,6 +633,15 @@ main :: () {
         log_error("Post window creation initialization failed\n");
         exit(1);
     }
+
+    // @note: Parsed settings are baked by the memory from raw_settings. So I just don't free it
+    // to avoid corruptions. A bit of a silly optimizations, but why not lmao.
+    should_parse_config, raw_settings, settings_filename := init_settings();
+    if should_parse_config {
+        parse_settings(raw_settings, settings_filename);
+    }
+    maybe_fixup_settings();
+    active_profile = active_profile_in_ui;
 
     // TODO: Need to separate detecting focused program and setting up keyboard hook. Probably...
     start_detecting_focused_program();
@@ -641,15 +655,6 @@ main :: () {
     subwindow_info_new_profile.open = false;
     subwindow_info_presets_confirmation.open = false;
 
-    // @note: Parsed settings are baked by the memory from raw_settings. So I just don't free it
-    // to avoid corruptions. A bit of a silly optimizations, but why not lmao.
-    should_parse_config, raw_settings, settings_filename := init_settings();
-    if should_parse_config {
-        parse_settings(raw_settings, settings_filename);
-    }
-    maybe_fixup_settings();
-    active_profile = active_profile_in_ui;
-
     quit := false;
     while !quit {
         // memory_visualizer_per_frame_update();
@@ -659,10 +664,10 @@ main :: () {
         last_time = current_time;
 
         if !need_to_rerender {
-            platform_wait_for_message();
+            wait_for_events();
         }
-        Input.update_window_events();
-
+        // Input.update_window_events();
+ 
         for Input.get_window_resizes() {
             Simp.update_window(it.window);
 
@@ -693,18 +698,19 @@ main :: () {
             }
 
             getrect_handle_event(event);
+
+            // TODO: handle alt+f4
         }
         if active_state == .NOTHING {
             unset_mapping_setting_hook();
         }
 
         draw_one_frame(dt, the_window);
-
         reset_temporary_storage();
     }
 }
 
-draw_one_frame :: (dt: float, window: Window_Type) {
+draw_one_frame :: (dt: float, window: *Window) {
     using current_program_state;
 
     next_y := 0.0;
@@ -750,8 +756,8 @@ draw_one_frame :: (dt: float, window: Window_Type) {
     button_height := default_button_height;
     padding := default_padding;
 
-    x:, y:, window_width, window_height = get_dimensions(window, true);
-    ui_per_frame_update(window, 800, 800, current_time);
+    x:, y:, window_width, window_height = get_dimensions(window, false);
+    ui_per_frame_update(window.handle, 800, 800, current_time);
 
     //
     // Profiles
@@ -1298,7 +1304,7 @@ working_directory_set := false;
 mapping_resolving_hook_is_installed := false;
 mapping_setting_hook_is_installed := false;
 
-#import "Basic"()(TEMP_ALLOCATOR_POISON_FREED_MEMORY=DEBUG, MEMORY_DEBUGGER=false, VISUALIZE_MEMORY_DEBUGGER=false);
+#import "Basic"()(TEMP_ALLOCATOR_POISON_FREED_MEMORY=DEBUG, MEMORY_DEBUGGER=DEBUG, ENABLE_ASSERT=DEBUG);
 #import "Hash_Table";
 Input :: #import "Input";
 Simp :: #import "Simp";
@@ -1306,7 +1312,7 @@ using GetRect :: #import "GetRect_LeftHanded";
 #import "Math";
 #import "String";
 System :: #import "System";
-#import "Window_Creation";
+#import "JDL";
 tfh :: #import "Text_File_Handler";
 #import "Reflection";
 #import "File";

@@ -11,6 +11,7 @@ build :: () {
     target_options := get_build_options(w);
     target_options.output_executable_name = "hitboxer";
     target_options.arithmetic_overflow_check = .FATAL;
+    target_options.dead_code_elimination = .NONE;
     set_optimization(*target_options, .DEBUG);
 
     args := target_options.compile_time_command_line;
@@ -23,10 +24,13 @@ build :: () {
             case "release";
             optimized = true;
             set_optimization(*target_options, .VERY_OPTIMIZED);
+            // Why is MODULES_ONLY the default?
+            target_options.dead_code_elimination = .ALL;
         }
     }
 
     remap_import(w, "", "Input", "");
+    remap_import(w, "", "Window_Type", "");
     set_build_options(target_options, w);
 
     #if OS == .WINDOWS {
@@ -49,6 +53,8 @@ build :: () {
             m := cast(*Message_Failed_Import) message;
             if m.target_module_name == {
                 case "Input";
+                provide_import(message.workspace, m, .PATH_TO_DIRECTORY, modules_dir);
+                case "Window_Type";
                 provide_import(message.workspace, m, .PATH_TO_DIRECTORY, modules_dir);
             }
             case .TYPECHECKED;

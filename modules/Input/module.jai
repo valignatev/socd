@@ -8,7 +8,7 @@
 #if OS == .WINDOWS {
     #load "windows.jai";
 } else #if OS == .LINUX {
-    #load "x11.jai";
+    #load "linux.jai";
 }
 
 Event_Type :: enum u32 {  // If we set this to u8, our packing will stop matching C's.
@@ -270,5 +270,5 @@ pending_resizes: [..] Window_Resize_Record;
 resizes_to_free: [..] Window_Resize_Record;
 
 #import "Basic";
-#import "Window_Type";
+#import "JDL";
 
